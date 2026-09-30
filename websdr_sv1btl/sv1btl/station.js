@@ -27,6 +27,14 @@ window.STATION = {
   // script copies it here). Used for the dB scale of the spectrum.
   waterfallCalibration: 12,
 
+  // ── RADE (FreeDV digital voice, buttons RADEL / RADEU) ──────────────────────
+  // RADE is decoded by UberSDR's main web server (its "freedv" extension), which the
+  // listener's browser contacts directly. Its address as your visitors reach it, e.g.
+  // 'https://yourcall.tunnel.ubersdr.org' or 'http://your.host:8080'. Leave '' for
+  // this same host on port 8080 (the install script fills in your UberSDR's public
+  // address when it has one). UberSDR needs server.enable_cors: true for this.
+  mainServer: '',
+
   // ── Users list ────────────────────────────────────────────────────────────
   // Each listener's country is added to their name ("SV1ABC GR,Athens"); set to
   // false to show the country only, without the city.

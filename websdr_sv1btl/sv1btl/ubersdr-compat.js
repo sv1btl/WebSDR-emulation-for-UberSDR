@@ -536,6 +536,7 @@
       }
       if (this._rec) recPush(this, decoded);
       if (state.nr > 0) syncNRBins(this, false);
+      if (rade.side) return;                 // RADE on: the decoded RADE voice plays instead
       origPlay.call(this, decoded);
     };
     }
@@ -693,6 +694,451 @@
     setInterval(poll, CHAT_POLL_MS);
   });
 
+  // ── RADE V1 (FreeDV) — buttons RADEL / RADEU in the Mode row ────────────────
+  // UberSDR decodes RADE on the server: its "freedv" audio extension runs the
+  // freedv-ka9q decoder on a listener's audio and sends the decoded voice back as
+  // Opus frames over the DX-cluster websocket. It can only be attached to a session
+  // of UberSDR's own interface (a UUID session), not to a WebSDR (port 8901) one, so
+  // for RADE this page opens such a session on UberSDR's main web server itself:
+  //   1. POST /connection  {user_session_id}          (registers the session id)
+  //   2. /ws               audio session on the same frequency in USB or LSB,
+  //                        muted (the decoder is fed before the mute) and in Opus
+  //   3. /ws/dxcluster     "audio_extension_attach" freedv → decoded voice frames:
+  //        byte 0 = 0x02, 1-8 timestamp, 9-12 sample rate (BE), 13 channels, 14… Opus
+  // While RADE is on, the page's normal WebSDR audio is silenced and the decoded
+  // voice plays through the same volume, Hi-Boost, notch and NR chain. Tuning on this
+  // page follows; any other mode button, or leaving USB/LSB, switches RADE off.
+  // The main server's address: window.UBERSDR_MAIN_URL (set in websdr-head.html),
+  // else the same host on port 8080. It needs server.enable_cors: true.
+  var RADE_SIG_TIMEOUT_MS = 1500;          // "decoding" shown until frames stop this long
+  var rade = { side: null, uuid: null, ws: null, dx: null, dec: null, decSR: 0, decCh: 0,
+               next: 0, frames: 0, busy: Promise.resolve(), sigTimer: null, pingTimer: null,
+               tuneTimer: null, retryTimer: null, gen: 0, lastErr: '' };
+
+  function radeBase() {
+    var u = window.UBERSDR_MAIN_URL || (window.STATION && window.STATION.mainServer) || '';
+    if (!u) u = location.protocol + '//' + location.hostname + ':8080';
+    return u.replace(/\/+$/, '');
+  }
+  function radeUUID() {                    // crypto.randomUUID needs https; this does not
+    var b = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+    var h = [];
+    for (var i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1));
+    return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' + h.slice(6, 8).join('') + '-' +
+           h.slice(8, 10).join('') + '-' + h.slice(10).join('');
+  }
+  function radeStatus(text, cls) {
+    var s = document.getElementById('radestatus');
+    if (s) { s.textContent = text || ''; s.className = 'radestatus' + (cls ? ' ' + cls : ''); }
+  }
+  function radeButtons() {
+    ['L', 'U'].forEach(function (k) {
+      var b = document.getElementById('btn-RADE' + k);
+      if (!b) return;
+      var on = rade.side === (k === 'L' ? 'lsb' : 'usb');
+      b.classList.toggle('btn-selected', on);
+      b.classList.toggle('rade-sync', on && !!rade.sigTimer);
+    });
+    if (rade.side) {                       // the LSB/USB button stays unlit while RADE is on
+      var m = document.getElementById('btn-' + rade.side.toUpperCase());
+      if (m) m.classList.remove('btn-selected');
+    }
+  }
+  function radeFreqHz() { return Math.round((window.freq || 0) * 1000); }
+  // RADE V1 occupies 700-2200 Hz of the audio band (1500 Hz): the decoder's session and
+  // the filter shown on this page both use that passband
+  var RADE_LO_HZ = 700, RADE_HI_HZ = 2200;
+  function radeBW(side) { return side === 'usb' ? [RADE_LO_HZ, RADE_HI_HZ] : [-RADE_HI_HZ, -RADE_LO_HZ]; }
+  window.ubersdr_rade_active = function () { return !!rade.side; };
+
+  // ── FreeDV Reporter window (shown while RADE is on) ────────────────────────
+  // The same live list as UberSDR's FreeDV panel: stations reported to
+  // qso.freedv.org, taken from UberSDR's FreeDV Reporter monitor over the DX-cluster
+  // websocket the RADE session already uses ("subscribe_freedv_activity" →
+  // freedv_activity_snapshot / freedv_activity_update). Kept small: stations on the
+  // band being listened to (all when outside the band table), transmitting ones
+  // first; a click on a station tunes to it. Built below the RADE status line, on the
+  // desktop page only (the mobile page's version was removed at the user's request).
+  var REP_MAX_MSG = 22, REP_ONFREQ_HZ = 100;
+  var rep = { users: {}, pending: false };
+  (function repStyle() {
+    var css =
+      '.radestatus{font-size:11px;line-height:13px;text-align:center;color:#333}' +
+      '.radestatus.sync{color:#0a7d2c;font-weight:bold}.radestatus.err{color:#c00}' +
+      '.radereporter{margin:3px 4px 4px;background:#f7f7f7;border:1px solid #bbb;border-radius:6px;' +
+        'font:11px/1.3 Arial,sans-serif;color:#222;text-align:left;box-shadow:1px 2px 5px rgba(0,0,0,.15)}' +
+      '.radereporter .rr-head{display:flex;justify-content:space-between;gap:6px;padding:3px 6px;' +
+        'background:#dfe6e4;border-radius:6px 6px 0 0;font-weight:bold}' +
+      '.radereporter .rr-count{font-weight:normal;color:#555}' +
+      '.radereporter .rr-status{padding:2px 6px;color:#777;font-style:italic}' +
+      '.radereporter .rr-status:empty{display:none}' +
+      '.radereporter .rr-wrap{max-height:86px;overflow-y:scroll}' +   // header + 4 rows; scroll for more
+      '.radereporter table{border-collapse:collapse;width:100%;table-layout:fixed}' +
+      '.radereporter th{position:sticky;top:0;background:#eee;font-weight:bold;color:#444;text-align:left;' +
+        'padding:1px 4px;border-bottom:1px solid #ccc}' +
+      '.radereporter td{padding:1px 4px;border-bottom:1px solid #e4e4e4;white-space:nowrap;overflow:hidden;' +
+        'text-overflow:ellipsis}' +
+      '.radereporter tr.rr-tune{cursor:pointer}.radereporter tr.rr-tune:hover td{background:#e3f1ee}' +
+      '.radereporter tr.rr-tx td{background:#fff1f0}' +
+      '.radereporter .rr-ago{color:#666}.radereporter .rr-txb{background:#d32f2f;color:#fff;border-radius:3px;padding:0 3px;font-size:10px}' +
+      '.radereporter .rr-on{color:#0a7d2c}.radereporter .rr-rxo{color:#777;font-size:9px;margin-left:3px}' +
+      '.radereporter{width:470px;margin:3px auto 4px;box-sizing:border-box}';   // the desktop middle column
+    var st = document.createElement('style');
+    st.textContent = css;
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  function repPanel(create) {
+    var p = document.getElementById('radereporter');
+    if (p || !create) return p;
+    var anchor = document.getElementById('radestatus');
+    if (!anchor || !document.getElementById('wfmode')) return null;   // desktop page only
+    p = document.createElement('div');
+    p.id = 'radereporter';
+    p.className = 'radereporter';
+    p.hidden = true;
+    p.innerHTML =
+      '<div class="rr-head"><span>FreeDV Reporter — <span class="rr-band"></span></span><span class="rr-count"></span></div>' +
+      '<div class="rr-status"></div>' +
+      '<div class="rr-wrap"><table><colgroup><col style="width:19%"><col class="rr-c" style="width:15%">' +
+      '<col style="width:10%"><col style="width:15%"><col class="rr-m" style="width:18%"><col style="width:7%">' +
+      '<col class="rr-r" style="width:16%"></colgroup><thead><tr><th>Callsign</th><th class="rr-c">Country</th>' +
+      '<th>km</th><th>kHz</th><th class="rr-m">Message</th><th>TX</th><th class="rr-r">Last RX</th></tr></thead>' +
+      '<tbody></tbody></table></div>';
+    anchor.parentNode.insertBefore(p, anchor.nextSibling);
+    return p;
+  }
+  function repStatus(t) { var p = repPanel(false); if (p) p.querySelector('.rr-status').textContent = t || ''; }
+  var repTimer = null;
+  function repShow(on) {
+    var p = repPanel(on);
+    if (!p) return;
+    p.hidden = !on;
+    clearInterval(repTimer);
+    if (on) repTimer = setInterval(repSchedule, 30000);   // keep the "last TX" ages current
+    if (!on) { rep.users = {}; p.querySelector('tbody').innerHTML = ''; }
+    else { repStatus('Connecting to FreeDV Reporter…'); repSchedule(); }
+  }
+  function repSchedule() {
+    if (rep.pending) return;
+    rep.pending = true;
+    requestAnimationFrame(function () { rep.pending = false; repRender(); });
+  }
+  function repBand() {                      // the band table entry of the tuned frequency
+    var f = (window.freq || 0);
+    for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) return HAM_BANDS[i];
+    return null;
+  }
+  function repTuneTo(hz) {
+    var f = hz / 1000;
+    if (typeof window.setwaterfall === 'function' && window.bi) setwaterfall(band, f);
+    setfreq(f);
+  }
+  function repRender() {
+    var p = repPanel(false);
+    if (!p || p.hidden) return;
+    var b = repBand(), list = [], sid, u;
+    for (sid in rep.users) {
+      u = rep.users[sid];
+      if (!b || (u.freq_hz && u.freq_hz >= b[1] * 1000 && u.freq_hz <= b[2] * 1000)) list.push(u);
+    }
+    // Transmitting now first, then by most recent transmission (last_tx), then the
+    // stations that have not transmitted, receive-only stations last
+    function lastTx(u) { var t = u.last_tx ? Date.parse(u.last_tx) : NaN; return t === t ? t : 0; }
+    list.sort(function (a, c) {
+      if (!!a.transmitting !== !!c.transmitting) return a.transmitting ? -1 : 1;
+      if (!!a.rx_only !== !!c.rx_only) return a.rx_only ? 1 : -1;
+      var ta = lastTx(a), tc = lastTx(c);
+      if (ta !== tc) return tc - ta;
+      return String(a.callsign || '').localeCompare(String(c.callsign || ''));
+    });
+    p.querySelector('.rr-band').textContent = b ? b[0] : 'all bands';
+    p.querySelector('.rr-count').textContent = list.length + (list.length === 1 ? ' station' : ' stations');
+    var tb = p.querySelector('tbody'), dial = Math.round((window.freq || 0) * 1000);
+    tb.innerHTML = '';
+    if (!list.length) {
+      var e = document.createElement('tr'), td = document.createElement('td');
+      td.colSpan = 7; td.textContent = 'No FreeDV stations on this band';
+      td.style.color = '#888'; e.appendChild(td); tb.appendChild(e);
+      return;
+    }
+    list.forEach(function (u) {
+      var tr = document.createElement('tr');
+      function cell(text, cls, title) {
+        var td = document.createElement('td');
+        if (cls) td.className = cls;
+        td.textContent = text;
+        if (title) td.title = title;
+        tr.appendChild(td);
+        return td;
+      }
+      var c = cell(u.callsign || '—');
+      if (u.rx_only) { var ro = document.createElement('span'); ro.className = 'rr-rxo'; ro.textContent = 'RX'; c.appendChild(ro); }
+      cell(u.country || '—', 'rr-c');
+      cell(u.distance_km != null ? String(Math.round(u.distance_km)) : '—');
+      var fc = cell(u.freq_hz ? (u.freq_hz / 1000).toFixed(1) : '—');
+      if (u.freq_hz && Math.abs(u.freq_hz - dial) <= REP_ONFREQ_HZ) {
+        var dot = document.createElement('span'); dot.className = 'rr-on'; dot.textContent = ' ●';
+        dot.title = 'You are tuned to this frequency'; fc.appendChild(dot);
+      }
+      var msg = u.message || '';
+      cell(msg.length > REP_MAX_MSG ? msg.slice(0, REP_MAX_MSG) + '…' : (msg || '—'), 'rr-m', msg);
+      var tx = cell('');
+      if (u.transmitting) { var bx = document.createElement('span'); bx.className = 'rr-txb'; bx.textContent = 'TX'; tx.appendChild(bx); }
+      else {                                // how long ago it last transmitted
+        var lt = lastTx(u), ago = lt ? Math.max(0, (Date.now() - lt) / 1000) : -1;
+        tx.textContent = ago < 0 ? '—' : ago < 60 ? Math.round(ago) + 's' : ago < 3600 ? Math.round(ago / 60) + 'm' :
+                         ago < 86400 ? Math.round(ago / 3600) + 'h' : Math.round(ago / 86400) + 'd';
+        if (lt) tx.title = 'Last transmitted ' + new Date(lt).toUTCString().replace(' GMT', ' UTC');
+        tx.className = 'rr-ago';
+      }
+      cell(u.last_rx_callsign ? u.last_rx_callsign + (typeof u.last_rx_snr === 'number' ? ' ' + u.last_rx_snr.toFixed(0) + ' dB' : '') : '—', 'rr-r');
+      if (u.transmitting) tr.className = 'rr-tx';
+      var maxHz = (window.bi && bi[window.band]) ? (bi[band].centerfreq + bi[band].samplerate / 2) * 1000 : 30e6;
+      if (u.freq_hz > 0 && u.freq_hz <= maxHz) {
+        tr.className += ' rr-tune';
+        tr.title = 'Tune to ' + (u.freq_hz / 1000).toFixed(1) + ' kHz';
+        tr.addEventListener('click', function () { repTuneTo(u.freq_hz); });
+      }
+      tb.appendChild(tr);
+    });
+  }
+  function repMessage(m) {                  // DX-cluster text messages for the reporter
+    if (m.type === 'freedv_activity_snapshot') {
+      rep.users = {};
+      (m.users || []).forEach(function (u) { if (u && u.sid) rep.users[u.sid] = u; });
+      repStatus(''); repSchedule(); return true;
+    }
+    if (m.type === 'freedv_activity_update') {
+      var u = m.user, sid = m.sid || (u && u.sid);
+      if (m.event === 'remove_connection') delete rep.users[sid];
+      else if (m.event === 'disconnected') { rep.users = {}; repStatus('FreeDV Reporter disconnected — reconnecting…'); }
+      else if (u && u.sid) rep.users[u.sid] = u;
+      repSchedule(); return true;
+    }
+    if (m.type === 'subscription_status' && m.stream === 'freedv_activity') {
+      repStatus(m.enabled ? '' : (m.error || 'FreeDV Reporter is not available on this server'));
+      return true;
+    }
+    return false;
+  }
+
+  function radeClose() {
+    rade.gen++;
+    clearInterval(rade.pingTimer); clearTimeout(rade.tuneTimer); clearTimeout(rade.retryTimer);
+    clearTimeout(rade.sigTimer); rade.sigTimer = null;
+    if (rade.dx) {
+      try { if (rade.dx.readyState === 1) rade.dx.send(JSON.stringify({ type: 'audio_extension_detach' })); } catch (e) {}
+      try { rade.dx.close(); } catch (e) {}
+    }
+    if (rade.ws) try { rade.ws.close(); } catch (e) {}
+    rade.ws = rade.dx = null;
+    if (rade.dec) { try { rade.dec.free(); } catch (e) {} }
+    rade.dec = null; rade.decSR = rade.decCh = 0; rade.next = 0;
+  }
+
+  function radeStop() {
+    if (!rade.side) return;
+    radeClose();
+    rade.side = null;
+    radeStatus('');
+    repShow(false);
+    radeButtons();
+    if (window.ubersdr_rade_onstop) window.ubersdr_rade_onstop();
+    try { if (typeof window.mode === 'string') document.getElementById('btn-' + window.mode).classList.add('btn-selected'); } catch (e) {}
+  }
+  window.ubersdr_rade_stop = radeStop;
+
+  function radePlay(buf) {                 // one Opus frame (ArrayBuffer) → speaker
+    var sa = window.soundapplet;
+    var ctx = sa && sa._audioCtx;
+    if (!ctx || buf.byteLength < 15) return;
+    var v = new DataView(buf);
+    if (v.getUint8(0) !== 0x02) return;
+    var sr = v.getUint32(9, false), ch = v.getUint8(13) || 1, data = new Uint8Array(buf, 14);
+    var gen = rade.gen;
+    // the Opus decoder is not re-entrant: frames are decoded strictly one after another
+    rade.busy = rade.busy.then(function () {
+      if (gen !== rade.gen) return;
+      var lib = window['opus-decoder'];
+      if (!lib || !lib.OpusDecoder) return;
+      var ready = Promise.resolve();
+      if (!rade.dec || rade.decSR !== sr || rade.decCh !== ch) {
+        if (rade.dec) try { rade.dec.free(); } catch (e) {}
+        rade.dec = new lib.OpusDecoder({ sampleRate: sr, channels: ch });
+        rade.decSR = sr; rade.decCh = ch;
+        ready = rade.dec.ready;
+      }
+      return ready.then(function () { return rade.dec.decodeFrame(data); }).then(function (d) {
+        if (gen !== rade.gen || !d || !d.channelData || !d.channelData.length || !d.channelData[0].length) return;
+        var b = ctx.createBuffer(d.channelData.length, d.channelData[0].length, d.sampleRate || sr);
+        for (var c = 0; c < d.channelData.length; c++) b.copyToChannel(d.channelData[c], c);
+        var src = ctx.createBufferSource();
+        src.buffer = b;
+        src.connect(sa._gainNode || ctx.destination);   // volume, Hi-Boost, notch, NR as usual
+        var now = ctx.currentTime;
+        if (rade.next < now) rade.next = now + 0.12;    // (re)start with a small buffer
+        src.start(rade.next);
+        rade.next += b.duration;
+      });
+    }).catch(function () {});
+    rade.frames++;
+    if (!rade.sigTimer) { radeStatus('RADE ' + rade.side.toUpperCase() + ': decoding', 'sync'); }
+    clearTimeout(rade.sigTimer);
+    rade.sigTimer = setTimeout(function () {
+      rade.sigTimer = null;
+      if (rade.side) radeStatus('RADE ' + rade.side.toUpperCase() + ': waiting for a RADE signal…');
+      radeButtons();
+    }, RADE_SIG_TIMEOUT_MS);
+    radeButtons();
+  }
+
+  function radeAttach(gen, retried) {
+    if (gen !== rade.gen || !rade.dx || rade.dx.readyState !== 1) return;
+    rade.dx.send(JSON.stringify({ type: 'audio_extension_attach', extension_name: 'freedv', params: {} }));
+  }
+
+  function radeConnect(side) {
+    radeClose();
+    var gen = rade.gen, base = radeBase(), uuid = radeUUID(), bw = radeBW(side);
+    rade.uuid = uuid;
+    radeStatus('RADE ' + side.toUpperCase() + ': connecting…');
+    var x = new XMLHttpRequest();
+    x.open('POST', base + '/connection', true);
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.onerror = function () { if (gen === rade.gen) radeFail('cannot reach ' + base); };
+    x.onload = function () {
+      if (gen !== rade.gen) return;
+      var r = null;
+      try { r = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status !== 200 || !r || !r.allowed) { radeFail((r && r.reason) || ('server answered ' + x.status)); return; }
+      var wsBase = base.replace(/^http/, 'ws');
+      var q = 'user_session_id=' + uuid + '&frequency=' + radeFreqHz() + '&mode=' + side +
+              '&bandwidthLow=' + bw[0] + '&bandwidthHigh=' + bw[1] + '&format=opus&muted=true';
+      var ws = rade.ws = new WebSocket(wsBase + '/ws?' + q);
+      ws.onmessage = function (ev) {       // only errors matter here; audio is muted
+        if (typeof ev.data !== 'string') return;
+        try { var m = JSON.parse(ev.data); if (m.type === 'error' && gen === rade.gen) radeStatus('RADE: ' + (m.error || m.message || 'error'), 'err'); } catch (e) {}
+      };
+      ws.onclose = function () { if (gen === rade.gen && rade.side) radeFail('connection to the receiver closed'); };
+      ws.onopen = function () {
+        if (gen !== rade.gen) return;
+        rade.pingTimer = setInterval(function () { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 30000);
+        var dx = rade.dx = new WebSocket(wsBase + '/ws/dxcluster?user_session_id=' + uuid);
+        dx.binaryType = 'arraybuffer';
+        dx.onopen = function () {
+          if (document.getElementById('wfmode'))           // reporter window (desktop page)
+            try { dx.send(JSON.stringify({ type: 'subscribe_freedv_activity' })); } catch (e) {}
+          setTimeout(function () { radeAttach(gen, false); }, 500);   // let the audio session settle
+        };
+        dx.onmessage = function (ev) {
+          if (gen !== rade.gen) return;
+          if (ev.data instanceof ArrayBuffer) { radePlay(ev.data); return; }
+          var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+          if (repMessage(m)) return;
+          if (m.type === 'audio_extension_attached') {
+            radeStatus('RADE ' + side.toUpperCase() + ': waiting for a RADE signal…');
+          } else if (m.type === 'audio_extension_error') {
+            var err = m.error || 'decoder error';
+            if (/too quickly|wait/i.test(err)) {       // restart cooldown (~2 s): try again once
+              radeStatus('RADE ' + side.toUpperCase() + ': starting…');
+              rade.retryTimer = setTimeout(function () { radeAttach(gen, true); }, 2500);
+            } else if (/no active audio session/i.test(err)) {
+              rade.retryTimer = setTimeout(function () { radeAttach(gen, true); }, 1000);
+            } else radeFail(err);
+          }
+        };
+        dx.onclose = function () { if (gen === rade.gen && rade.side) radeFail('decoder connection closed'); };
+      };
+    };
+    x.send(JSON.stringify({ user_session_id: uuid }));
+  }
+
+  function radeFail(msg) {
+    rade.lastErr = msg;
+    radeClose();
+    radeStatus('RADE unavailable: ' + msg, 'err');
+    var side = rade.side;
+    rade.side = null;
+    repShow(false);
+    radeButtons();
+    if (window.ubersdr_rade_onstop) window.ubersdr_rade_onstop();
+    try { document.getElementById('btn-' + window.mode).classList.add('btn-selected'); } catch (e) {}
+    if (side) setTimeout(function () { if (!rade.side) radeStatus(''); }, 8000);
+  }
+
+  // Button: RADEL / RADEU. Pressing the active one again switches RADE off.
+  window.ubersdr_rade = function (side) {
+    side = side === 'usb' ? 'usb' : 'lsb';
+    if (rade.side === side) {              // switch off: back to the normal filter of that sideband
+      radeStop();
+      if (typeof window.set_mode === 'function') set_mode(side);
+      return;
+    }
+    if (!window.soundapplet || !window.soundapplet._audioCtx) {
+      radeStatus('RADE: start the audio first', 'err');
+      setTimeout(function () { if (!rade.side) radeStatus(''); }, 5000);
+      return;
+    }
+    rade.side = side;
+    var bw = radeBW(side);
+    rade.switching = true;
+    try {
+      if (String(window.mode).toLowerCase() !== side && typeof window.set_mode === 'function') set_mode(side);
+      if (typeof window.setmf === 'function') setmf(side, bw[0] / 1000, bw[1] / 1000);   // show the RADE passband
+    } finally { rade.switching = false; }
+    radeButtons();
+    repShow(true);
+    radeConnect(side);
+  };
+
+  // Called after every tune on this page: the RADE session follows (throttled; the
+  // server rate-limits commands)
+  function radeFollowTune() {
+    if (rade.side) repSchedule();          // band filter and on-frequency dot
+    if (!rade.side || !rade.ws || rade.ws.readyState !== 1) return;
+    clearTimeout(rade.tuneTimer);
+    rade.tuneTimer = setTimeout(function () {
+      if (rade.ws && rade.ws.readyState === 1) rade.ws.send(JSON.stringify({ type: 'tune', frequency: radeFreqHz() }));
+    }, 300);
+  }
+  // Called after every mode/filter change: leaving the RADE sideband switches RADE off
+  function radeFollowMode() {
+    if (!rade.side || rade.switching) return;
+    if (String(window.mode).toLowerCase() !== rade.side) radeStop();
+    else radeButtons();
+  }
+  window.addEventListener('beforeunload', radeClose);
+
+  // Mobile page: RADEL / RADEU in the mode list. The page tunes the sideband with its
+  // own setmode_sel(), then sets the RADE passband; any other mode switches RADE off.
+  window.addEventListener('load', function () {
+    var sel = document.getElementById('modesel');
+    if (document.getElementById('wfmode') || !sel || typeof window.setmode_sel !== 'function') return;
+    var origSel = window.setmode_sel;
+    window.setmode_sel = function (s) {
+      var v = s.value, m = /^RADE([LU])$/.exec(v);
+      if (!m) { if (rade.side) radeStop(); return origSel.apply(this, arguments); }
+      var side = m[1] === 'L' ? 'lsb' : 'usb', bw = radeBW(side);
+      s.value = side.toUpperCase();
+      rade.switching = true;
+      try { origSel.call(this, s); } finally { rade.switching = false; }
+      s.value = v;
+      window.lo = bw[0] / 1000; window.hi = bw[1] / 1000;     // RADE passband
+      try { send_soundsettings_to_server(); drawaxis(); } catch (e) {}
+      if (rade.side !== side) window.ubersdr_rade(side);
+      if (!rade.side) window.ubersdr_rade_onstop();          // did not start (e.g. audio not started yet)
+    };
+    window.ubersdr_rade_onstop = function () {                  // the list shows the plain sideband again
+      var cur = String(window.mode || '').toUpperCase();
+      if (/^RADE/.test(sel.value)) sel.value = (cur === 'LSB' || cur === 'USB') ? cur : 'USB';
+    };
+    var origFreq = window.setfreq;
+    window.setfreq = function () { var r = origFreq.apply(this, arguments); radeFollowTune(); return r; };
+  });
+
   window.ubersdr_compat_after_base = function () {
     var origBandButtons = window.document_bandbuttons;
     window.document_bandbuttons = function () {
@@ -732,9 +1178,9 @@
     };
     function savePos() { if (posReady) window.ubersdr_savepos(nominalfreq(), mode, lo, hi); }
     var origSetfreq = window.setfreq;
-    window.setfreq = function (f) { origSetfreq.apply(this, arguments); savePos(); bandLight(); };
+    window.setfreq = function (f) { origSetfreq.apply(this, arguments); savePos(); bandLight(); radeFollowTune(); };
     var origSetmf = window.setmf;
-    window.setmf = function () { origSetmf.apply(this, arguments); savePos(); bandLight(); };
+    window.setmf = function () { origSetmf.apply(this, arguments); savePos(); bandLight(); radeFollowMode(); };
     // Clicking a listener in the users strip: tune to the exact frequency they are on
     // (the RW3PS click also shifted it by this page's own passband offset) and switch to
     // their mode — sent at the end of their name by these pages; for other clients the

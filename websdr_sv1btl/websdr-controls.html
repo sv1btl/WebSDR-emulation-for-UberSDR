@@ -346,19 +346,21 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
   <tr>
   <td id="lsbpresets" style="display: table-row;">
     <table>
-      <tbody><tr>
+      <tbody>
+    <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 1.50 kHz, 0.70–2.20 kHz: the RADE passband" onClick="setmf('lsb', -2.2, -0.7);  rememberpreset();">1.50 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.00 kHz @ -6dB" onClick="setmf('lsb', -2.26, -0.35);  rememberpreset();">2.00 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.20 kHz @ -6dB" onClick="setmf('lsb', -2.36, -0.25);  rememberpreset();">2.20 kHz</button></td>
+    </tr>
+    <tr>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.40 kHz @ -6dB" onClick="setmf('lsb', -2.56, -0.25);  rememberpreset();">2.40 kHz</button></td>
-        </tr>
-    <tr>
-		<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.60 kHz @ -6dB" onClick="setmf('lsb', -2.71, -0.2);  rememberpreset();">2.60 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.60 kHz @ -6dB" onClick="setmf('lsb', -2.71, -0.2);  rememberpreset();">2.60 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.70 kHz @ -6dB" onClick="setmf('lsb', -2.76, -0.15);  rememberpreset();">2.70 kHz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.80 kHz @ -6dB" onClick="setmf('lsb', -2.8, -0.09);  rememberpreset();">2.80 kHz</button></td>
-		   </tr>
+    </tr>
     <tr>
-		<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.00 kHz @ -6dB" onClick="setmf('lsb', -2.97, -0.06);  rememberpreset();">3.00 kHz</button></td>
-    	<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.50 kHz @ -6dB" onClick="setmf('lsb', -3.47, -0.06);  rememberpreset();">3.50 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.80 kHz @ -6dB" onClick="setmf('lsb', -2.8, -0.09);  rememberpreset();">2.80 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.00 kHz @ -6dB" onClick="setmf('lsb', -2.97, -0.06);  rememberpreset();">3.00 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.50 kHz @ -6dB" onClick="setmf('lsb', -3.47, -0.06);  rememberpreset();">3.50 kHz</button></td>
     </tr>
     </tbody>
     </table>
@@ -367,24 +369,22 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
   <td id="usbpresets" style="display: none;">
     <table>
       <tbody>
-      <tr>
+    <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 1.50 kHz, 0.70–2.20 kHz: the RADE passband" onClick="setmf('usb', 0.7, 2.2);  rememberpreset();">1.50 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.00 kHz @ -6dB" onClick="setmf('usb', 0.35, 2.26);  rememberpreset();">2.00 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.20 kHz @ -6dB" onClick="setmf('usb', 0.25, 2.36);  rememberpreset();">2.20 kHz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.40 kHz @ -6dB" onClick="setmf('usb', 0.25, 2.56);  rememberpreset();">2.40 kHz</button></td>
-     </tr>
-    <tr>
-		<td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.30 kHz @ -6dB" onClick="setmf('usb', 0.2, 2.71);  rememberpreset();">2.60 kHz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.70 kHz @ -6dB" onClick="setmf('usb', 0.15, 2.76);  rememberpreset();">2.70 kHz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.80 kHz @ -6dB" onClick="setmf('usb', 0.09, 2.8);  rememberpreset();">2.80 kHz</button></td>
-        
     </tr>
-
-	<tr>
-    	<td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 3.00 kHz @ -6dB" onClick="setmf('usb', 0.06, 2.97);  rememberpreset();">3.00 kHz</button></td>
+    <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.40 kHz @ -6dB" onClick="setmf('usb', 0.25, 2.56);  rememberpreset();">2.40 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.60 kHz @ -6dB" onClick="setmf('usb', 0.2, 2.71);  rememberpreset();">2.60 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.70 kHz @ -6dB" onClick="setmf('usb', 0.15, 2.76);  rememberpreset();">2.70 kHz</button></td>
+    </tr>
+    <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.80 kHz @ -6dB" onClick="setmf('usb', 0.09, 2.8);  rememberpreset();">2.80 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 3.00 kHz @ -6dB" onClick="setmf('usb', 0.06, 2.97);  rememberpreset();">3.00 kHz</button></td>
         <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 3.50 kHz @ -6dB" onClick="setmf('usb', 0.06, 3.47);  rememberpreset();">3.50 kHz</button></td>
-        
-      </tr>
-		</tbody>
+    </tr>
+    </tbody>
         </table>
  		 </td>
  
@@ -758,13 +758,17 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
           <button type="button" class="btnTune" onClick="tune_step=0; freqstep(+2); setstep();" onMouseDown="startrunfreq(1)" onMouseUp="stoprunfreq(1,1)" ontouchstart="startrunfreq(1); setfreq(freq+0.0)" ontouchend="stoprunfreq(1,0)">&gt;&gt;</button>
           <button type="button" class="btnTune" onClick="tune_step=0; freqstep(+3); setstep();" onMouseDown="startrunfreq(1)" onMouseUp="stoprunfreq(1,1)" ontouchstart="startrunfreq(1); setfreq(freq+0.0)" ontouchend="stoprunfreq(1,0)">&gt;&gt;&gt;</button>
 </div>
-    <div class="d-tr" style="margin-block-start: 3px;">
+    <div class="d-tr" id="moderow" style="margin-block-start: 3px;">
  <b>Mode: &nbsp;</b>
 <button type="button" id="btn-CW" class="btnMode" onClick="set_mode('cw');toggle_info('mode', mode='CW');">CW</button>
 <button type="button" id="btn-LSB" class="btnMode" onClick="set_mode('lsb');toggle_info('mode', mode='LSB');">LSB</button>
 <button type="button" id="btn-USB" class="btnMode" onClick="set_mode('usb');toggle_info('mode', mode='USB');">USB</button>
 <button type="button" id="btn-AM" class="btnMode" onClick="set_mode('am');toggle_info('mode', mode='AM');">AM</button>
 <button type="button" id="btn-FM" class="btnMode" onClick="set_mode('fm');toggle_info('mode', mode='FM');">FM</button>
+<!-- RADE V1 (FreeDV digital voice), decoded by UberSDR's freedv extension: see sv1btl/ubersdr-compat.js -->
+<button type="button" id="btn-RADEL" class="btnMode" title="RADE V1 digital voice (FreeDV) on the lower sideband, decoded by UberSDR. Press again to switch off." onClick="ubersdr_rade('lsb');">RADEL</button>
+<button type="button" id="btn-RADEU" class="btnMode" title="RADE V1 digital voice (FreeDV) on the upper sideband, decoded by UberSDR. Press again to switch off." onClick="ubersdr_rade('usb');">RADEU</button>
+<div id="radestatus" class="radestatus"></div>
 </div></div></td>
 <td>
     </td></tr></tbody></table>
@@ -854,6 +858,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     </span>
 
 <!-- "Switch to another WebSDR" buttons: filled from otherWebSDRs in sv1btl/station.js -->
+<br>
 <table id="otherwebsdrs"></table>
 		
 <br><br>

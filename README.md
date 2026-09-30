@@ -17,6 +17,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
 - **band buttons** that zoom to the band and follow the frequency;
+- **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
+  decoded by UberSDR's own FreeDV extension;
 - **audio tools** that run in the listener's browser: Weak-signal AGC, noise reduction,
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
@@ -70,6 +72,8 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
   To check it, open `http://<your-address>:8901/`. You should see UberSDR's own WebSDR
   page before installing.
 - `python3` and `docker` on the host. Both are already there on a normal UberSDR machine.
+- For the **RADE** buttons (optional): UberSDR's FreeDV extension (standard in current
+  UberSDR) and `server.enable_cors: true` in its `config.yaml`. See section 6.
 
 ## 2. Quick install
 
@@ -138,6 +142,7 @@ and the comma at the end of each line.
 | `startKHz` | `7120` | where a **first-time** visitor starts, in kHz (returning visitors start where they left off) |
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
+| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
 | `otherWebSDRs` | `[ 'Twente', 'http://…' ],` | the "Switch to another WebSDR" buttons, up to 6 per row, as many rows as needed |
 | `hamBands` | *(commented out)* | your own band-button table (see below); leave it out to use the built-in IARU Region 1 table |
@@ -240,9 +245,53 @@ Browsers keep scripts in their cache. After editing a `.js` file, press **Ctrl+F
 make every visitor's browser fetch a changed `ubersdr-compat.js`, raise the `?v=…`
 number after `ubersdr-compat.js` in both `websdr-head.html` and `mobile-controls.html`.
 
+### RADE (FreeDV digital voice)
+
+The **RADEL** and **RADEU** buttons in the Mode row decode RADE V1 on the lower or upper
+sideband, with a 700–2200 Hz passband (1500 Hz, the width of a RADE signal; the
+**1.50 kHz** filter button, first in the LSB and USB filter presets, lights up). Pressing
+the lit button again, or any other mode button, switches it off.
+
+UberSDR decodes RADE on the server, with its FreeDV extension (`freedv-ka9q`). That
+extension can only work on a session of UberSDR's own interface, not on a WebSDR
+(port 8901) one. So when a listener presses RADEL or RADEU, their browser:
+
+1. registers a session with UberSDR's main web server (`mainServer` in `station.js`);
+2. opens an audio session there on the same frequency in LSB or USB, muted, so no audio
+   is sent back for it;
+3. asks UberSDR to start the FreeDV decoder on it, and plays the decoded voice through
+   the page's volume, Hi-Boost, notch and NR, while the normal audio is silenced.
+
+Tuning on the page is followed. A status line under the Mode row shows "waiting for a
+RADE signal…" or "decoding", and the lit button turns green while voice is decoded.
+
+Below it, a small **FreeDV Reporter** window lists the stations reported to FreeDV
+Reporter on the band you are on, as in UberSDR's own FreeDV panel: callsign, country,
+distance, frequency (a green dot when you are on it), message, TX and last RX. Stations
+transmitting now come first (red TX badge), then those that transmitted most recently;
+the TX column shows how long ago ("3m", "2h"). Clicking a station tunes to it. The
+window shows four rows at a time and scrolls for more.
+
+On the **mobile page**, RADEL and RADEU are at the end of the mode list, with the same
+status line under the buttons (the reporter window is on the desktop page only).
+
+Things to know:
+
+- **Your visitors must be able to reach `mainServer`.** The installer fills in the
+  public address from UberSDR's instance settings (for example a `…tunnel.ubersdr.org`
+  address). Without one, the page uses port 8080 of the same host; forward that port too
+  in that case.
+- **`server.enable_cors: true`** must be set in UberSDR's `config.yaml`, because the page
+  (port 8901) contacts another address. The installer warns if it is off.
+- **Each RADE listener uses one more UberSDR session** and one FreeDV decoder
+  (`freedv_extension.max_users` in `config.yaml`, 15 by default).
+- The decoder reads the sideband when it starts, so switching between RADEL and RADEU
+  restarts it. UberSDR allows one restart every 2 seconds; the page waits and retries.
+
 ### What listeners' browsers contact
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
+- Your UberSDR's main web server (`mainServer`), only while RADE is on.
 - `get.geojs.io`, or `ipwho.is` as a fallback, once a day per visitor. This finds the
   visitor's own country and city for the users list. Nothing is sent to it except the
   normal web request. To switch it off, see section 12.
@@ -328,6 +377,8 @@ and, after asking, recreates the container. UberSDR's own WebSDR page is back.
 | No sound until clicking | Browsers need one click before playing audio; the page shows a "start audio" button. The header links a guide for allowing autoplay. |
 | Phones don't get the mobile page | Open `/m.html?mobile` once; that clears a saved "desktop version" choice. |
 | Audio or extras stopped after an UberSDR update | Run the check script (section 7). |
+| RADE says "RADE unavailable: cannot reach …" | `mainServer` in `station.js` is wrong or not reachable from outside, or `server.enable_cors` is off (section 6). |
+| RADE stays on "waiting for a RADE signal…" | Nobody is transmitting RADE there right now. Common RADE frequencies: 7177 kHz LSB, 14236 kHz USB. |
 | Something else | Open the page with `?ubersdr_debug` at the end of the address (`http://…:8901/?ubersdr_debug`). Script errors then appear in a red panel at the bottom; please include them in a report at [github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues](https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues). |
 
 ## 12. Settings for advanced users

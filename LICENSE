@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 sv1btl
+Copyright (c) 2026 SV1BTL
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,25 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-------------------------------------------------------------------------------
+Scope of this licence
+
+The MIT licence above covers SV1BTL's own work in this package: the UberSDR
+adaptation and extras in websdr_sv1btl/sv1btl/ubersdr-compat.js, station.js,
+install.sh, uninstall.sh, check-after-update.sh, README.md and SV1BTL's
+changes to the page files.
+
+Third-party parts keep their own terms and are NOT relicensed:
+
+  - WebSDR client pages and scripts (websdr-base.js, the mobile page):
+    (c) 2007-2014 Pieter-Tjerk de Boer, PA3FWM, www.websdr.org
+  - Layout, styles and waterfall colour map: RW3PS's WebSDR template
+  - websdr-nr.js noise reduction: (c) 2026 joshuah.rainstar@gmail.com, MIT
+    terms with a caveat on commercial use, see the header of that file
+    (SV1BTL's residual-floor change to it is under the same terms)
+  - jQuery 3.1.1: MIT licence, (c) jQuery Foundation
+  - Less.js 3.12: Apache License 2.0
+  - Roboto Condensed font: Apache License 2.0, (c) Google
+  - DS-Digital font (sv1btl/DS-DIGII.TTF): (c) Dusit Supasawat, "All Rights
+    Reserved", usually free for personal use only

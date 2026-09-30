@@ -92,6 +92,42 @@ EOF
     say "Waterfall calibration from UberSDR's config: $CAL (written to station.js)"
 fi
 
+# ── RADE: UberSDR's public main-server address → station.js (mainServer) ───────
+if [ -n "$CFG" ]; then
+    MAINURL="$(echo "$CFG" | python3 -c '
+import re, sys
+t = sys.stdin.read()
+m = re.search(r"^instance_reporting:\s*\n((?:[ \t].*\n|\s*\n)*)", t, re.M)
+b = m.group(1) if m else ""
+i = re.search(r"^  instance:\s*\n((?:    .*\n)*)", b, re.M)
+ib = i.group(1) if i else ""
+h = re.search(r"^\s*host:\s*\"?([^\"\s#]+)", ib, re.M)
+p = re.search(r"^\s*port:\s*(\d+)", ib, re.M)
+tls = re.search(r"^\s*tls:\s*(true|false)", ib, re.M)
+if h and h.group(1) not in ("", "localhost"):
+    https = bool(tls and tls.group(1) == "true")
+    port = p.group(1) if p else ("443" if https else "80")
+    default = (https and port == "443") or (not https and port == "80")
+    print(("https" if https else "http") + "://" + h.group(1) + ("" if default else ":" + port))
+')"
+    CORS="$(echo "$CFG" | sed -n 's/^\s*enable_cors:\s*\([a-z]*\).*/\1/p' | head -1)"
+    if [ -n "$MAINURL" ]; then
+        python3 - "$TARGET/sv1btl/station.js" "$MAINURL" <<'EOF2'
+import re, sys
+p, url = sys.argv[1], sys.argv[2]
+s = open(p).read()
+n = re.sub(r"(mainServer:\s*)'[^']*'", lambda m: m.group(1) + "'" + url + "'", s, count=1)
+if n != s and re.search(r"mainServer:\s*''", s):      # only fill an empty setting
+    open(p, 'w').write(n)
+EOF2
+        say "RADE: UberSDR's public address $MAINURL (mainServer in station.js, if it was empty)"
+    else
+        say "RADE: no public UberSDR address in its config; the page will use port 8080 of this host"
+        echo "   (set mainServer in station.js if your visitors reach UberSDR another way)"
+    fi
+    [ "$CORS" = "true" ] || echo "   WARNING: server.enable_cors is not true in UberSDR's config.yaml; the RADE buttons need it"
+fi
+
 # ── 3. Mount lines in docker-compose.yml ─────────────────────────────────────
 ADDED="$(python3 - "$COMPOSE" "$TS" <<'EOF'
 import re, shutil, sys
