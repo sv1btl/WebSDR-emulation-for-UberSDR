@@ -124,7 +124,7 @@ var passbandobjstart=0;    // position (in pixels) of start of passband on frequ
 var passbandobjwidth=0;    // width of passband in pixels
 var centerfreq=bandinfo[band].centerfreq;
 
-var band0_smeter_offset = 1200;
+var band0_smeter_offset = 700;   // SV1BTL 2026-10-01: was 1200 (+12 dB); now +7 dB
 var band1_smeter_offset = 1000;
 var band2_smeter_offset = 1000;
 var band3_smeter_offset = 1000;

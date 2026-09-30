@@ -709,11 +709,14 @@ function set_buffer1(toggle)
 var smeterpeaktimer=2;
 var smeterpeak=0;    
 var interval_updatesmeter;
+// S-meter calibration of this page, in 1/100 dB (SV1BTL 2026-10-01: -3 dB, i.e. 10 dB
+// lower than the desktop page's band0_smeter_offset of +7 dB in websdr-base.js)
+var smeter_offset = -300;
 
 function updatesmeter()
 {
    try {
-      var s=soundapplet.smeter();
+      var s=soundapplet.smeter()+smeter_offset;
    } catch (e) { s=0; };
    var c=''+(s/100.0-127).toFixed(1);
    if (c.length<6) c='&nbsp;&nbsp;'+c;
