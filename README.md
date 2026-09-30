@@ -2,6 +2,10 @@
 
 Version 2026-09-30 · by SV1BTL · based on RW3PS's WebSDR template
 
+- **Repository:** https://github.com/sv1btl/WebSDR-emulation-for-UberSDR
+- **Live example:** http://sv1btlham.no-ip.org:8901/ (SV1BTL's WebSDR, Athens)
+- **Questions and problem reports:** https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues
+
 This package replaces the page that UberSDR shows on its **WebSDR port (8901)** with the
 layout used at SV1BTL's WebSDR (Athens, KM17vx). It is the classic Twente WebSDR interface
 restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
@@ -69,13 +73,28 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
 
 ## 2. Quick install
 
-1. **Copy the package to the UberSDR machine and unpack it** anywhere, for example in
-   your home folder:
+1. **Get the package on the UberSDR machine**, anywhere, for example in your home folder.
+
+   With git:
 
    ```bash
-   tar xzf websdr_sv1btl_package_*.tar.gz
-   cd websdr_sv1btl_package
+   git clone https://github.com/sv1btl/WebSDR-emulation-for-UberSDR.git
+   cd WebSDR-emulation-for-UberSDR
    ```
+
+   Or without git, download the repository as a ZIP file:
+
+   ```bash
+   wget https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/archive/refs/heads/main.zip
+   unzip main.zip
+   cd WebSDR-emulation-for-UberSDR-main
+   ```
+
+   Or download `websdr_sv1btl_package_<date>.tar.gz` from the repository's
+   [Releases](https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/releases) page and unpack it with
+   `tar xzf websdr_sv1btl_package_*.tar.gz && cd websdr_sv1btl_package`. Check it first
+   with `sha256sum -c websdr_sv1btl_package_*.tar.gz.sha256`, using the `.sha256` file
+   from the same page.
 
 2. **Run the installer:**
 
@@ -241,7 +260,8 @@ bash ~/ubersdr/websdr_sv1btl/check-after-update.sh
 - **A FAIL line:** it says what is wrong. The usual case is missing mount lines; the
   line to copy is in `compose-mounts.txt` in the package. The other is
   "`websdr-sound.js` changed shape", meaning a new UberSDR version renamed something the
-  audio extras rely on. The page still plays, but tell the author (section 13).
+  audio extras rely on. The page still plays; please report it at
+  https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues.
 
 If your UberSDR is not in `~/ubersdr`, or the container has another name:
 
@@ -252,7 +272,16 @@ UBERSDR_DIR=/path/to/ubersdr CONTAINER=my_container URL=http://localhost:8901 \
 
 ## 8. Upgrading to a newer package
 
-Unpack the new package and run its `install.sh` again. It:
+Get the new version and run its `install.sh` again:
+
+```bash
+cd WebSDR-emulation-for-UberSDR   # the folder you cloned
+git pull
+bash install.sh
+```
+
+(Without git, download and unpack the new ZIP or release archive, and run its
+`install.sh`.) The installer:
 
 - saves the whole current folder as `websdr_sv1btl.bak.<date>`;
 - writes the new files **in place**, so they are live at once with no restart;
@@ -299,7 +328,7 @@ and, after asking, recreates the container. UberSDR's own WebSDR page is back.
 | No sound until clicking | Browsers need one click before playing audio; the page shows a "start audio" button. The header links a guide for allowing autoplay. |
 | Phones don't get the mobile page | Open `/m.html?mobile` once; that clears a saved "desktop version" choice. |
 | Audio or extras stopped after an UberSDR update | Run the check script (section 7). |
-| Something else | Open the page with `?ubersdr_debug` at the end of the address (`http://…:8901/?ubersdr_debug`). Script errors then appear in a red panel at the bottom; please send them with your report. |
+| Something else | Open the page with `?ubersdr_debug` at the end of the address (`http://…:8901/?ubersdr_debug`). Script errors then appear in a red panel at the bottom; please include them in a report at [github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues](https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues). |
 
 ## 12. Settings for advanced users
 
@@ -340,4 +369,4 @@ editing, raise the `?v=` number (see section 6).
 SV1BTL's own work in this package is released under the **MIT licence** (see `LICENSE`).
 The third-party parts listed above keep their own terms; `LICENSE` lists them too.
 
-Questions and reports: SV1BTL.
+Questions and problem reports: https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues
