@@ -1,0 +1,1130 @@
+<div class="notify" ><span id="notifyType" class=""></span></div>
+<div class="loader">
+   <div class="text">Loading WebSDR</div>
+   <div class="dots">
+      <div></div>
+      <div></div>
+      <div></div>
+      <div></div>
+   </div>
+</div>
+
+<div style="margin: 5px 5px 0px 5px;font-size: 11pt;background: #f5f5f5cc;border:solid 0px #fff;border-radius: 4px 4px 4px 4px;color: #4a005d;padding: 10px 5px 15px 15px;box-shadow: 4px 4px 15px 0px rgba(0,0,0);z-index: 2;position: relative;">
+    <span style="
+    font-size: 17pt;
+    font-weight: bold;
+">This is a WebSDR receiver, located in <span data-station="location">Your City, Country</span>, <a data-station="locator" href="#" target="_blank">AA00aa</a></span>
+    <br>
+  <em style="font-size: 14px;">
+	
+    It is operated by <span data-station="callsign">N0CALL</span>, e-mail: <a data-station="email" href="#" style="font-weight: normal;">you@example.com</a>.
+      <br>
+	
+	Best viewed with Firefox <img src="sv1btl/mozilla.png" width="14" height="14" alt=""/>. If you wish to configure your browser to NOT require the need to press this button and allow audio/video to start automatically on ANY web site, read this <a href="sv1btl/guide/guide.html" target="_new">Guide</a>. 
+	  <br>
+	
+    More information about the WebSDR project can be found on  <a href="http://www.websdr.org" target="_blank">www.websdr.org</a>
+   
+   </em>
+  	
+<form name="usernameform" action="#">
+<script type="text/javascript">
+document_username();
+</script>
+<input type="text" size=1 name="dummytopreventsubmissiononenter" style="display:none" onClick="">
+</form>
+</div>
+	
+	<div id="equip_info" style="margin: 0px 10px; font-size: 11pt; background: rgba(245, 245, 245, 0.8); border: 0px solid rgb(255, 255, 255); color: rgb(0, 0, 0); padding: 1px 5px 2px 15px; display: none;">
+    <div style="">
+
+  <!-- <h2 style="font-size: 1.4rem">Equipment</h2> -->
+    <img src="sv1btl/setup_bw.gif" style="float: right; height: 187px;margin-top: 7px;
+    margin-right: 45px;
+	box-shadow: 2px 2px 10px 0px rgba(0,0,0);">
+  <ul style="font-size: 0.91rem;">
+    <b>This is a layout based on RW3PS's template</b>
+	<br>emulating Twente's WebSDR using UberSDR project, modified by SV1BTL.
+    <!--<span style="/*text-decoration: line-through*/">Original layout is <a
+	href="http://IPADD:PORT/" title="CALLSIGN WebSDR"><b>here</b> (click)</a></span>-->
+    <br>
+	<br>
+	<b>Computer and operator system</b>
+	<br>
+    <span style="/*text-decoration: line-through*/">Linux, running <a href="https://ubersdr.org" target="_blank">UberSDR</a> (ka9q-radio)</span>
+    <br>
+	<br>
+    <b>Receiver and Antenna</b>
+	<br>
+    <span style="/*text-decoration: line-through*/">RX888MK2 receiver with UberSDR</span>
+	<br>
+
+<br>
+<span style="color: rgb(195, 45, 0);">EFHW 160-10m multi-band HF antenna<br>	  
+</span>
+</ul>
+</div>
+</div>
+
+<div style="
+    margin: 0px 10px 0px 10px;
+    padding: 0px 5px 0px 15px;
+    height: 18px;
+    background: #f5f5f5cc;
+    text-align: center;
+    border-radius: 0px 0px 10px 10px;
+    line-height: 50px;
+    font-size: 1.4rem;
+    font-weight: bold;
+    box-shadow: 5px 14px 15px -4px rgba(0,0,0);
+    position: relative;
+    z-index: 1;
+"></div><div id="equip_button" style="
+	cursor:pointer;
+    margin-left: auto;
+    margin-right: auto;
+    width: 245px;
+    height: 30px;
+    background: #d6d6d6;
+    text-align: center;
+	text-shadow: 0px 0px 0px;
+    border-radius: 0px 0px 10px 10px;
+    line-height: 33px;
+    font-size: 1.0rem;
+    font-weight: 1; 
+    box-shadow: 3px 10px 15px -3px rgba(0,0,0);
+    position: relative;
+    z-index: 1;
+">WebSDR Information
+</div>
+
+
+
+
+
+<br>
+
+<!--<div class="mb" style="display: none;">
+<form name="usernameform" action="#">
+<script type="text/javascript">
+document_username();
+</script>-->
+<!--<form name="usernameform" action="#">
+<center><script type="text/javascript">
+document_username();
+</script></center>
+<input type="text" size=1 name="dummytopreventsubmissiononenter" style="display:none" onClick="">
+</form>-->
+<script>
+  window.sessionTime();
+</script>
+
+	
+<input type="text" size=1 name="dummytopreventsubmissiononenter" style="display:none" onClick="">
+</form>
+</div>
+
+<div id="dummyforie"></div>
+<a href="m.html?mobile">
+<div id="mobilewarning" class="warning" style="min-height:45px; text-align:center; vertical-align:middle;">
+It seems that you're using a mobile device. Please click here.
+</div>
+</a>
+<script>
+// UberSDR's tmp/bandinfo.js sets has_mobile=0, so websdr-base.js never shows this banner;
+// show it to phones and tablets that chose the desktop page (see websdr-head.html)
+if (window.ubersdr_is_mobile) document.getElementById('mobilewarning').style.display = 'block';
+</script>
+<div id="javawarning" class="warning">
+It seems Java is not installed or disabled on your computer. You need to install and/or enable it for this website to work properly.
+<br>Since Java version 7u51, Java needs to be enabled separately for each website; see <a href=http://websdr.org/java.html>http://websdr.org/java.html</a> for instructions.
+</div>
+<div id="html5warning" class="warning">
+Your browser does not seem to support HTML5 WebAudio; please try a recent version of Firefox, Chrome, Opera or Safari; or switch to Java.
+</div>
+<div style='margin-left: auto;
+    margin-right: auto;
+    text-align: center;'>
+<form name="viewform" action="#" style='display: inline-block;'>
+<div class="mb" style='    display: inline-flex;'>
+  <b>Waterfall:</b>
+  <fieldset id='viewformbuttons' style="margin-left: 30px;margin-right: -40px;margin-top: -5px;margin-bottom: -20px;">
+<input class="radios" type="radio" name="group" id="radio-1" value="all bands" checked="checked" onClick="setview(0);">
+<label for="radio-1">All Bands</label>
+<input class="radios" type="radio" name="group" id="radio-2" value="one band"  onclick="setview(2);">
+<label for="radio-2">Single Band</label>
+<input class="radios" type="radio" name="group" id="radio-3" value="blind" onClick="setview(3);">
+<label for="radio-3">off</label>
+</fieldset>
+</div>
+<div class="mb" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;">
+    <b>Keyboard Control:</b>
+	<div class="toggleWrapper" style="
+    display: flex;
+    vertical-align: middle;
+    text-align: center;
+    justify-content: center;
+    margin-left: 11px;
+">
+  <input type="checkbox" name="allowkeys" class="mobileToggle" id="allowkeys" onClick="settings_store()" checked>
+<label for="allowkeys"></label></div>
+    <div class="keylist">
+      <table>
+        <tbody><tr><td class="keylisttd1"><tt><b>j k ← →</b></tt></td><td class="keylisttd2">freq. down/up (+shift/ctrl/alt faster)</td></tr>
+        <tr><td class="keylisttd1"><tt><b>u l c a f</b></tt></td><td class="keylisttd2">USB, LSB, CW, AM, FM</td></tr>
+        <tr><td class="keylisttd1"><tt><b>W w</b></tt></td><td class="keylisttd2">filter wider/narrower </td></tr>
+        <tr><td class="keylisttd1"><tt><b>z Z ^Z</b></tt></td><td class="keylisttd2">center/zoom waterfall </td></tr>
+        <tr><td class="keylisttd1"><tt><b>g</b></tt></td><td class="keylisttd2">enter frequency</td></tr>
+        <tr id="keyhelpmultiband"><td class="keylisttd1"><tt><b>b B</b></tt></td><td class="keylisttd2">change band</td></tr>
+        <tr><td class="keylisttd1"><tt><b>m V v</b></tt></td><td class="keylisttd2">mute, volume up/down</td></tr>
+        </tbody></table>
+    </div>
+  </div>
+</form>
+
+
+
+<div class="mb" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;vertical-align: bottom;
+    margin-bottom: 5px;">
+    <b>Background image</b>
+	<div class="toggleWrapper" style="
+    display: flex;
+    vertical-align: middle;
+    text-align: center;
+    justify-content: center;
+    margin-left: 11px;
+">
+  <input type="checkbox" name="background_toggle" class="mobileToggle" id="background_toggle" onClick="background_load();">
+<label for="background_toggle"></label></div>
+  </div>
+  
+</div>
+
+
+
+<div style="
+    text-align: center;
+">
+<div class="users-bg">
+
+<!-- WATERFALL -->
+<!-- RW3PS waterfall colours: colour-map filter copied from the RW3PS websdr-waterfall.js,
+     applied to UberSDR's waterfall by the #wfcdiv rule in websdr-head.html -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="svgGradientMap"><fecolormatrix type="saturate" values="0" /><feComponentTransfer color-interpolation-filters="sRGB"><feFuncR type="table" tableValues="0,0.01,0.01,0.02,0.03,0.03,0.04,0.05,0.05,0.06,0.06,0.07,0.08,0.08,0.09,0.1,0.1,0.11,0.12,0.12,0.13,0.14,0.14,0.15,0.13,0.11,0.09,0.07,0.06,0.04,0.02,0,0,0,0,0,0,0,0,0,0.13,0.25,0.38,0.5,0.63,0.75,0.88,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,255"/><feFuncG type="table" tableValues="0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.13,0.25,0.38,0.5,0.63,0.75,0.88,1,1,1,1,1,1,1,1,1,0.99,0.99,0.98,0.97,0.97,0.96,0.96,0.95,0.93,0.91,0.9,0.88,0.86,0.84,0.82,0.81,0.79,0.77,0.75,0.73,0.72,0.7,0.68,0.66,0.64,0.63,0.61,0.59,0.57,0.56,0.54,0.52,0.5,0.48,0.47,0.45,0.43,0.41,0.39,0.38,0.36,0.34,0.32,0.3,0.29,0.27,0.25,0.23,0.21,0.2,0.18,0.16,0.14,0.13,0.11,0.09,0.07,0.05,0.04,0.02,0"/><feFuncB type="table" tableValues="0,0.04,0.09,0.13,0.17,0.22,0.26,0.3,0.35,0.39,0.43,0.48,0.52,0.57,0.61,0.65,0.7,0.74,0.78,0.83,0.87,0.91,0.96,1,0.99,0.98,0.97,0.96,0.95,0.94,0.93,0.92,0.9,0.88,0.85,0.83,0.81,0.79,0.77,0.75,0.66,0.56,0.47,0.37,0.28,0.19,0.09,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"/></feComponentTransfer></filter></svg>
+
+	
+<div id="wfccontainer">
+    <div id="wfcontainer" style="position:relative; transform-origin: 0% 0%;" class="clear">
+<div id="test"></div>
+<div id="waterfalls">
+<div id="wfdiv0">
+<div id="wfcdiv8" style="height:100px;overflow:hidden;position:relative;">
+<canvas class="html5waterfall" id="wf1canvas8" width="1024" height="100">test</canvas>
+<canvas class="html5waterfall" id="wf2canvas8" width="1024" height="0">test</canvas></div>
+</div>
+
+<div class="scale" style="overflow:hidden; width:1024px; height:14px; position:relative" title="click to tune" id="clipscale0" onMouseDown="return false"><img onMouseDown="imgmousedown(event,0)" class="scaleabs" style="top: 0px; left: 0px;" name="s0cale0">
+<img src="scaleblack.png" onMouseDown="imgmousedown(event,0)" class="scaleabs" style="top: 0px; left: 1024px;" name="s1cale0"></div>
+<div class="scale" style="width:1024px;height:20px;background-color:black;position:relative;" id="blackbar0" title="click to tune" onMouseDown="imgmousedown(event,0)">
+</div>
+
+<!--<div id="wfdiv1"><div id="wfcdiv9" style="height:100px;overflow:hidden;position:relative;"><canvas class="html5waterfall" id="wf1canvas9" width="1024" height="100">test</canvas><canvas class="html5waterfall" id="wf2canvas9" width="1024" height="0">test</canvas></div></div><div class="scale" style="overflow:hidden; width:1024px; height:14px; position:relative" title="click to tune" id="clipscale1" onmousedown="return false"><img onmousedown="imgmousedown(event,1)" class="scaleabs" style="top: 0px; left: 0px;" name="s0cale1"><img src="scaleblack.png" onmousedown="imgmousedown(event,1)" class="scaleabs" style="top: 0px; left: 1024px;" name="s1cale1"></div><div class="scale" style="width:1024px;height:20px;background-color:black;position:relative;" id="blackbar1" title="click to tune" onmousedown="imgmousedown(event,1)"></div>-->
+</div>
+		
+<!----VERTICAL LINES from NA5B WebSDR, help from W3 Schools and G8HXT----->
+<style>
+.vl {
+  position: absolute;
+  width:100%; 
+  height:100px; 
+  top:-117px; 
+  z-index: 2; 
+  background-image: linear-gradient(to right, rgb(255, 255, 0) -20%, rgba(255, 255, 154, 0.2) 5%, rgba(255, 255, 154, 0.2) 95%, rgb(255, 255, 0) 120%);
+}
+</style>
+
+<div class="hideblind" style="display: inline;">
+<img src="edgelower.png" title="drag to change filter" id="edgelower" onMouseDown="mousedownlower(event)" class="scaleabs" alt="" style="top: 115px; left: 493.5px;">
+<img src="edgeupper.png" title="drag to change filter" id="edgeupper" onMouseDown="mousedownupper(event)" class="scaleabs" alt="" style="top: 115px; left: 505.5px;">
+<img src="carrier.png" title="drag to tune" id="carrier" onMouseDown="mousedownpassband(event)" class="scaleabs" style="z-index: 2; top: 115px; left: 505.5px; height: 33px;" alt="">
+	
+<div id="yellowbara">
+<div id="yellowbar" title="drag to tune" class="scaleabs" style="width:100px; height:16px; top:20px; z-index: 2; background-color: rgba(241, 238, 238, 0);background-image: linear-gradient(to right, rgb(255, 255, 0) -20%, rgba(255, 255, 154, 0.2) 5%, rgba(255, 255, 154, 0.2) 95%, rgb(255, 255, 0) 120%);" onMouseDown="mousedownpassband(event)">
+<div id="yellowbarr" class="scaleabs" style="position:relative;left:0px;">
+<div class="scaleabs" style="position:absolute;width:0px;height:0px;"></div>
+<div class="vl"></div>
+</div></div></div></div></div></div></div>
+
+<!-- End of WATERFALL -->
+	
+<!-- Left Window -->
+	
+<div class="mb" style=" min-width: 1160px;">
+<div class="d-table" style="">
+<div class="d-tr" style="display: inline;">
+</div></div>
+    
+	
+<form name="freqform" action="#" onSubmit="setfreqif(this.frequency.value); return false;">
+<div class="d-table" style="
+    position: relative;
+">
+ 
+    
+    <div class="d-td" style="width: 317px;left: -23%;position: relative;">
+    <div class="d-tr"><div style="
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: middle;
+    margin-block-start: 6px;
+    ">
+    Used by <span id=numusers1 style='margin: 0px 3px;font-weight: bold;'>?</span> user(s) simultaneously <br>
+		<div style="font-weight: bold;margin: 0px 0px 6px 0px;     font-size: 14px;">Band
+		</div>
+	    <!--SV2YJ - Dynamically loading band buttons based on the bandinfo configuration-->
+        <script type="text/javascript">
+            document_bandbuttons();
+         </script>	
+<br>
+
+<!--
+<button type="button" class="btnBand btn-selected" name="group0" id="btnB-0" onclick="setband(0)">MW</button>
+<button type="button" class="btnBand" name="group0" id="btnB-1" onclick="setband(2)">80m</button>
+<button type="button" class="btnBand" name="group0" id="btnB-2" onclick="setband(1)">60m</button>
+<button type="button" class="btnBand" name="group0" id="btnB-3" onclick="setband(3)">40m</button>		
+<button type="button" class="btnBand" name="group0" id="btnB-4" onclick="setband(4)">30m</button>
+
+<br>
+
+<button type="button" class="btnBand band_offed" name="group0" id="btnB-5" onclick="setband(5)">20m</button>
+<button type="button" class="btnBand band_offed" name="group0" id="btnB-6" onclick="setband(6)">17m</button>
+<button type="button" class="btnBand band_offed" name="group0" id="btnB-7" onclick="setband(7)">15m</button>
+<button type="button" class="btnBand band_offed" name="group0" id="btnB-8" onclick="setband(8)">12m</button>
+<button type="button" class="btnBand band_offed" name="group0" id="btnB-9" onclick="setband(9)">10m</button>
+ -->
+			</div></div>
+   <div class="d-tr" style="padding: 7px 0px 0px 0px;">
+<table style="
+    /* text-align: center; */
+    margin-left:auto;
+    margin-right:auto;
+    width: 270px;
+"><tbody>
+<tr style="vertical-align: top;">
+<td><center style="text-align: center;">
+
+  <div style="font-size: 0.85rem;">
+    <b style="font-size:14px;    margin-right: 3px; ">Filters: </b>
+    <b><span id="numericalbandwidth6">2.70</span></b> kHz @ -6dB;
+    <b><span id="numericalbandwidth60">3.16</span></b> kHz @ -60dB
+
+    <table align=center>
+    <tr>
+    <td><b style="font-size:14px;    margin-right: 3px; ">Filter shift: </b></td>
+    <td><input type="button"  class="btnZoom" style="border-radius: 40px 0px 0px 40px; vertical-align:text-bottom; width:100%;" value="&nbsp; wider &nbsp; " onClick="if (lo<0) lo*=1.1; else lo/=1.1; if (hi>0) hi*=1.1; else hi/=1.1; updbw();"></td>
+    <td><input type="button" class="btnZoom" style="border-radius: 0px 40px 40px 0px; vertical-align:text-bottom; width:100%;" value="&nbsp; narrower &nbsp;"onclick="if (lo>0) lo*=1.1; else lo/=1.1; if (hi<0) hi*=1.1; else hi/=1.1; updbw();"></td>
+    </tr>
+    <tr>
+    <td><input type="button" class="btnZoom" style="border-radius: 40px 0px 0px 40px; vertical-align:text-bottom; width:100%;" value="filter -" onClick="lo-=0.03125; hi-=0.03125; updbw();"></td>
+    <td><input type="button" class="btnZoom" value="low -"    onclick="lo-=0.03125; hi+=0.0; updbw();"></td>
+    <td><input type="button" class="btnZoom" style="border-radius: 0px 40px 40px 0px; vertical-align:text-bottom; width:100%;" value="upper -" onClick="lo+=0.0; hi-=0.03125; updbw();"></td>
+    </tr>
+    <tr>
+    <td><input type="button" class="btnZoom" style="border-radius: 40px 0px 0px 40px; vertical-align:text-bottom; width:100%;" value="filter +" onClick="lo+=0.03125; hi+=0.03125; updbw();"></td>
+    <td><input type="button" class="btnZoom" value="low +" onClick="lo+=0.03125; hi+=0.0; updbw();"></td>
+    <td><input type="button" class="btnZoom" style="border-radius: 0px 40px 40px 0px; vertical-align:text-bottom; width:100%;" value="upper +" onClick="lo+=0.0; hi+=0.03125; updbw();"></td>
+    </tr>
+  </table>
+ 
+    
+    <br> 
+    <em>Select <b>Mode</b> at the right for Filters' presets!</em>
+  </div>
+
+  <table>
+  <tbody>
+  <tr>
+  <td id="lsbpresets" style="display: table-row;">
+    <table>
+      <tbody><tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.00 kHz @ -6dB" onClick="setmf('lsb', -2.26, -0.35);  rememberpreset();">2.00 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.20 kHz @ -6dB" onClick="setmf('lsb', -2.36, -0.25);  rememberpreset();">2.20 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.40 kHz @ -6dB" onClick="setmf('lsb', -2.56, -0.25);  rememberpreset();">2.40 kHz</button></td>
+        </tr>
+    <tr>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.60 kHz @ -6dB" onClick="setmf('lsb', -2.71, -0.2);  rememberpreset();">2.60 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.70 kHz @ -6dB" onClick="setmf('lsb', -2.76, -0.15);  rememberpreset();">2.70 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 2.80 kHz @ -6dB" onClick="setmf('lsb', -2.8, -0.09);  rememberpreset();">2.80 kHz</button></td>
+		   </tr>
+    <tr>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.00 kHz @ -6dB" onClick="setmf('lsb', -2.97, -0.06);  rememberpreset();">3.00 kHz</button></td>
+    	<td><button type="button" class="btnBandW" title="Bandwidth preset (LSB): 3.50 kHz @ -6dB" onClick="setmf('lsb', -3.47, -0.06);  rememberpreset();">3.50 kHz</button></td>
+    </tr>
+    </tbody>
+    </table>
+    </td>
+    
+  <td id="usbpresets" style="display: none;">
+    <table>
+      <tbody>
+      <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.00 kHz @ -6dB" onClick="setmf('usb', 0.35, 2.26);  rememberpreset();">2.00 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.20 kHz @ -6dB" onClick="setmf('usb', 0.25, 2.36);  rememberpreset();">2.20 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.40 kHz @ -6dB" onClick="setmf('usb', 0.25, 2.56);  rememberpreset();">2.40 kHz</button></td>
+     </tr>
+    <tr>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.30 kHz @ -6dB" onClick="setmf('usb', 0.2, 2.71);  rememberpreset();">2.60 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.70 kHz @ -6dB" onClick="setmf('usb', 0.15, 2.76);  rememberpreset();">2.70 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 2.80 kHz @ -6dB" onClick="setmf('usb', 0.09, 2.8);  rememberpreset();">2.80 kHz</button></td>
+        
+    </tr>
+
+	<tr>
+    	<td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 3.00 kHz @ -6dB" onClick="setmf('usb', 0.06, 2.97);  rememberpreset();">3.00 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (USB): 3.50 kHz @ -6dB" onClick="setmf('usb', 0.06, 3.47);  rememberpreset();">3.50 kHz</button></td>
+        
+      </tr>
+		</tbody>
+        </table>
+ 		 </td>
+ 
+  <td id="ampresets" style="display: none;">
+    <table>
+      <tbody>
+      <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 5.00 kHz @ -6dB" onClick="setmf('am', -2.46, 2.45);  rememberpreset();">5.00 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 6.50 kHz @ -6dB" onClick="setmf('am', -3.21, 3.2);  rememberpreset();">6.50 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 7.00 kHz @ -6dB" onClick="setmf('am', -3.46, 3.45);  rememberpreset();">7.00 kHz</button></td>
+		</tr>
+    <tr>
+    	<td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 9.00 kHz @ -6dB" onClick="setmf('am', -4.455, 4.455);  rememberpreset();">9.00 kHz</button></td>
+    	<td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 10.00 kHz @ -6dB" onClick="setmf('am', -4.955, 4.955);  rememberpreset();">10.00 kHz</button></td>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (AM): 15.00 kHz @ -6dB" onClick="setmf('am', -7.46, 7.45);  rememberpreset();">15.00 kHz</button></td>
+     </tr>
+    	</tbody>
+   	 	</table>
+  		</td>
+        
+  <td id="fmpresets" style="display: none;">
+    <table>
+      <tbody>
+      <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (FM): 5.50 kHz @ -6dB" onClick="setmf('fm', -2.7, 2.71);  rememberpreset();">5.50 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (FM): 6.50 kHz @ -6dB" onClick="setmf('fm', -3.2, 3.21);  rememberpreset();">6.50 kHz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (FM): 10.00 kHz @ -6dB" onClick="setmf('fm', -4.95, 4.96);  rememberpreset();">10.00 kHz</button></td>
+		</tr>
+    <tr> 
+    	<td><button type="button" class="btnBandW" title="Bandwidth preset (FM): 12.50 kHz @ -6dB" onClick="setmf('fm', -6.2, 6.21);  rememberpreset();">12.50 kHz</button></td>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (FM): 25.00 kHz @ -6dB" onClick="setmf('fm', -12.45, 12.46);  rememberpreset();">25.00 kHz</button></td>
+      </tr>
+    	</tbody>
+        </table>
+  		</td>
+  
+  <td id="cwpresets" style="display: none;">
+    <table>
+      <tbody>
+      <tr>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset : 700 Hz - 800 Hz (CW)" onClick="setmf('cw', -0.8, -0.7);  rememberpreset();">100 Hz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset : 650 Hz - 850 Hz (CW)" onClick="setmf('cw', -0.85, -0.65);  rememberpreset();">200 Hz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset : 600 Hz - 900 Hz (CW)" onClick="setmf('cw', -0.9, -0.6);  rememberpreset();">300 Hz</button></td>
+
+	</tr>
+    <tr>
+         <td><button type="button" class="btnBandW" title="Bandwidth preset : 550 Hz - 950 Hz (CW)" onClick="setmf('cw', -0.95, -0.55);  rememberpreset();">400 Hz</button></td>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset : 500 Hz - 1 kHz (CW)" onClick="setmf('cw', -1, -0.5);  rememberpreset();">500 Hz</button></td>
+    </tr>
+    	</tbody>
+        </table>
+   		</td>
+  </tr></tbody></table>
+  </center>
+  </td></tr></tbody></table>
+</div>
+
+	<div class="d-tr" style="">
+<b style="
+    /* display: inline-block; */
+    /* vertical-align: top; */
+    margin-top: 5px;
+	    font-size: 14px;
+    /* margin-left: 15px; */
+    /* float: left; */
+">Memories</b>
+</div>
+
+<center>
+<table>
+<tbody>
+    <tr>
+	<td>
+	<span title="Download memories as a CSV file, e.g. for Excel"><input type="button" class="btnMem" value="Download" style="border-radius: 40px 0px 0px 40px; vertical-align:text-bottom; width:100%; " onClick="mem_downloadCSV()"></span>
+	</td>
+	
+	<td>
+    <span title="Add memories from CSV file as extra columns"><input  type="button" class="btnMem" value="Append" style="vertical-align:text-bottom; width:100%;" onClick="document.getElementById('uploadcsvfilebutton1').click();"></span>
+	</td>
+	
+	<td>
+    <span title="Delete current memories and replace by those from CSV file"><input type="button" class="btnMem" value="Replace" style="border-radius: 0px 40px 40px 0px; vertical-align:text-bottom; width:100%;" onClick="document.getElementById('uploadcsvfilebutton2').click();"></span>
+	</td>
+	</tr>
+	
+	<tr>
+	<td>
+    <span title="Delete all memories!"><input  type="button" class="btnMem" value="Delete all" style="border-radius: 40px 0px 0px 40px; vertical-align:text-bottom; width:100%;" onClick="mem_deleteall()"></span>
+	</td>
+	
+	<td>
+    <span title="Undo last upload or delete action"><input  type="button" class="btnMem" value="&#10554;" style="vertical-align:text-bottom; width:100%;" onClick="mem_revert()"></span>
+	</td>
+	
+	<td>
+    <span title="Show or hide user memories list"><input id="btnMemList"  type="button" class="btnMem" value="Show/Hide" style="border-radius: 0px 40px 40px 0px; vertical-align:text-bottom; width:100%;" onClick="hide_memory_list()"></span>
+	</td>
+	</tr>
+	</tbody>
+	</table>
+   
+<input type="file" id="uploadcsvfilebutton1" style="height:0px; display:none;" onChange="mem_uploadCSV(1);">
+    <input type="file" id="uploadcsvfilebutton2" style="height:0px; display:none;" onChange="mem_uploadCSV(2);">
+  </form>
+	
+
+<div class="d-tr">
+<div class="d-td" style="width: 350px; margin-left: 6.5px; ">
+<div id="memories" class="memories">
+
+</div>
+</div></div></div>
+
+<!-- Middle Window -->
+    
+    <div style="
+    margin: 12px -7px;
+    padding: 0px 0px 0px 4px;
+    height: 93%;
+    position:relative;
+    position: absolute;
+    left: 27%;
+    z-index:1;
+    " class="d-td">
+
+    <table style="margin-top: -12px;"><tbody><tr>
+    <td>
+    <div class="d-table" style="
+">
+    <div class="d-tr">
+    <div style="
+    display: flex;
+    background: black;
+    border: 3px solid #9e9883;
+    border-radius: 10px;
+    align-items: center;
+	position:relative
+"><div><input type="text" style="
+    font-size: 38px;
+    font-family: digital-font;
+    width: 160px;
+    margin: 4px 0px 0px 5px;
+    border-color: black;
+    background-position-x: 1px;
+    background-color: black;
+    color: #98ffee;
+    /*text-shadow: 0px 0px 8px;*/
+    margin-bottom: -13px;
+    padding-right: 0px;
+    text-align: center;
+    height: 51px;
+    display: inline-block;
+    border: 0px;
+    " size="3" name="frequency" onKeyUp="setfreqif_fut(this.value);">
+   <!--<input type="submit" style="position:absolute; left:-999px; width:1px" value="submit">-->
+<div style="
+    color: #98ffee;
+    font-size: 11px;
+    text-shadow: 0px 0px 42px;
+    margin-left: 11px;
+    margin-top: 7px;
+    margin-bottom: 12px;
+    text-align: left;
+"> 
+    <div class="radio_info_container" style="
+    cursor: default;
+    /* display: none; */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: relative;
+    ">
+<div class="radio_info is_on" id="displaymode" style="left: 11px;"></div>
+</div>
+
+<div style="margin-left: 41px;position: absolute;display: inline;text-align: right;">BW
+<div style="
+    position: absolute;
+    display: inline;
+    text-align: right;
+    /* width: 3px; */
+    /* margin-left: 13px; */
+    padding-left: 64px;
+">kHz</div><div id="numericalfilterlow" style="margin-left: 2px;position: absolute;display: inline;text-align: right;width: 26px;"></div><div id="numericalfilterhigh" style="
+    position: absolute;
+    display: inline;
+    text-align: right;
+    width: 26px;
+    margin-left: 36px;
+"></div><div style="
+    position: absolute;
+    display: inline;
+    text-align: right;
+    /* width: 3px; */
+    /* margin-left: 13px; */
+    padding-left: 30px;
+	"></div>
+    
+</div>
+    <br>
+    
+
+</div>
+
+        </div>
+		
+		<div style="display: flex; align-items: center; margin-right: -22px; margin-left: -9px; opacity: 0.9;  transition: opacity 0.5s ease 0s;" class="progress-ring">
+<svg style="display: block;border: 2px solid rgb(43, 43, 43);border-radius: 50%;width: 56px;height: 56px;background: green;position: relative;bottom: 50%;top: 50%;box-shadow: 0 0 8px 0px rgb(13, 224, 12);" class="progress-ring" width="120" height="120">
+    
+    <g>
+    
+    <linearGradient id="gradient" style="
+    /* transform: rotate(45deg); */
+    x1: 50%;
+" gradientTransform="rotate(90)" x1="50%">
+
+<stop offset="0" stop-color="#59b189" style="stop-color: #c3ffc3;"></stop><stop offset="0%" stop-color="#59b189" stop-opacity="0" style="     stop-color: rgb(15, 252, 13);     stop-opacity: 1; "></stop>
+</linearGradient>
+<linearGradient id="gradient2" style="
+    /* transform: rotate(45deg); */
+    x1: 50%;
+" gradientTransform="rotate(90)" x1="50%">
+
+<stop offset="0%" stop-color="#59b189" stop-opacity="0" style="     stop-color: rgb(15, 252, 13);     stop-opacity: 1; "></stop><stop offset="0" stop-color="#59b189" style="stop-color: #c3ffc3;"></stop>
+</linearGradient><circle class="progress-ring__circle" stroke= url(#gradient) stroke-width="17px" r="20" fill="transparent"cx=28 cy=28 style="stroke-dasharray: 125.664, 125.664; stroke-dashoffset: 125.664; position: absolute;  stroke: url(&quot;#gradient&quot;);"></circle>
+<circle class="progress-ring__circle" stroke= url(#gradient2) stroke-width="17px" r="20" fill="transparent" cx=28 cy=28 style="stroke-dasharray: 125.664, 125.664; stroke-dashoffset: -125.664; position: absolute stroke: url(&quot;#gradient2&quot;); mix-blend-mode: lighten;"></circle>
+</g>
+</svg>
+<div style="
+    border-radius: 50%;
+    width: 23px;
+    height: 23px;
+    background: #2d2d2d;
+    position: relative;
+    left: -41.5px;
+    box-shadow: 0 0 15px 1px rgba(0,0,0);
+    "></div>
+</div>
+	
+ <div style="width: 270px;height: 76px;border-radius: 10px;">
+ <div class="radio_info_container" style="
+    cursor: default;
+    /* display: none; */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: relative;
+    ">
+	
+    <span style="
+    color: #fee059;
+    margin-left: -233px;
+    position: relative;
+    display: inline;
+    text-align: right;
+    width: 15px;
+">SNR</span><div style="
+    color: #fee059;
+    position: relative;
+    display: inline;
+    text-align: right;
+    width: 15px;
+    margin-left: 7px;
+    position: absolute;
+    display: inline;
+    text-align: right;
+    width: 13px;
+    margin-left: 3px;
+" id="snr_info"></div><div style="
+    color: #fee059;
+    position: absolute;
+    margin-left: 18px;
+    display: inline;
+">dB</div>
+<div class="radio_info" id="mute_info" style="
+    left: 66px;
+">MUTED        </div>
+    <div class="radio_info" id="sql_info" style="
+    left: 106px;
+">SQL</div>
+    
+    <div class="radio_info" id="anf1_info" style="
+    left: 132px;
+">ANF1</div><span class="radio_info" id="anf2_info" style="
+    left: 163px;
+">ANF2</span>
+    
+    <div class="radio_info" id="nr_info" style="
+    left: 195px;
+">NR</div>
+<div class="radio_info" id="agc_info" style="
+    left: 216px;
+">AGC OFF</div>
+</div>
+
+
+
+      <div style="width:270px;margin-top: -10px;" align="left">
+        <br>
+        <div class="view_smeter">
+			<div id="smetermin" class="smetermin" style="width: 93.9782px; transition: width 0.1s ease 0s;">
+				<div style="position:absolute;height:0px;"></div>
+			  </div>
+          <div id="smeterpeak" class="smeterpeak" style="width: 113.436px; z-index: 10; transition: width 0.1s ease 0s;">
+            <div style="position:absolute;width:0px;height:0px;"></div>
+          </div>
+        
+          <div id="smeterbar" class="smeterbar" style="width: 93.9782px; display: none;">
+            <div style="position:absolute;width:0px;height:0px;"></div>
+          </div>
+		  <div class="EQ" id="smeterbarnew" style="width: 96px;">
+		  
+				<div class="EQ-column" data-volume="5"></div>
+				<table style="margin-top: -8px;position:relative;width: 228px;height: 8px;border-spacing: 0px;" class="smetertable"><tbody><tr>
+    <td></td>   
+    <td></td>
+     <td></td><td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td><td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td><td></td>
+    <td></td><td></td>
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+			  </tr></tbody></table>
+				</div>
+          <div class="mask pattern-3 flex-center"></div>
+        </div>
+		
+        <img src="sv1btl/smeter.png" style="margin-top: 0px; width:270px" tppabs="smeter1down.png" alt="[scale]"> 
+        <br>
+      </div>
+
+    </div></div></div>
+	
+	
+    <div class="d-tr" style="
+    margin-top: 4px;">
+<b style="font-size:14px;">Frequency Tuning &amp; Mode</b></div>
+     
+      <div class="d-tr" style="margin-block-start: 3px;">
+          <button type="button" class="btnTune" onClick="tune_step=0; freqstep(-3); setstep();" onMouseDown="startrunfreq(0)" onMouseUp="stoprunfreq(0,1)" ontouchstart="startrunfreq(0); setfreq(freq-0.0)" ontouchend="stoprunfreq(0,0)">&lt;&lt;&lt;</button>
+          <button type="button" class="btnTune" onClick="tune_step=0; freqstep(-2); setstep();" onMouseDown="startrunfreq(0)" onMouseUp="stoprunfreq(0,1)" ontouchstart="startrunfreq(0); setfreq(freq-0.0)" ontouchend="stoprunfreq(0,0)">&lt;&lt;</button>
+          <button type="button" class="btnTune" onClick="freq_step(-1);" onMouseDown="startrunfreq(0)" onMouseUp="stoprunfreq(0,1)" ontouchstart="startrunfreq(0); setfreq(freq-0.0)" ontouchend="stoprunfreq(0,0)">&lt;</button>
+          <button type="button" class="btnTune" onClick="tune_step=0; freqstep(9); setstep();" style="width: 70px;">&gt;&gt;&gt; 0 &lt;&lt;&lt;</button>
+          <button type="button" class="btnTune" onClick="freq_step(+1);" onMouseDown="startrunfreq(1)" onMouseUp="stoprunfreq(1,1)" ontouchstart="startrunfreq(1); setfreq(freq+0.0)" ontouchend="stoprunfreq(1,0)">&gt;</button>
+          <button type="button" class="btnTune" onClick="tune_step=0; freqstep(+2); setstep();" onMouseDown="startrunfreq(1)" onMouseUp="stoprunfreq(1,1)" ontouchstart="startrunfreq(1); setfreq(freq+0.0)" ontouchend="stoprunfreq(1,0)">&gt;&gt;</button>
+          <button type="button" class="btnTune" onClick="tune_step=0; freqstep(+3); setstep();" onMouseDown="startrunfreq(1)" onMouseUp="stoprunfreq(1,1)" ontouchstart="startrunfreq(1); setfreq(freq+0.0)" ontouchend="stoprunfreq(1,0)">&gt;&gt;&gt;</button>
+</div>
+    <div class="d-tr" style="margin-block-start: 3px;">
+ <b>Mode: &nbsp;</b>
+<button type="button" id="btn-CW" class="btnMode" onClick="set_mode('cw');toggle_info('mode', mode='CW');">CW</button>
+<button type="button" id="btn-LSB" class="btnMode" onClick="set_mode('lsb');toggle_info('mode', mode='LSB');">LSB</button>
+<button type="button" id="btn-USB" class="btnMode" onClick="set_mode('usb');toggle_info('mode', mode='USB');">USB</button>
+<button type="button" id="btn-AM" class="btnMode" onClick="set_mode('am');toggle_info('mode', mode='AM');">AM</button>
+<button type="button" id="btn-FM" class="btnMode" onClick="set_mode('fm');toggle_info('mode', mode='FM');">FM</button>
+</div></div></td>
+<td>
+    </td></tr></tbody></table>
+
+    <div class="d-tr" style="
+    margin-top: 3px;">
+<b style=" font-size: 14px;">Waterfall Settings</b></div>
+
+    <div class="d-tr" style="margin-bottom: 5px;margin-top: 5px;">
+      <span title="view entire frequency range of this receiver"><button type="button" class="btnZoom" onClick="wfset(4);" style="
+    border-radius: 40px 0px 0px 40px;">Max out</button></span>
+      <span title="zoom out one step"><button type="button" class="btnZoom" onClick="wfset(1);" style="">Zoom out</button></span>
+      <span title="view the entire current amateur or broadcast band"><button type="button" class="btnZoom" onClick="wfset(3);">Band</button></span>
+      <span title="zoom in one step"><button type="button" class="btnZoom" onClick="wfset(0);">Zoom in</button></span>
+      <span title="zoom in as deep as possible"><button type="button" class="btnZoom" onClick="wfset(2);" style="
+    border-radius: 0px 40px 40px 0px;">Max in</button></span>
+   </div>
+
+   
+    <div class="d-tr" style="
+    vertical-align: middle;
+    font-size: 0.85rem !important;">
+    <div class="d-td">
+    <span style="
+    margin: 0px 9px 2px 9px;
+    display: block;">
+    Type</span>      
+      <select id="wfmode" class="wfmb" onChange="waterfallmode(this.value)">
+        <option value="0">spectrum</option>
+        <option selected="" value="1">waterfall</option>
+        <option value="2">spectrum + waterfall</option>
+      </select>
+</div>
+    
+    <div class="d-td">
+    <span style="
+    display: block;
+    margin: 0px 9px 2px 9px;">
+    Size</span>
+      <select id="wf-size" class="wfmb" onChange="waterfallheight(this.value);">
+        <option value="50">tiny</option>
+        <option selected="" value="100">small</option>
+        <option value="150">normal</option>
+        <option value="200">medium</option>
+        <option value="250">large</option>
+        </select></div>
+
+    <div class="d-td">
+    <span style="
+    display: block;
+    margin: 0px 9px 2px 9px;">
+    Speed</span>
+      <select id="wfspeed" class="wfmb" onChange="waterfallspeed(this.value)">
+        <option value="4">slow</option>
+        <option selected="" value="2">medium</option>
+        <option value="1">fast</option>
+      </select>
+        </div>
+<!--
+    <div class="d-td">
+    <span style="
+    display: block;
+    margin: 0px 9px 2px 9px;">
+    Buffer</span>
+      <select id="audbuf1" class="wfmb" onchange="set_buffer1(this.value)">
+      <option selected value=0>+ 0.125sec</option>
+      <option value=1>+ 0.25sec</option>
+      <option value=2>+ 0.5sec</option>
+      <option value=3>+ 1sec</option>
+      <option value=4>+ 1.25sec</option>
+  </select>
+        </div>	-->
+    
+    <div class="d-td" style="
+    /* line-height: 71px; */
+    margin-top: 17px;">
+
+<div class="toggleWrapper" style="display: inline-block;"><input type="checkbox" "=" name=" hidedx"="" class="mobileToggle" id="hidedx" onClick="sethidedx(this.checked);settings_store();"><label for="hidedx"></label><div style="display: inline-block;margin: -13px  7px 0px 6px;vertical-align: middle;font-size: 0.85rem;">Hide labels</div>
+
+</div> </div></div>
+
+
+    <div class="d-td">
+    <span style="
+    display: block;
+    margin: 0px 9px 2px 9px;">
+    </span>
+
+<!-- "Switch to another WebSDR" buttons: filled from otherWebSDRs in sv1btl/station.js -->
+<table id="otherwebsdrs"></table>
+		
+<br><br>
+		
+ </div>
+<br>
+</div>
+
+	
+	
+<!-- Right Window -->
+<div class="d-td" style="
+    padding-top: 20px;
+    position: relative;
+    right: -21.5%;
+">
+    
+<div class="d-tr" style="margin-bottom: 7px;">
+<b style="    font-size: 14px;
+">Tube &amp; Waterfall &amp; DSP &amp; Audio </b>
+<br>
+
+</div>
+<span id="magiccontrol" style="white-space:nowrap;width:70%;font-size:0.85rem;">
+    Magic &nbsp;Eye:  Off
+    <input style="width: 60%;vertical-align: middle;margin: 0;" type="range" min="0" max="1" id="magicinput" name="magic" value="0.9" step="0.1" oninput="set_magic(this.value);" onChange="set_magic(this.value);">
+Max    </span>
+
+<br>
+
+<span id="magiccontrol" style="white-space:nowrap;width:70%;font-size:0.85rem;">
+    Brightness:  Off
+    <input style="width: 60%;vertical-align: middle;margin: 0;" type="range" min="10" max="500" id="wf-brightness2" title="Waterfall Brightness control" value="100" step="1"
+            oninput="wfbright();"
+            onchange="wfbright();">
+Max    </span>
+		
+<br>
+		
+<span id="magiccontrol" style="white-space:nowrap;width:70%;font-size:0.85rem;">
+    Contrast:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Off 
+    <input style="width: 60%;vertical-align: middle;margin: 0;" type="range" min="50" max="500" id="wf-contrast2" title="Waterfall Contrast control" value="100" step="5"
+            oninput="wfcontrast();"
+            onchange="wfcontrast();"> 
+Max    </span>
+
+<br>
+<!-- UberSDR: automatic waterfall brightness, see ubersdr_wfauto in sv1btl/ubersdr-compat.js -->
+<div class="toggleWrapper" style="display: inline-block; font-size: 0.85rem; margin-top: 4px;" title="Keep the waterfall noise floor at dark blue by adjusting the brightness automatically; Contrast stays yours">
+<input type="checkbox" name="wfautocheckbox" class="mobileToggle" id="wfautocheckbox" onClick="ubersdr_wfauto(this.checked);"><label for="wfautocheckbox"></label><div style="display: inline-block; margin: -13px 7px 0px 6px; vertical-align: middle;">Auto brightness</div>
+</div>
+
+<div style="font-size:0.85rem !important; margin-top:3px">
+  <center style="
+    display: flex;
+    justify-content: space-between;
+    width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 5px 0px;
+">
+  <div class="toggleWrapper" style="display: inline-block;">
+  <div style="
+    margin: 0px 9px 4px 9px;
+    vertical-align: middle;
+">Mute</div><input type="checkbox" name="mutecheckbox" class="mobileToggle" id="mutecheckbox" onClick="setmute(this.checked);toggle_info('mute');">
+<label for="mutecheckbox" style="
+"></label></div>
+    <div class="toggleWrapper" style="display: inline-block;">
+  <div style="
+    vertical-align: middle;
+    margin: 0px 9px 4px 9px;
+">Squelch</div><input type="checkbox" name="squelchcheckbox" class="mobileToggle" id="squelchcheckbox" onClick="setsquelch(this.checked); toggle_info('sql');">
+<label for="squelchcheckbox"></label></div>
+    
+    <div class="toggleWrapper" style="
+    display: inline-block;
+">
+  <div style="
+    margin: 0px  9px 4px 9px;
+    vertical-align: middle;
+">Autonotch</div><input type="checkbox" name="autonotchcheckbox" class="mobileToggle" id="autonotchcheckbox" title="Adaptive notch: removes steady whistles and carriers (also a CW tone you are listening to)" onClick="setautonotch(this.checked);toggle_info('anf1');">
+<label for="autonotchcheckbox"></label></div>
+
+     <div class="toggleWrapper" style="display: inline-block;">
+  <div style="
+    vertical-align: middle;
+    margin: 0px 9px 4px 9px;
+">Notch-2</div><input type="checkbox" name="autonotch2checkbox" class="mobileToggle" id="autonotch2checkbox" title="Slower, deeper adaptive notch (KA7OEI settings); can be used together with Autonotch" onClick="setautonotch2(this.checked);toggle_info('anf2');">
+<label for="autonotch2checkbox"></label></div>
+
+  </center>
+<br>
+  <center style="
+    margin-top: -10px;
+    display: flex;
+    justify-content: center;
+    padding: 5px 0px;">
+    
+  <b style="padding-top: 2px;padding-right: 8px;   font-size: 14px;">DSP Noise Reduction:</b>
+    <select style="border-radius:10px" id="nrcheckbox" title="Select level of Noise Reduction from this box" onChange="setnoise(this.value);toggle_info('nr', info_mode=this.value);">
+     <option selected="" value="0">Off</option>
+      <option value="1">Low</option> 
+     <option value="2">Medium</option>
+    <option value="3">High</option>
+     <option value="4">Strong</option>
+  </select>
+  <div class="toggleWrapper" style="
+    display: flex;
+    vertical-align: middle;
+    text-align: center;
+    justify-content: center;
+    margin-left: 11px;">
+
+  <input type="checkbox" title="6dB high frequency boost with knee centered at 1500 Hz - Use with DSP noise reduction and/or to improve intelligibility of speech" name="hiboostcheckbox" class="mobileToggle" id="hiboostcheckbox" onClick="sethboost(this.checked)">
+<label for="hiboostcheckbox"></label><div style="
+    display: inline-block;
+    margin: 2px 7px 0px 6px;
+    vertical-align: middle;
+">Hi-Boost</div></div>
+ 
+    </center>
+  
+  </div>
+  <div style="
+    padding-left: 3px;
+    text-align: left;
+    margin-block-start: 10px;
+    padding-bottom: 10px;">
+
+<div class="d-tr" style="margin-bottom: 7px;">
+<b style="font-size: 14px;">Audio:&nbsp;&nbsp;</b>
+<span style="font-size: 14px;">Buffer:</span>
+      <select id="audbuf1" class="wfmb" onChange="set_buffer1(this.value)">
+      <option selected value=0>+ 0.125sec</option>
+      <option value=1>+ 0.25sec</option>
+      <option value=2>+ 0.5sec</option>
+      <option value=3>+ 1sec</option>
+      <option value=4>+ 1.25sec</option>
+  </select>
+ &nbsp;&nbsp;
+<span style="font-size: 14px;">Out:</span>
+  <select id="au-out" class="wfmb" onChange="if (soundapplet) soundapplet.setstereo(this.value)">
+      <option value=-0>• Left Ch.</option>
+      <option selected value=-1>• L/R Ch.</option>
+      <option value=1>• Right Ch.</option>
+  </select>    
+ 
+ </div>
+
+  <span id="volumecontrol" style="white-space:nowrap; width:70%; font-size:0.85rem">
+    Volume: Off
+    <input style="width: 65%;vertical-align: middle;margin: 0;" type="range" min="-20" max="10" id="volumecontrol2" name="volume" value="0" step="1" oninput="set_volume(this.value); volumedb(this.value)" onChange="set_volume(this.value); volumedb(this.value);">
+  </span> &nbsp;
+  <span id="volumedb" style="font-size:14px";> 0dB</span>
+  <br>
+    <!-- Weak-signal AGC (sv1btl/ubersdr-compat.js): raises weak stations towards the level of strong ones; on by default -->
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; white-space: nowrap; padding: 5px 0 5px 5px;" title="Raises weak stations towards the level of strong ones (up to +15 dB).">
+		<div class="toggleWrapper" style="display: contents;">
+		  <input type="checkbox" name="agcboostcheckbox" class="mobileToggle" id="agcboostcheckbox" checked onClick="ubersdr_agcboost(this.checked);">
+		<label for="agcboostcheckbox"></label><div style="
+			display: inline-block;
+			margin: -13px 7px 0px 6px;
+			vertical-align: middle;
+		">Weak-signal AGC</div></div>
+    </div>
+  
+
+   
+ </div>
+
+ <div class="d-tr" style="margin-bottom: 7px;">
+  <div id="record_span" style="display:inline;">
+    
+    <b style="font-size: 14px;">Audio recording: </b>
+    <button type="button" id="recbutton" class="btnRec" onClick="record_click(); return false">start</button>
+    <span id="reccontrol"></span>
+    <br>
+    <!-- audioMotion analyzer removed (2026-09-30); websdr-base.js still shows this element after a recording, so it stays, empty -->
+    <div id="recwarning" style="display: none;"></div>
+  </div>
+
+<br>
+<b style="font-size: 14px;">Signal strength plot: </b>
+<select id="sgraphchoice" class="wfmb" >
+      <option value=0>none</option>
+      <option value=1>fast</option>
+      <option value=2>slow</option>
+    </select>    
+    <br> 
+  <div>
+    <canvas id="sgraph" style="width:100%; display:none;"></canvas>
+   
+<br>
+<b style="font-size: 14px;">Broadcast Station Information: </b> <!-- removed class="btnAA" --><br>
+<input type="button" class="btnMem" title="Lookup current listening frequency in the fmscan.org database (new window)" value="FM" onClick="window.open('http://fmscan.org/am-frequency.php?f='+Math.round(nominalfreq())+'&amp;b=38.76&amp;l=-77.21&amp;m=s&amp;r=m','websdrstationinfo','')">  
+<input type="button" class="btnMem" title="Lookup current listening frequency in the mwlist.org database (new window)" value="MW"
+     onclick="if (nominalfreq()<150) window.open('http://www.mwlist.org/vlf.php?area=1&amp;kHz='+Math.round(nominalfreq()*10)/10,'websdrstationinfo','')
+              else if (nominalfreq()<1710) window.open('http://www.mwlist.org/mwlist_quick_and_easy.php?area=1&amp;kHz='+Math.round(nominalfreq()),'websdrstationinfo','')
+
+              else window.open('http://www.mwlist.org/now.php?kHz='+Math.round(nominalfreq()),'websdrstationinfo','')">
+  <input type="button" class="btnMem" title="Lookup current listening frequency in the short-wave.info database (new window)" value="SW" onClick="window.open('http://www.short-wave.info/index.php?freq='+Math.round(nominalfreq())+'&amp;timbus=NOW&amp;ip=179&amp;porm=4','websdrstationinfo','')">
+
+  </div>
+ </div>
+</div>
+
+
+<!-- Bottom -->
+
+    <div style="position: absolute;height: 100%;width: 501px;top:0px;left: 308px;border-right: 2px solid #969595;border-left: 2px solid #969595;z-index=0;"></div>
+<div style="
+    margin: 12px 0px;
+    padding: 0px 0px 0px 4px;
+    height: 93%;
+    position:relative;
+    position: relative;
+    z-index:0;
+    " class="d-td"></div>
+	</div></form>
+<br>
+</div>
+
+<div style="text-align: center;">
+<form name="form1" action="#">
+<br>
+<div class='mb'>
+<span  style="font-size:85%;margin: 0px 15px 0px 15px; display: inline-flex;">
+This WebSDR is currently being used by <span id=numusers style='margin: 0px 3px;'>?</span> user(s) simultaneously
+<div class="toggleWrapper" style="display: inline-flex;
+margin: -2px 0px 0px 30px;">
+<input type="checkbox" name="compactviewcheckbox" class="mobileToggle" id="compactviewcheckbox" onClick="setcompactview(this.checked)">
+<label for="compactviewcheckbox" style=""></label><div style="display: inline-block; margin: 2px 8px 0px 10px;
+vertical-align: middle;">compact view</div></div>
+</span>
+</div>
+<form class="users-bg" style="text-align: center" name="form1" action="#">
+<div align="left" id=users></div>
+</form>
+</form>
+</div>
+
+
+<!-- Chat!!!-->
+
+<div align="center" id="chatboxspan" >
+<p><b>Chatbox:</b><br>
+<span style="font-size:80%">
+This chatbox is intended to discuss the operation of the WebSDR.
+<br>
+The operators of this site disclaim any responsibility for text appearing in this chatbox.
+</span>
+<div align="left" id="chatboxnew" style="margin: 5px 5px 0px 5px; paddig: 5px 5px 5px 15px; border-radius: 4px 4px 4px 4px; box-shadow: 0px 3px 10px 10px rgba(0,0,0,0.4); background-color:rgb(241, 241, 241); overflow:auto; height:200px; width:73%; font-family: monospace; font-size:13px;"></div>
+<br>
+<form name="chatform" onSubmit="return sendchat()" action="#" autocomplete="off">
+<input type="text"  placeholder="E n t e r    y o u r    m e s s a g e    h e r e" style="background-color: rgb(241, 241, 241); color: #000; border-radius: 4px 4px 4px 4px; box-shadow: 0px 3px 10px 10px rgba(0,0,0,0.4); border-style: inset;border-color: grey color:grey;" size=80 name="chat" onClick="">
+<input type="button" value="chatbox submit" onClick="return sendchat()" autocomplete="off">
+</form>
+<br>
+</div>
+
+<!-- End of Chat -->
+
+
+
+<div style="font-size:80%">
+Statistics:
+<div id="stats"></div>
+</div>
+<br>
+
+<div id="soundappletdiv"></div>
+
+

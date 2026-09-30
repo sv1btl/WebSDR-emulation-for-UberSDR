@@ -1,0 +1,984 @@
+
+<!-- strictly the css should go into the head not the body of the html, but well... -->
+
+<style type="text/css">
+button { height:30px }
+body {
+	color: black;
+	background-image: url('sv1btl/aluminium.jpg');
+}
+.freqbar { 
+  box-sizing: border-box; -webkit-box-sizing: border-box; -moz-box-sizing: border-box;
+  background-color: black; color:yellow; text-align:center;
+  vertical-align:middle;
+  height:45px;
+  font-size:35px;
+}
+@media (max-width:319px) { .freqbar { font-size:30px; } }
+@media (max-width:279px) { .freqbar { font-size:25px; } }
+@media (max-width:239px) { .freqbar { font-size:20px; } }
+@media (max-width:199px) { .freqbar { font-size:16px; } }
+.relbutton3, .relbutton4, .relbutton5, .relbutton6, .relbuttona { 
+   text-align:center; vertical-align:middle;
+   box-sizing: border-box; -webkit-box-sizing: border-box; -moz-box-sizing: border-box;
+   margin:2px;
+}
+.relbutton3 { width:30%; width:calc(33.33333% - 4px); }
+.relbutton4 { width:22%; width:calc(25% - 4px); }
+.relbutton5 { width:18%; width:calc(20% - 4px); }
+.relbutton6 { width:14%; width:calc(14.28% - 4px); }
+.relbutton6b { width:15%; width:calc(16.6666% - 4px); white-space:nowrap; overflow:hidden; }
+.relbuttona { min-width:76px; }
+.upsidedown {
+  -moz-transform: scaleY(-1);
+  -o-transform: scaleY(-1);
+  -webkit-transform: scaleY(-1);
+  transform: scaleY(-1);
+  -ms-filter: "FlipV";
+}
+.onesetting { display:table-cell; min-width:50%; height:45px; vertical-align:middle; }
+
+div.freqinfo1 {
+  display:none;
+  position:absolute;
+}
+input.freqbar:focus + div.freqinfo1 {
+  display:block;
+}
+div.freqinfo2 {
+  background-color:#ffffc0;
+  position:relative;
+  border: 3px solid #c0c000;
+  padding:2px;
+  z-index:2;
+}
+.warning {
+color:red; font-weight:bold; border:2px; border-style:solid; border-color:black; background-color:white; margin:8px; padding:4px; display:none;
+}
+  .smeterpeak {
+/*    width:100px; */
+/*    height:13.17px; */
+/*    margin: 0px 0px -14px 6px; */
+	height:11px;
+    margin: 0px 0px -20px 8px;
+    background-color:#FF0000;
+/*    box-shadow: 0 0 8px rgba(250, 0, 0, 0.8);
+    -webkit-box-shadow: 0 0 8px rgba(250, 0, 0, 0.8);
+    -moz-box-shadow: 0 0 8px rgba(250, 0, 0, 0.8);
+*/    position:relative;
+    background-color: transparent;
+    border-right: 2px solid rgb(255, 0, 0);
+  }
+
+  .smetermin {
+    margin: 7px 0px -12px 7px; 
+    z-index: 1;
+    width: 0px;
+    height: 4.17px;
+    background-color: transparent;
+    position: absolute;
+    border-right: 2px solid #98ffee;
+	<!-- transition: 0.5s width; -->
+  }
+
+  .smeterbar {
+    width:220px;
+    height:14px;
+/*    max-width: 112px; */
+/*
+    background-color: #05ff0a;
+    background-color: rgb(0, 220, 0, 0.8);
+*/
+    background: linear-gradient(to right, #98ffee 91px, red 5px);
+    box-shadow: 0 0 5px rgba(251, 244, 135, 0.8);
+/*    -webkit-box-shadow: 0 0 16px rgba(251, 244, 135, 0.8); */
+/*    -moz-box-shadow: 0 0 16px rgba(251, 244, 135, 0.8); */
+    position:relative;
+    margin: 9px 0px 0px 7px;
+  }
+
+.blink{
+	text-decoration: blink;
+	-webkit-animation-name: blinker;
+	-webkit-animation-duration: 4s;
+	-webkit-animation-iteration-count:infinite;
+	-webkit-animation-timing-function:ease-in-out;  
+	-webkit-animation-direction: alternate;
+}
+
+.EQ {
+  /* Блок резиновый
+     width: 100%; height: 100%; */
+	width: 300px;
+	margin-left:7px;
+    max-width: 241px;
+    height: 8px;
+    font-size: 0;
+    position: relative;
+
+    background-color: #000;
+}
+
+.EQ * { box-sizing: border-box; }
+
+.EQ-column {
+  display: inline-block;
+    /* border-left: 5px solid #333; */
+    /* border-right: 5px solid #333; */
+    width: 100%;
+    height: 100%;
+    position: relative;
+	background-image: linear-gradient(to right, #98ffee 115px, red 5px);
+}
+
+.EQ-column[data-volume="0"]::after { height: 0; }
+.EQ-column[data-volume="1"]::after { height: 3%; }
+.EQ-column[data-volume="2"]::after { height: 13%; }
+.EQ-column[data-volume="3"]::after { height: 23%; }
+.EQ-column[data-volume="4"]::after { height: 33%; }
+.EQ-column[data-volume="5"]::after { height: 43%; }
+.EQ-column[data-volume="6"]::after { height: 53%; }
+.EQ-column[data-volume="7"]::after { height: 63%; }
+.EQ-column[data-volume="8"]::after { height: 73%; }
+.EQ-column[data-volume="9"]::after { height: 83%; }
+.EQ-column[data-volume="10"]::after { height: 93%; }
+
+table.smetertable td {border: 1px solid #000;background-color:rgba(226, 226, 226, 0.11)}
+
+.progress-ring {
+}
+
+.progress-ring__circle {
+  transition: 0.35s stroke-dashoffset;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+/* RW3PS button style (from its default.css) */
+.myButton {
+  box-shadow: 1px 1px 3px -1px #414445;
+  background: linear-gradient(to bottom, #ededed 5%, #c2c0c2 100%);
+  background-color: #ededed; border-radius: 6px; border: 1px solid #dcdcdc;
+  display: inline-block; cursor: pointer; color: #050505;
+  font-family: Arial; font-size: 13px; padding: 3px 3px;
+  text-decoration: none; text-shadow: 0px 1px 0px #ffffff;
+}
+.myButton:hover { background: linear-gradient(to bottom, #c2c0c2 5%, #ededed 100%); background-color: #c2c0c2; }
+.myButton:active { position: relative; top: 1px; }
+/* RW3PS waterfall colours: colour-map filter defined below the style block */
+[id^="wfcdiv"] { filter: url(#svgGradientMap); }
+</style>
+
+<div id="browserwarning" class="warning">
+Your browser is not supported; if it does not work, please try again with Firefox on Android, or Safari version 6 or later on iOS.</div>
+</div>
+
+<form name="freqform" action="#" onsubmit="freqsubmit(this); return false;"
+><script>
+var sup_android=false;
+var sup_iOS=false;
+var sup_chrome=false;
+try { 
+   var n=navigator.userAgent.toLowerCase();
+   if (n.indexOf('android')!=-1) sup_android=true;
+   if (n.indexOf('iphone')!=-1) sup_iOS=true;
+   if (n.indexOf('ipad')!=-1) sup_iOS=true;
+   if (n.indexOf('ipod')!=-1) sup_iOS=true;
+   if (n.indexOf('ios')!=-1) sup_iOS=true;
+   if (n.indexOf('ipados')!=-1) sup_iOS=true;
+   if (n.indexOf('macintosh')!=-1) sup_iOS=true;
+   if (n.indexOf('chrome')!=-1) sup_chrome=true;
+} catch (e) {};
+	
+document.write('<div id="audiostart"><button class="myButton" style="height:40px;width:100%;font-size:18px" onclick="ubersdr_mobile_audio_start()">Tap here to start audio</button></div>');
+if (sup_android && (n.indexOf('firefox')==-1) && (n.indexOf('chrome')==-1)) document.getElementById("browserwarning").style.display= "block";
+</script>
+	
+<input type="number" name="frequency" step="any" onFocus="freqfocus=1; this.value=''" onBlur="freqsubmit(document.freqform); freqfocus=0;" onchange="freqfocus=0; freqsubmit(document.freqform); freqfocus=0;" class="freqbar" style="display:inline-block; width:60%;" /
+><div class="freqinfo1"><div class="freqinfo2" id="freqinfo"></div></div
+><select class="freqbar" style="display:inline-block; width:40%" id="modesel" onchange="setmode_sel(this)">
+  <option value="USB">USB</option>
+  <option value="LSB">LSB</option>
+  <option value="CW">CW</option>
+  <option value="AM">AM</option>
+  <option value="FM">FM</option>
+</select>
+</form>
+
+<div style="background-color:black; font-size:0px">
+
+<canvas id="ax" height="25px"></canvas>
+</div>
+
+<div id="wfdiv" class="upsidedown" style="background-color:black;"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="svgGradientMap"><fecolormatrix type="saturate" values="0" /><feComponentTransfer color-interpolation-filters="sRGB"><feFuncR type="table" tableValues="0,0.01,0.01,0.02,0.03,0.03,0.04,0.05,0.05,0.06,0.06,0.07,0.08,0.08,0.09,0.1,0.1,0.11,0.12,0.12,0.13,0.14,0.14,0.15,0.13,0.11,0.09,0.07,0.06,0.04,0.02,0,0,0,0,0,0,0,0,0,0.13,0.25,0.38,0.5,0.63,0.75,0.88,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,255"/><feFuncG type="table" tableValues="0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.13,0.25,0.38,0.5,0.63,0.75,0.88,1,1,1,1,1,1,1,1,1,0.99,0.99,0.98,0.97,0.97,0.96,0.96,0.95,0.93,0.91,0.9,0.88,0.86,0.84,0.82,0.81,0.79,0.77,0.75,0.73,0.72,0.7,0.68,0.66,0.64,0.63,0.61,0.59,0.57,0.56,0.54,0.52,0.5,0.48,0.47,0.45,0.43,0.41,0.39,0.38,0.36,0.34,0.32,0.3,0.29,0.27,0.25,0.23,0.21,0.2,0.18,0.16,0.14,0.13,0.11,0.09,0.07,0.05,0.04,0.02,0"/><feFuncB type="table" tableValues="0,0.04,0.09,0.13,0.17,0.22,0.26,0.3,0.35,0.39,0.43,0.48,0.52,0.57,0.61,0.65,0.7,0.74,0.78,0.83,0.87,0.91,0.96,1,0.99,0.98,0.97,0.96,0.95,0.94,0.93,0.92,0.9,0.88,0.85,0.83,0.81,0.79,0.77,0.75,0.66,0.56,0.47,0.37,0.28,0.19,0.09,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"/></feComponentTransfer></filter></svg>
+
+<!------- S-meter ------->
+
+<div id="smeter" style="display:none; background-color:black;">
+  <div style="display:inline-block;position:relative;width:100%;height:53px;background-color:black;">
+  
+    <div style="width: 220px; background-color: #000000;">
+    <img src="sv1btl/smeter10h.png" style="width:220px" alt="[scale]">
+    
+			<div id="smetermin" class="smetermin" style="width: 0px; transition: width 0.1s ease 0s;">
+				<div style="position:absolute;height:0px;"></div>
+	  </div> 
+
+          <div id="smeterpeak" class="smeterpeak" style="width: 123.436px; z-index: 10; transition: width 0.1s ease 0s;">
+    
+    <div style="position:absolute;width:0px;height:0px;"></div>
+    </div>
+    
+
+           <div id="smeterbar" class="smeterbar" style="width: 93.9782px;">
+              <div class="EQ" id="smeterbarnew" style="width:0px;">
+			  <div class="EQ-column" data-volume="5"></div>
+				<table style="margin-top: -9px;position:relative;width: 236px;height: 13px;border-spacing: 0px;" class="smetertable"><tbody><tr>
+    <td></td>   
+    <td></td>
+    <td></td><td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td><td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td><td></td>
+    <td></td><td></td>
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td><td></td>
+    
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+				<td></td>
+                
+			  </tr></tbody></table>
+			 </div>
+          <div class="mask pattern-3 flex-center"></div>
+    
+    <div style="position: left; width: 0px; height: 0px; background-color: #FFCC66; layer-background-color: #EEEEEE; border: 1px none #000000;"></div>
+    </div>
+    <img src="sv1btl/smeter10.png" style="width:220px" alt="[scale]">
+
+    <div style="background-color: #000000; font-size: 12px; color: #c0c0c0; padding: 2px 0 3px 7px; white-space: nowrap;">Signal:
+  <span id="numericalsmeter" style="color: #98ffee; font-weight: bold;">?</span> dBm &nbsp;&ndash;&nbsp; Peak:
+  <span id="numericalsmeterpeak" style="color: #ff4040; font-weight: bold;">?</span>&nbsp;dBm</div>
+    </div>
+  </div>
+</div><!-- end of #smeter (it was left open, which hid the buttons below whenever the S-meter was off) -->
+
+<!--
+  <span id="numericalsmeter">?</span> dB;
+  peak
+  <span id="numericalsmeterpeak">?</span> dB;
+  <br>
+
+<!------- end of S-meter -------->
+
+<button class="myButton relbutton6" onclick="freqstep(-3)">&lt;&lt;&lt;</button
+><button class="myButton relbutton6" onclick="freqstep(-2)">&lt;&lt;</button
+><button class="myButton relbutton6" onclick="freqstep(-1)">&lt;</button
+><button class="myButton relbutton6" onclick="freqstep(9)">&gt;|&lt;</button
+><button class="myButton relbutton6" onclick="freqstep(+1)">&gt;</button
+><button class="myButton relbutton6" onclick="freqstep(+2)">&gt;&gt;</button
+><button class="myButton relbutton6" onclick="freqstep(+3)">&gt;&gt;&gt;</button
+><br
+><button class="myButton relbutton6b" id="mutebutton" name="mute" onclick="togglemute()">mute</button
+><button class="myButton relbutton6b" id="squelchbutton" name="mute" onclick="togglesquelch()">squelch</button
+><button class="myButton relbutton6b" id="notchbutton" name="autonotch" title="Autonotch: removes steady whistles and carriers" onclick="togglenotch(1)">notch</button
+><button class="myButton relbutton6b" id="notch2button" name="autonotch2" title="Notch-2: slower, deeper autonotch; can be used together with notch" onclick="togglenotch(2)">notch 2</button
+><button class="myButton relbutton6b" name="zoom out" title="zoom out" onclick="waterfallapplet[0].setzoom(-1,waterfallapplet[0].width/2)">zoom &minus;</button
+><button class="myButton relbutton6b" name="zoom in" title="zoom in" onclick="waterfallapplet[0].setzoom(-2,waterfallapplet[0].width/2)">zoom +</button
+>
+ 
+<hr> 
+
+<b>Memories:</b><br
+><button class="myButton relbutton3" onclick="mem_store()">store</button
+><button class="myButton relbutton3" id="deletebutton" onclick="mem_deletebutton()">delete</button
+><button class="myButton relbutton3" id="labelbutton" onclick="mem_labelbutton()">label</button
+><br
+><div id="memories"></div>
+<hr>
+
+<b>Settings:</b>
+<br>
+<button class="myButton relbutton3" id="restartbutton" name="restart audio" onclick="started--; prep_html5sound()">restart audio</button>
+<br>
+<label class="onesetting" for="stopwaterfallcheckbox">
+<input id="stopwaterfallcheckbox" type="checkbox" value="" onclick="waterfallapplet[0].startstop(!this.checked)">
+Stop waterfall (reduces network and processor load)
+</label>
+<div></div>
+
+<label class="onesetting" for="showsmetercheckbox">
+<input id="showsmetercheckbox" type="checkbox" value=""
+onclick="if (this.checked) { document.getElementById('smeter').style.display='block'; interval_updatesmeter = setInterval('updatesmeter()',200); }
+else {document.getElementById('smeter').style.display='none'; clearInterval(interval_updatesmeter); }">
+<!--
+else { document.getElementById('smeter').style.display='block'; interval_updatesmeter = setInterval('updatesmeter()',200); }">
+-->
+Show S-meter
+</label>
+<div></div>
+
+<label class="onesetting" for="wfautocheckbox">
+<input id="wfautocheckbox" type="checkbox" value="" onclick="ubersdr_wfauto(this.checked)">
+Auto waterfall brightness
+</label>
+<div></div>
+
+
+
+<!-- Weak-signal AGC (sv1btl/ubersdr-compat.js): raises weak stations towards the level of strong ones; on by default -->
+<label class="onesetting" for="agcboostcheckbox">
+<input id="agcboostcheckbox" type="checkbox" value="" checked onclick="ubersdr_agcboost(this.checked)">
+Weak-signal AGC
+</label>
+<div></div>
+
+<label class="onesetting" for="extrabuffer1checkbox">
+<input id="extrabuffer1checkbox" type="checkbox" value="" onclick="set_buffer1(this.checked)">
+More playback buffering
+</label>
+<br>
+
+<a href="index.html?desktop" target="_self" class="myButton relbutton3">Web Version</a>
+<br>
+
+<!--<a href="old.html" target="_self" class="myButton relbutton3">Old Iphone</a>-->
+<div></div>
+
+<script>
+document.getElementById('stopwaterfallcheckbox').checked=false;
+// S-meter shown by default (untick "Show S-meter" to hide it)
+document.getElementById('showsmetercheckbox').checked=true;
+document.getElementById('smeter').style.display='block';
+interval_updatesmeter = setInterval('updatesmeter()',200);
+document.getElementById('extrabuffer1checkbox').checked=false;
+</script>
+
+<br>
+<hr>
+<div id="soundappletdiv"></div>
+
+<script src="tmp/bandinfo.js" type="text/javascript"></script>
+<!-- UberSDR: sound-player additions and auto waterfall brightness; before the script that declares soundapplet -->
+<script src="sv1btl/station.js" type="text/javascript"></script>
+<script src="sv1btl/ubersdr-compat.js?v=20260930k" type="text/javascript"></script>
+<script>
+// WebSDR, client side for mobile devices
+// Copyright 2007-2014, Pieter-Tjerk de Boer, pa3fwm@websdr.org
+
+var isTouchDev=true;
+var freq=(window.STATION && Number(STATION.startKHz)) || 7120;   // first visit: startKHz/startMode in sv1btl/station.js
+var mode=String((window.STATION && STATION.startMode) || "LSB").toUpperCase();
+var hi=-0.1;
+var lo=-2.7;
+switch (mode) {                    // the same filters as setmode_sel() below
+   case "AM": lo=-3.5; hi=3.5; break;
+   case "FM": lo=-7; hi=7; break;
+   case "CW": lo=0.55; hi=0.95; break;
+   case "USB": lo=0.1; hi=2.7; break;
+   default: mode="LSB";
+}
+// Returning visitor: start where they left off (saved by this page or the desktop page;
+// see ubersdr_lastpos in sv1btl/ubersdr-compat.js). The saved frequency is the displayed
+// one (nominalfreq); with a CW-narrow filter the carrier sits (hi+lo)/2 away from it.
+var lastpos = window.ubersdr_lastpos ? ubersdr_lastpos() : null;
+if (lastpos) {
+   mode = lastpos.mode; lo = lastpos.lo; hi = lastpos.hi;
+   freq = lastpos.nom - (iscw() ? (hi+lo)/2 : 0);
+}
+var band=0;
+var soundapplet=null;
+var smeter;
+var mute=0;
+var started=0;
+var reqanim=1;
+var memories;
+
+try { memories=JSON.parse(localStorage.getItem('memories')); } catch (e) {};
+if (!memories) memories=[];
+else mem_show();
+
+
+var wvw=document.body.offsetWidth || window.innerWidth;
+if (wvw>1024) wvw=1024;
+var nwaterfalls=1;
+var waterfallapplet = [
+  { div:"wfdiv", id:0, band:band, maxzoom:bandinfo[band].maxzoom, width:wvw }
+];
+var i;
+for (i=0;i<nbands;i++) bandinfo[i].zoom=0;
+document.getElementById("ax").width=wvw;
+var wvw0=wvw;
+
+document.getElementById('modesel').value=mode;
+
+{
+   var i;
+   var s="";
+   for (i=0;i<nbands;i++) {
+      var bi=bandinfo[i];
+      s+=(i?"<br>":"")+bi.name+": "+(bi.centerfreq-bi.samplerate/2).toFixed(0)+" - "+(bi.centerfreq+bi.samplerate/2).toFixed(0)+" kHz";
+   }
+   document.getElementById("freqinfo").innerHTML=s;
+}
+
+// ----- initialization stuff: -------------------------------
+
+function iOS_audio_start()
+{
+   // Safari on iOS only plays webaudio after it has been started by clicking a button, so this function must be called from a button's onclick handler
+   if (!document.ct) document.ct= new webkitAudioContext();
+   var s = document.ct.createBufferSource();
+   s.connect(document.ct.destination);
+   try { s.start(0); } catch(e) { s.noteOn(0); }
+   document.getElementById("iOSstart").innerHTML="";
+}
+
+
+var serveravailable=-1;  // -1 means yet to be tested, 0 and 1 mean false and true
+
+function test_serverbusy()
+{
+   serveravailable=soundapplet.getid();
+   if (serveravailable<0) setTimeout('test_serverbusy()',100);
+   if (serveravailable==0) {
+      document.body.innerHTML="Sorry, the WebSDR server is too busy right now; please try again later.\n";
+   }
+}
+
+function soundappletstarted() 
+{
+   started++;
+   serveravailable=-1;
+   setTimeout('test_serverbusy()',100);
+   if (started==2) setfreq(freq);
+}
+
+function waterfallappletstarted() 
+{ 
+   waterfallapplet[0].setslow(1);   // was 8 (WebSDR's mobile default); 1 = "fast", as on the desktop page
+   bandinfo[band].zoom=bandinfo[band].maxzoom-2;
+   centerwaterfall();
+   started++;
+   if (started==2) setfreq(freq);
+}
+
+function browsersupporterror()
+{
+   document.getElementById("browserwarning").style.display= "block";
+}
+
+// ----- zooming & tuning: -------------------------------
+
+// this function is called when the scrollwheel is moved to change the zoom
+function zoomchange(id,zoom,start)
+{
+   var e=bandinfo[band];
+   if (zoom==e.zoom && start==e.start) return;
+   var oldzoom=e.zoom;
+   e.kHzperpx = e.samplerate/(1<<zoom)/1024;
+   e.px0freq = e.centerfreq - e.samplerate/2 + (start*(e.samplerate/(1<<e.maxzoom))/1024);
+   e.zoom=zoom;
+   e.start=start;
+   drawaxis();
+   var newfreq=e.px0freq+e.kHzperpx*waterfallapplet[0].width/2;
+   if (Math.abs(freq-newfreq)>4*e.kHzperpx || zoom==oldzoom) {
+      freq=newfreq;
+      document.freqform.frequency.value=nominalfreq().toFixed(2);
+      send_soundsettings_to_server();
+   }
+}
+
+function iscw()
+{
+   return hi-lo < 1.0;
+}
+
+function nominalfreq()
+{
+   if (iscw()) return freq+(hi+lo)/2;
+   return freq;
+}
+
+
+function send_soundsettings_to_server()
+{
+   var m=mode;
+   if (m=="USB") m=0;
+   else if (m=="LSB") m=0;
+   else if (m=="CW") m=0;
+   else if (m=="AM") m=1;
+   else if (m=="FM") m=4;
+      soundapplet.setparam(
+          "f="+freq
+         +"&band="+band
+         +"&lo="+lo
+         +"&hi="+hi
+         +"&mode="+m
+         +"&name=mobile"+(sup_iOS?"/iOS":sup_android?"/Android":"")
+         );
+}
+
+function centerwaterfall()
+{
+   var e=bandinfo[band];
+   var zoom=e.zoom;
+   e.kHzperpx = e.samplerate/(1<<zoom)/1024;
+   e.kHzperpxmax = e.samplerate/(1<<e.maxzoom)/1024;
+   e.px0freq = freq-e.kHzperpx*waterfallapplet[0].width/2;
+   var start = ( e.px0freq - e.centerfreq + e.samplerate/2 ) / e.kHzperpxmax;
+   waterfallapplet[0].setzoom(zoom, start);
+}
+
+var freqfocus=false;
+
+function setband(b)
+{
+   if (b<0 || b>=nbands) return;
+   band=b;
+   var e=bandinfo[b];
+   waterfallapplet[0].setband(b, e.maxzoom, e.zoom, e.start);
+   drawaxis();
+}
+
+function setfreq(f)
+{
+   freq=f;
+   f=nominalfreq();
+   var e=bandinfo[band];
+   if (f<e.centerfreq-e.samplerate/2-4 || f>e.centerfreq+e.samplerate/2+4) {
+      // new frequency is not in the current band: then search through all bands until we find the right one (if any)
+      for (i=0;i<nbands;i++) {
+         e=bandinfo[i];
+         c=e.centerfreq;
+         w=e.samplerate/2+4;
+         if (f>c-w && f<c+w) { setband(i); break; }
+      }
+   }
+
+   if (!freqfocus) document.freqform.frequency.value=nominalfreq().toFixed(2);
+   send_soundsettings_to_server();
+   centerwaterfall();
+}
+
+function setmode_sel(sel)
+{
+   mode=sel.options[sel.selectedIndex].value;
+   switch (mode) {
+      case "AM": lo=-3.5; hi=3.5; break;
+      case "FM": lo=-7; hi=7; break;
+      case "CW": lo=0.55; hi=0.95; break;
+      case "USB": lo=0.1; hi=2.7; break;
+      case "LSB": lo=-2.7; hi=-0.1; break;
+   }
+   document.freqform.frequency.value=nominalfreq().toFixed(2);  // because modechange might change nominalfrequency
+   send_soundsettings_to_server();
+   drawaxis();   // to update the passband indicator
+}
+
+function freqstep(st)
+// do a frequency step, suitable for the current mode
+{
+   if (st == 9) {            // RW3PS: round to the nearest kHz (CW: put the tone on it)
+      freq = Math.round(freq);
+      setfreq(mode=="CW" ? freq-(hi+lo)/2 : freq);
+      return;
+   }
+   var steps_ssb= [0.01, 0.5, 1];
+   var steps_am5= [0.1, 1, 5];
+   var steps_am9= [0.1, 1, 9];
+   var steps_fm= [1, 5, 12.5 ];
+   var steps=steps_ssb;
+   var grid=false;
+   var i=Math.abs(st)-1;   
+   if (mode=="AM") {
+      if (freq<1620) steps=steps_am9; else steps=steps_am5;
+      if (i>=1) grid=true;
+   }
+   if (mode=="FM") {
+      steps=steps_fm;
+      if (i>=1) grid=true;
+   }
+   var d=steps[i];
+   var f=(st>0)?freq:-freq;
+   if (!grid) f=f+d;
+   else f=d*Math.ceil(f/d+0.1);
+   f=(st>0)?f:-f;
+   setfreq(f);
+}
+
+function freqsubmit(fo)
+{
+   var f=fo.frequency.value;
+   if (iscw()) f-=(hi+lo)/2;
+   if (!(f>0)) f=freq;
+   setTimeout("setfreq("+f+");",0);
+   fo.modesel.focus();
+}
+
+
+// ----- other controls: -------------------------------
+
+var muted=0;
+function togglemute()
+{
+   muted=1-muted;
+   document.getElementById("mutebutton").style.backgroundColor = muted ? "darkgrey" : "";
+//   document.getElementById("mutebutton").innerHTML = muted ? "unmute" : "mute";
+   soundapplet.setparam("mute="+muted);
+}
+
+var squelched=0;
+
+var notched=[0,0,0];
+function togglenotch(n)
+{
+   // Autonotch (1) and Notch-2 (2) run in the browser (sv1btl/ubersdr-compat.js);
+   // UberSDR's server has none
+   notched[n]=1-notched[n];
+   document.getElementById(n==1 ? "notchbutton" : "notch2button").style.backgroundColor = notched[n] ? "darkgrey" : "";
+   if (soundapplet && soundapplet.setnotch) soundapplet.setnotch(n, notched[n]);
+}
+
+function togglesquelch()
+{
+   squelched=1-squelched;
+   document.getElementById("squelchbutton").style.backgroundColor = squelched ? "darkgrey" : "";
+   soundapplet.setparam("squelch="+squelched);
+}
+
+var wfhidden=0;
+function togglewfhide()
+{
+   wfhidden=1-wfhidden;
+   document.getElementById("wfhidebutton").style.backgroundColor = wfhidden ? "darkgrey" : "";
+   if (wfhidden) {
+      waterfallapplet[0].destroy();
+   } else {
+      waterfallapplet = [ { div:"wfdiv", id:0, band:0, maxzoom:bandinfo[band].maxzoom, width:wvw } ];
+      prep_html5waterfalls();
+   }
+}
+
+var wfhidden=0;
+function setwfhide(h)
+{
+   wfhidden=h;
+   if (wfhidden) {
+      waterfallapplet[0].destroy();
+   } else {
+      waterfallapplet = [ { div:"wfdiv", id:0, band:0, maxzoom:bandinfo[band].maxzoom, width:wvw } ];
+      prep_html5waterfalls();
+   }
+}
+
+function set_buffer1(toggle)
+{
+   if (toggle) soundapplet.setdelay1(4000);
+   else soundapplet.setdelay1(1000);
+}
+
+
+
+var smeterpeaktimer=2;
+var smeterpeak=0;    
+var interval_updatesmeter;
+
+function updatesmeter()
+{
+   try {
+      var s=soundapplet.smeter();
+   } catch (e) { s=0; };
+   var c=''+(s/100.0-127).toFixed(1);
+   if (c.length<6) c='&nbsp;&nbsp;'+c;
+   document.getElementById('numericalsmeter').innerHTML = c;
+   if (s>=0) document.getElementById('smeterbar').style.width= s*0.0191667+"px";
+   else document.getElementById('smeterbar').style.width="0px";
+   smeterpeaktimer--;
+   if ((smeterpeak<s-0.1) || (smeterpeaktimer<=0)) {
+      smeterpeak=s;
+      smeterpeaktimer=5;
+      if (smeterpeak>=0) document.getElementById('smeterpeak').style.width= smeterpeak*0.0191667 +"px";
+      else document.getElementById('smeterpeak').style.width="0px";
+      var c=''+(s/100.0-127).toFixed(1);
+      if (c.length<6) c='&nbsp;&nbsp;'+c;
+      document.getElementById('numericalsmeterpeak').innerHTML = c;
+   }
+}
+
+
+
+// ----- drawing the frequency axis -------------------------------
+
+var needdrawaxis=0;
+
+function drawaxis_do()
+{
+   var ax=document.getElementById("ax");
+   var ctx=ax.getContext("2d");
+   var vw=ax.width;
+
+   needdrawaxis=0;
+
+   // erase canvas
+   ctx.fillStyle="black";
+   ctx.fillRect(0,0,vw,ax.height);
+
+   // draw major tics
+   ctx.strokeStyle="white";
+   ctx.beginPath();
+   ctx.font="18px Verdana";
+   ctx.fillStyle="white";
+   ctx.textAlign="center";
+   ctx.lineWidth=2;
+   var i;
+   var b=bandinfo[band];
+   var fmin=b.px0freq;
+   if (fmin<b.centerfreq-b.samplerate/2) fmin=b.centerfreq-b.samplerate/2;
+   var fmax=b.px0freq+b.kHzperpx*vw;
+   if (fmax>b.centerfreq+b.samplerate/2) fmax=b.centerfreq+b.samplerate/2;
+   var grid=9;
+   var mgrid=1;
+   if (fmin>1600) grid=10;
+   if (b.kHzperpx>0.15) { grid=20; mgrid=grid/10; }
+   if (b.kHzperpx>0.3) { grid=50; mgrid=grid/10; }
+   if (b.kHzperpx>0.6) { grid=100; mgrid=grid/10; }
+   if (b.kHzperpx>1.5) { grid=200; mgrid=grid/10; }
+   if (b.kHzperpx>3) { grid=500; mgrid=grid/10; }
+   if (b.kHzperpx>6) { grid=1000; mgrid=grid/10; }
+   if (b.kHzperpx>15) { grid=2000; mgrid=grid/10; }
+   if (b.kHzperpx>30) { grid=5000; mgrid=grid/10; }
+   if (b.kHzperpx>60) { grid=10000; mgrid=grid/10; }
+   var f=Math.ceil(fmin/grid)*grid;
+   // major ticks
+   while (f<fmax) {
+     var x=0.5+(f-b.px0freq)/b.kHzperpx;
+     ctx.moveTo(x,21);
+     ctx.lineTo(x,15);
+     ctx.fillText(""+f,x,14);
+     f+=grid;
+   }
+   // minor ticks
+   grid=1;
+   var f=Math.ceil(fmin/grid)*grid;
+   while (f<fmax) {
+     var x=0.5+(f-b.px0freq)/b.kHzperpx;
+     ctx.moveTo(x,21); ctx.lineTo(x,19);
+     f+=mgrid;
+   }
+   ctx.stroke();
+
+   // draw tuning indicator
+   ctx.strokeStyle="yellow";
+   ctx.beginPath();
+   ctx.moveTo(vw/2+.5,3);
+   ctx.lineTo(vw/2+.5,19);
+   var x=vw/2+lo/b.kHzperpx;
+   ctx.moveTo(x-10,19);
+   ctx.lineTo(x-5,19);
+   ctx.lineTo(x,5);
+   var x=vw/2+hi/b.kHzperpx;
+   ctx.lineTo(x,5);
+   ctx.lineTo(x+5,17);
+   ctx.lineTo(x+10,17);
+   ctx.stroke();
+}
+
+function drawaxis()
+{
+   if (reqanim) {
+      if (needdrawaxis) return;
+      needdrawaxis=1;
+      requestAnimationFrame(drawaxis_do);
+   }
+   else drawaxis_do();
+}
+
+
+window.onresize=function(ev)
+{
+   wvw=document.body.offsetWidth || window.innerWidth;
+   if (wvw>1024) wvw=1024;
+   document.getElementById("ax").width=wvw;
+   waterfallapplet[0].setSize(wvw,waterfallapplet[0].height);
+   centerwaterfall();
+   drawaxis();
+}
+
+// things related to interaction with the mouse (clicking & dragging on the frequency axes)
+
+var dragging=false;
+var dragorigX;
+var dragorigval;
+var touchingLower=false;
+
+// from http://www.switchonthecode.com/tutorials/javascript-tutorial-the-scroll-wheel
+function cancelEvent(e)
+{
+  e = e ? e : window.event;
+  if(e.stopPropagation) e.stopPropagation();
+  if(e.preventDefault) e.preventDefault();
+  e.cancelBubble = true;
+  e.cancel = true;
+  e.returnValue = false;
+  return false;
+}
+
+
+function getMouseXY(e)
+{
+   e = e || window.event;
+   if (e.pageX || e.pageY) return {x:e.pageX, y:e.pageY};
+   return {
+     x:e.clientX + document.body.scrollLeft - document.body.clientLeft,
+     y:e.clientY + document.body.scrollTop  - document.body.clientTop
+   };
+// from: http://www.webreference.com/programming/javascript/mk/column2/
+}
+
+
+function mouseup(e)
+{
+   if (dragging) {
+      dragging=false;
+      document.onmousemove(e);
+      document.onmousemove = null;
+   }
+}
+
+document.onmouseup = mouseup;
+
+// ----- handling memories -------------------------------
+
+var mem_mode=0;  // 0 for recall, 1 for erase, 2 for edit
+
+function mem_recall(i)
+{
+   mode=memories[i].mode;
+   document.getElementById('modesel').value=mode;
+   lo=memories[i].lo;
+   hi=memories[i].hi;
+   setfreq(memories[i].freq);
+   drawaxis();   // to update the passband indicator
+}
+
+function mem_erase(i)
+{
+   var b=memories[i].band;
+   memories.splice(i,1);
+   mem_show();
+   try { localStorage.setItem('memories',JSON.stringify(memories)); } catch (e) {};
+}
+
+function mem_label(i)
+{
+   var label=prompt("Label? ","");
+   if (!label) return;
+   memories[i].label=label;
+   mem_show();
+   try { localStorage.setItem('memories',JSON.stringify(memories)); } catch (e) {};
+}
+
+function mem_store()
+{
+   var nomf=nominalfreq();
+   var l;
+   try { l=memories[i].label;} catch(e){ l=''; };
+   i=memories.length;
+   memories[i]={freq:freq, nomfreq:nomf, band:band, mode:mode, lo:lo, hi:hi, label:'' };
+   mem_show();
+   try { localStorage.setItem('memories',JSON.stringify(memories)); } catch (e) {};
+}
+
+function mem_click(i)
+{
+   // called when clicking on a memory button
+   switch (mem_mode) {
+      case 0: mem_recall(i); break;
+      case 1: mem_erase(i); mem_set_mode(0); break;
+      case 2: mem_label(i); mem_set_mode(0); break;
+   }
+}
+
+function mem_set_mode(m)
+{
+   mem_mode=m;
+   document.getElementById("deletebutton").style.backgroundColor = (mem_mode==1) ? "darkgrey" : "";
+   document.getElementById("labelbutton").style.backgroundColor = (mem_mode==2) ? "darkgrey" : "";
+   document.getElementById('memories').style.backgroundColor= (mem_mode>=1) ? "darkgrey" : "";
+}
+
+function mem_deletebutton()
+{
+   var m=1;
+   if (mem_mode==1) m=0;
+   mem_set_mode(m);
+}
+
+function mem_labelbutton()
+{
+   var m=2;
+   if (mem_mode==2) m=0;
+   mem_set_mode(m);
+}
+
+function mem_show()
+{
+   var i;
+   var s="";
+   for (i=0;i<memories.length;i++) {
+      var m="";
+      m=memories[i].mode;
+      s+='<button class="relbuttona" onclick="mem_click('+i+')">'+memories[i].nomfreq.toFixed(2)+' '+m+
+         '<br>'+memories[i].label+'</button>';
+   }
+   document.getElementById('memories').innerHTML=s;
+}
+
+
+
+
+function ubersdr_mobile_audio_start()
+{
+   // UberSDR's player makes its own AudioContext; a tap lets the browser start it
+   try { if (window.soundapplet && soundapplet._audioCtx) soundapplet._audioCtx.resume(); } catch (e) {};
+   try { if (document.ct) document.ct.resume(); } catch (e) {};
+   var b=document.getElementById("audiostart");
+   if (b) b.style.display="none";
+}
+</script>
+
+<script>
+// Remember every retune and mode change for the next visit (desktop and mobile share it)
+(function () {
+   if (!window.ubersdr_savepos) return;
+   function save() { ubersdr_savepos(nominalfreq(), mode, lo, hi); }
+   var sf = setfreq;     setfreq     = function () { sf.apply(this, arguments); save(); };
+   var sm = setmode_sel; setmode_sel = function () { sm.apply(this, arguments); save(); };
+})();
+</script>
+
+<script src="websdr-sound.js" type="text/javascript"></script>
+<script src="websdr-waterfall.js" type="text/javascript"></script>

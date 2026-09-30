@@ -1,0 +1,214 @@
+60.0cw MSF
+61.8cw RBU
+62.6cw FUG
+63.9cw FTA63
+65.8cw FUE
+66.6cw RBU
+68.0cw GBY20?
+77.5cw DCF77
+81.0cw GYN2
+82.75cw GYB/MKL
+100.0am LORAN
+122.5cw DCF42
+123.7cw DCF42
+129.1cw DCF49
+135.8cw SXV
+139cw DCF39
+140.22usb DCF60
+162cw TDF time signal
+171am Medi 1 (Morocco)
+216am Monte Carlo (FR)
+225am Polskie R.RP1
+252am RTA Algeria)
+
+474.2usb Begin 630m
+479usb End 630m
+501usb Begin 600m
+504usb End 600m
+
+531am R.Yavne (ISR)
+540am R.Kossuth (HU)
+549am R.Ukrainian
+558am R.Slovenija
+567am R.Romania
+576am BNRHorizont (BG)
+585am IRIB (Iran)
+603am R.Actualite (RO)
+612am Al-Quran al-Karim (Bahrain)
+621am Sawt al-Arab (Batrah)
+630am R.Timisoara (RO)
+639am Ceska Rozhlas Dvojka
+657am RAI 1 (IT)
+666am R. Barcelona (ESP)
+675am Sawt Ul Libya
+693am Diaulos
+711am IRIB (Iran)
+729am ERA
+738am RNE R.Nacional (Spain)
+756am R.Romania Actualite
+774am ERTU Al-Sharq al-Awsat (EGY)
+783am R. Barcelona (SP)
+801am Studio 1 Athens
+810am Radio Skopje
+819am ERTU Al-Barnameg al-Aam (EGY)
+828am Studio 54 Athens
+855am R.Romania
+864am ERTU Al-Quran (EGY)
+873am R.Actualite (RO)
+900am RAI 1 (IT)
+909am R.Actualite (RO)
+918am R.Croatia
+927am TRT 1 (TUR)
+936am Rai Uno (IT)
+954am R.Dvojka (Cesky)
+963am RIK (CY)
+990am Voice of Iran
+999am Voice of Russia
+1008am R. Corfu (GR)
+1026am IRIB R.Tabriz (IRAN)
+1044am Radio Daffy (GR)
+1053am SRR R.Iași (RO)
+1062am RAI Radio1
+1107AM R.322 (GR)
+1125am R.Miniwatt (GR)
+1143am Radio Galaxy (GR)
+1152am R.Romania Actualite
+1161am Voice of Iran
+1170am R. Capodistria Ljubljana
+1179am R. Romania Cluj
+1188am R. Nikolas (GR)
+1197am R. Targu Mure (RO)
+1215am Absolute Radio (GB)
+1221am R. Nobel (GR)
+1233am Qatar Radio
+1242am R. Sultanate Oman
+1251am Dankó Rádió (HU)
+1278am R.IRIB (IRAN)
+1296am COPE Ciudad Real (ESP)
+1305am ERTU Al-Barnameg al-Aam (EGY)
+1314am R.Romania Ant. Satelor
+1332am R.Actualite (RO)
+1341am R. Kuwait
+1350am C-QUAM Stereo
+1386am R.Svoboda Moscow
+1377am R.Kermanshah (Iran)
+1404am Romania Sighet
+1413am R.Vesti(RU)
+1458am R.Cluj (RO)
+1494am R. Moldova
+1503am R.IRIB (Iran)
+1521am Saudi Radio
+1530am R.Actualite (RO)
+1548am TWR Europe
+1557am A44 (GR)
+1620am >180m
+1780am <180m
+1836.6usb JT65<br>WSPR
+1840usb FT8
+1850lsb 1850
+1910lsb 1910
+2182usb Int Rescue
+2730usb Olympia Radio
+2789usb Messina (IT)
+2799usb Hellas Radio
+2830usb Hellas Radio
+2920am >'Troika' russian pirates
+2941usb Rostov VOLMET (RU)
+3250am <'Troika' russian pirates
+3568.6usb WSPR
+3570usb JT65
+3573usb FT8
+3575usb FT4
+3595 WSPR
+3695lsb 3695
+3720lsb 3720
+3750lsb 3750
+3785lsb 3785
+3955am BBC
+3965am DRM France
+5288.6usb WSPR
+5357usb FT8
+5360usb 5360
+5450usb RAF Volmet (UK)
+5505usb RAF Volmet (UK)
+5680usb Int Rescue
+7038.6usb WSPR
+7047.5usb FT4
+7120lsb 7120
+7197lsb 7197
+9420am ERT5 (GR)
+9996cw RWM Russian time signal 
+10000cw WWV
+10140usb FT4
+10138.6usb WSPR
+10136usb FT8
+10131usb FT8
+10138usb JT65
+14074usb FT8<br>JT65
+14080usb FT4
+14090usb FT2
+14095.usb WSPR
+14280usb 14280
+18104.6usb WSPR
+18104usb FT4
+18100usb FT8
+18102usb JT65
+18104.6usb WSPR
+21074usb FT8<br>JT65
+21094.6usb WSPR
+21140usb FT4
+21385usb 21385
+24915usb FT8
+24917usb JT65
+24919usb FT4
+24924.6usb WSPR
+26965fm 1
+26975fm 2
+26985fm 3
+27005fm 4
+27015fm 5
+27025fm 6
+27035fm 7
+27055fm 8
+27065fm 9
+27075fm 10
+27085fm 11
+27105fm 12
+27115fm 13
+27125fm 14
+27135fm 15
+27155fm 16
+27165fm 17
+27175fm 18
+27185fm 19
+27205fm 20
+27215fm 21
+27225fm 22
+27255fm 23
+27235fm 24
+27245fm 25
+27265fm 26
+27275fm 27
+27285fm 28
+27295fm 29
+27305fm 30
+27315fm 31
+27325fm 32
+27335fm 33
+27345fm 34
+27355fm 35
+27365fm 36
+27375fm 37
+27385fm 38
+27395fm 39
+27405fm 40
+28074usb FT8<br>JT65
+28180usb FT4
+28124.6usb WSPR
+28585usb 28585
+50293usb WSPR
+70091usb WSPR
+144120usb WSPR
+70091usb WSPR
+10489500usb UPPER<br>Beacon
+10490000Lsb LOWER<br> Beacon 

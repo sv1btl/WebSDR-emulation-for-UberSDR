@@ -1,0 +1,26 @@
+<!DOCTYPE HTML>
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
+<title>WebSDR Mobile version</title>
+<link rel="shortcut icon" type="image/x-icon" href="sv1btl/favicon.ico"/>
+</head>
+<body>
+
+<script>
+// Back on the mobile page from the desktop one's banner: forget the desktop choice
+if (/[?&]mobile\b/.test(location.search)) try { localStorage.removeItem('ubersdr_desktop'); } catch (e) {}
+</script>
+This is the mobile version of this <a href="index.html?desktop">WebSDR</a>.
+It should work using Safari on iOS devices; Firefox or Chrome on Android devices; and Edge on devices running Windows 10.
+<br>
+Tuning is different from the normal WebSDR: do not drag the yellow filter curve,
+but the waterfall.
+<br>
+
+<hr>
+
+<!--#include file="mobile-controls.html"-->
+
+</body>
+</html>

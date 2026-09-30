@@ -1,0 +1,13 @@
+# Lines to add by hand (only if install.sh could not do it) to docker-compose.yml,
+# under the "ubersdr:" service, inside its "volumes:" list (same indentation as the
+# lines already there):
+
+      - ./websdr_sv1btl/websdr-head.html:/app/websdr/websdr-head.html
+      - ./websdr_sv1btl/websdr-controls.html:/app/websdr/websdr-controls.html
+      - ./websdr_sv1btl/websdr-base.js:/app/websdr/websdr-base.js
+      - ./websdr_sv1btl/m.html:/app/websdr/m.html
+      - ./websdr_sv1btl/mobile-controls.html:/app/websdr/mobile-controls.html
+      - ./websdr_sv1btl/sv1btl:/app/websdr/sv1btl
+
+# Then apply once (listeners' audio stops for about 15 seconds):
+#   cd ~/ubersdr && docker compose up -d ubersdr
