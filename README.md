@@ -334,9 +334,9 @@ bash install.sh
 
 - saves the whole current folder as `websdr_sv1btl.bak.<date>`;
 - writes the new files **in place**, so they are live at once with no restart;
-- **keeps your `station.js` and `stationinfo.txt`**. New settings added to `station.js`
-  in a later version have safe defaults; compare with the package's `station.js` if you
-  want them.
+- **keeps your `station.js` and `stationinfo.txt`**, and adds to your `station.js` any
+  settings that are new in this version (with their explanation and default value; your
+  own values are not changed). It lists the settings it added.
 
 ## 9. Uninstalling
 
@@ -369,6 +369,7 @@ and, after asking, recreates the container. UberSDR's own WebSDR page is back.
 | Problem | Cause and fix |
 |---|---|
 | Port 8901 shows UberSDR's own page, not this layout | The mounts aren't active: run `docker compose up -d ubersdr` in the UberSDR folder, then the check script. |
+| The check says "http://localhost:… does not answer" (older versions: many FAIL lines with `HTTP 000`) | UberSDR was still starting, the WebSDR server is off, or the port is published under another number. Wait a minute and run the check again; see `docker port ka9q_ubersdr`; for another port run `URL=http://localhost:<port> bash ~/ubersdr/websdr_sv1btl/check-after-update.sh`. The installation itself is fine if sections 1 and 2 say OK. |
 | Port 8901 doesn't answer at all | `enable_websdr` is off, or the port isn't published/forwarded. Check `config.yaml` and the `ports:` of the `ubersdr` service (`8901:8901`). |
 | Red "Station settings not loaded" line | A typo in `station.js` (section 3). |
 | The header still says "N0CALL / Your City" | `station.js` wasn't edited, or the browser cached the old one: press Ctrl+F5. |

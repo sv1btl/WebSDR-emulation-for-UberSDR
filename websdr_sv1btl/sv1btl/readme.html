@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="favicon.ico">
+<title>SV1BTL WebSDR Layout Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a radio service manual — sticky contents rail on wide screens, one reading column, LCD-style readout header */
+:root {
+  --bg: #f3f5f4;
+  --paper: #ffffff;
+  --ink: #17201f;
+  --muted: #56645f;
+  --rule: #d5ddd9;
+  --accent: #0b7a72;          /* phosphor teal, the waterfall display's colour */
+  --accent-ink: #ffffff;
+  --code-bg: #eaf0ee;
+  --lcd-bg: #0d1614;
+  --lcd-fg: #98ffee;
+  --warn: #9a5b00;
+  --warn-bg: #fff4e0;
+  --font-display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1514; --paper: #151d1b; --ink: #e3ebe8; --muted: #9aaba5; --rule: #2a3633;
+    --accent: #5fd3c6; --accent-ink: #0d1614; --code-bg: #1c2624; --lcd-bg: #050908; --lcd-fg: #98ffee;
+    --warn: #f0b560; --warn-bg: #2b2213; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1514; --paper: #151d1b; --ink: #e3ebe8; --muted: #9aaba5; --rule: #2a3633;
+  --accent: #5fd3c6; --accent-ink: #0d1614; --code-bg: #1c2624; --lcd-bg: #050908; --lcd-fg: #98ffee;
+  --warn: #f0b560; --warn-bg: #2b2213; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; }
+
+/* header readout */
+.masthead { background: var(--lcd-bg); color: var(--lcd-fg); border-radius: 12px; padding: 22px 24px; display: grid; gap: 14px; grid-template-columns: 1fr auto; align-items: end; }
+.masthead h1 { margin: 0; font: 600 clamp(26px, 4.4vw, 40px)/1.1 var(--font-display); letter-spacing: 0.01em; text-wrap: balance; color: #eafffb; }
+.masthead p { margin: 6px 0 0; color: #b8d8d2; max-width: 62ch; }
+.masthead p.links { margin-top: 10px; font-size: 14px; }
+.masthead .links a { color: var(--lcd-fg); }
+.readout { font: 500 13px/1.3 var(--font-mono); text-align: right; color: #7fc9bd; }
+.readout b { display: block; font: 600 clamp(30px, 5vw, 46px)/1 var(--font-display); color: var(--lcd-fg); letter-spacing: 0.04em; }
+@media (max-width: 620px) { .masthead { grid-template-columns: 1fr; } .readout { text-align: left; } }
+
+.grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 36px; margin-top: 28px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); font-size: 14px; }
+@media (max-width: 900px) { nav.toc { position: static; } }
+nav.toc h2 { font: 600 12px/1 var(--font-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+nav.toc ol { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+nav.toc a { color: var(--ink); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+
+main { min-width: 0; }
+section { padding-block: 8px 20px; border-top: 1px solid var(--rule); }
+section:first-child { border-top: 0; padding-top: 0; }
+h2 { font: 600 24px/1.25 var(--font-display); margin: 22px 0 10px; text-wrap: balance; }
+h2 .n { color: var(--accent); margin-right: 8px; font-variant-numeric: tabular-nums; }
+h3 { font: 600 17px/1.3 var(--font-body); margin: 22px 0 6px; }
+p, li { max-width: 72ch; }
+a { color: var(--accent); }
+code { font: 0.9em var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.lead { font-size: 17px; }
+ul.features { display: grid; gap: 6px; padding-left: 20px; }
+
+.code { position: relative; margin: 12px 0; }
+.code pre { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; margin: 0; overflow-x: auto; font: 14px/1.55 var(--font-mono); }
+.code pre code { background: none; padding: 0; }
+.copy { position: absolute; top: 8px; right: 8px; font: 500 12px var(--font-body); border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.copy:hover { border-color: var(--accent); color: var(--accent); }
+.copy:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.steps { counter-reset: s; list-style: none; padding: 0; display: grid; gap: 18px; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; max-width: none; }
+.steps > li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 600 15px/30px var(--font-display); text-align: center; }
+.steps > li > div { min-width: 0; }
+
+.table { overflow-x: auto; margin: 12px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 12px/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--code-bg); }
+td code { white-space: nowrap; }
+
+.note { background: var(--warn-bg); color: var(--ink); border-radius: 8px; padding: 12px 14px; margin: 14px 0; max-width: 72ch; }
+.note b { color: var(--warn); }
+.sum { font: 13px var(--font-mono); word-break: break-all; color: var(--muted); }
+footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <h1>SV1BTL WebSDR layout for UberSDR</h1>
+      <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
+      <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
+    </div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-09-30</div>
+  </header>
+
+  <div class="grid">
+    <nav class="toc" aria-label="Contents">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#what">What you get</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#install">Quick install</a></li>
+        <li><a href="#station">Your station settings</a></li>
+        <li><a href="#labels">Station labels</a></li>
+        <li><a href="#other">Other changes</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#updates">After an UberSDR update</a></li>
+        <li><a href="#upgrade">Upgrading the layout</a></li>
+        <li><a href="#uninstall">Uninstalling</a></li>
+        <li><a href="#manual">Manual installation</a></li>
+        <li><a href="#trouble">Troubleshooting</a></li>
+        <li><a href="#advanced">Advanced settings</a></li>
+        <li><a href="#credits">Credits and licences</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="what">
+        <h2><span class="n">1</span>What you get</h2>
+        <p class="lead">This package replaces the page UberSDR serves on its <strong>WebSDR port (8901)</strong> with the classic Twente WebSDR interface, restyled by RW3PS and adapted to UberSDR's Opus sound engine.</p>
+        <ul class="features">
+          <li><strong>Waterfall</strong> with colours and automatic brightness and contrast.</li>
+          <li><strong>Spectrum</strong> in the PhantomSDR style, over the waterfall or above it ("spectrum + waterfall", the default for first-time visitors).</li>
+          <li><strong>Click-to-tune</strong> on the waterfall and spectrum, rounded to 0.5 kHz.</li>
+          <li><strong>Digit tuning</strong> on the frequency display: mouse wheel over a digit, left click up, right click down.</li>
+          <li><strong>Band buttons</strong> that zoom to the band and follow the frequency.</li>
+          <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
+          <li><strong>Audio tools</strong> in the listener's browser: Weak-signal AGC, noise reduction, two autonotch filters, squelch, soft limiter, Hi-Boost, L/R output, WAV recording.</li>
+          <li><strong>Users list</strong> with each listener's country and city; clicking a listener tunes to their frequency and mode.</li>
+          <li><strong>Mobile page</strong>: phones are sent there automatically, with the same audio tools and an S-meter.</li>
+          <li><strong>Station labels</strong> on the frequency scale, from a plain text file.</li>
+          <li><strong>Chatbox</strong> working with UberSDR's WebSDR chat. The server keeps the last 20 messages in memory until it restarts.</li>
+        </ul>
+        <p>UberSDR itself is not modified. The files are mounted into its container, UberSDR updates leave them alone, and uninstalling brings back UberSDR's own page.</p>
+      </section>
+
+      <section id="requirements">
+        <h2><span class="n">2</span>Requirements</h2>
+        <ul>
+          <li>A working <strong>UberSDR</strong> made with its standard installer (Docker Compose). The package expects the usual folder <code>~/ubersdr</code>, with <code>docker-compose.yml</code>, a service called <code>ubersdr</code> and a container called <code>ka9q_ubersdr</code>. Other folders and names work too.</li>
+          <li>UberSDR's <strong>WebSDR server switched on</strong>, in the admin page or in <code>config.yaml</code>:
+            <div class="code"><pre><code>server:
+  enable_websdr: true
+  websdr_tcp_port: 8901</code></pre></div>
+            Check that <code>http://&lt;your-address&gt;:8901/</code> shows UberSDR's own WebSDR page before you install.</li>
+          <li><code>python3</code> and <code>docker</code> on the host. Both are already there on a normal UberSDR machine.</li>
+          <li>For the <strong>RADE</strong> buttons (optional): UberSDR's FreeDV extension (standard in current UberSDR) and <code>server.enable_cors: true</code> in its <code>config.yaml</code>. See <a href="#how">section 7</a>.</li>
+        </ul>
+      </section>
+
+      <section id="install">
+        <h2><span class="n">3</span>Quick install</h2>
+        <p>The package is on GitHub: <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">github.com/sv1btl/WebSDR-emulation-for-UberSDR</a>.</p>
+        <ol class="steps">
+          <li><div><strong>Get the package on the UberSDR machine</strong>, for example in your home folder. With git:
+            <div class="code"><pre><code>git clone https://github.com/sv1btl/WebSDR-emulation-for-UberSDR.git
+cd WebSDR-emulation-for-UberSDR</code></pre></div>
+            <p>Or without git, as a ZIP file:</p>
+            <div class="code"><pre><code>wget https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/archive/refs/heads/main.zip
+unzip main.zip
+cd WebSDR-emulation-for-UberSDR-main</code></pre></div>
+            <p>Or download <code>websdr_sv1btl_package_&lt;date&gt;.tar.gz</code> and its <code>.sha256</code> file from the <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/releases" target="_blank" rel="noopener">Releases page</a>, check it with <code>sha256sum -c websdr_sv1btl_package_*.tar.gz.sha256</code>, then unpack it with <code>tar xzf websdr_sv1btl_package_*.tar.gz &amp;&amp; cd websdr_sv1btl_package</code>.</p></div></li>
+          <li><div><strong>Run the installer.</strong>
+            <div class="code"><pre><code>bash install.sh                  # UberSDR in ~/ubersdr
+bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
+            <p>It deletes nothing. It:</p>
+            <ul>
+              <li>copies <code>websdr_sv1btl/</code> next to <code>docker-compose.yml</code>;</li>
+              <li>adds 6 mount lines to the <code>ubersdr</code> service, after saving a backup as <code>docker-compose.yml.bak.&lt;date&gt;</code>;</li>
+              <li>copies <code>websdr_waterfall_calibration</code> from UberSDR's config into <code>station.js</code>;</li>
+              <li>asks before recreating the container. This happens once, the first time, and stops listeners' audio for about 15 seconds. Answer <strong>N</strong> to do it later with <code>cd ~/ubersdr &amp;&amp; docker compose up -d ubersdr</code>;</li>
+              <li>runs a check, where every line should say <strong>OK</strong>.</li>
+            </ul></div></li>
+          <li><div><strong>Edit your station settings</strong> in <code>~/ubersdr/websdr_sv1btl/sv1btl/station.js</code> (<a href="#station">section 4</a>). No restart is needed.</div></li>
+          <li><div><strong>Open <code>http://&lt;your-address&gt;:8901/</code></strong> and press <strong>Ctrl+F5</strong>. Try the mobile page at <code>/m.html</code> too.</div></li>
+        </ol>
+      </section>
+
+      <section id="station">
+        <h2><span class="n">4</span>Your station settings</h2>
+        <p>Everything that belongs to your station is in one file, <code>websdr_sv1btl/sv1btl/station.js</code>. Change the values, keeping the quotes and the comma at the end of each line.</p>
+        <div class="table"><table>
+          <thead><tr><th>Setting</th><th>Example</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>callsign</code></td><td><code>'SV1ABC'</code></td><td>"It is operated by …" in the header</td></tr>
+            <tr><td><code>location</code></td><td><code>'Athens, GR'</code></td><td>"This is a WebSDR receiver, located in …"</td></tr>
+            <tr><td><code>locator</code></td><td><code>'KM17vx'</code></td><td>Maidenhead locator, linked to a map</td></tr>
+            <tr><td><code>email</code></td><td><code>'sv1abc@example.com'</code></td><td>contact address in the header</td></tr>
+            <tr><td><code>mobileTitle</code></td><td><code>'SV1ABC WebSDR Mobile version'</code></td><td>browser-tab title of the mobile page</td></tr>
+            <tr><td><code>startKHz</code></td><td><code>7120</code></td><td>where a first-time visitor starts; returning visitors start where they left off</td></tr>
+            <tr><td><code>startMode</code></td><td><code>'LSB'</code></td><td><code>'LSB'</code>, <code>'USB'</code>, <code>'AM'</code>, <code>'CW'</code> or <code>'FM'</code></td></tr>
+            <tr><td><code>waterfallCalibration</code></td><td><code>12</code></td><td>must equal <code>websdr_waterfall_calibration</code> in UberSDR's config (the installer copies it); sets the spectrum's dB scale</td></tr>
+            <tr><td><code>mainServer</code></td><td><code>'https://sv1abc.tunnel.ubersdr.org'</code></td><td>where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; <code>''</code> means this host on port 8080</td></tr>
+            <tr><td><code>showListenerCity</code></td><td><code>true</code></td><td><code>true</code> gives "GR,Athens" in the users list, <code>false</code> the country only</td></tr>
+            <tr><td><code>otherWebSDRs</code></td><td><code>[ 'Twente', 'http://…' ],</code></td><td>"Switch to another WebSDR" buttons, 6 per row, as many rows as needed</td></tr>
+            <tr><td><code>hamBands</code></td><td><em>commented out</em></td><td>your own band-button table; leave it out for the built-in IARU Region 1 table</td></tr>
+          </tbody>
+        </table></div>
+        <h3>The band table</h3>
+        <p>Each line is <code>[ 'button text', lowest kHz, highest kHz, kHz the button tunes to, 'mode' ],</code>. For example, <code>[ '40m', 7000, 7300, 7200, 'LSB' ],</code> suits Region 2. The range also decides which band button lights up as a listener tunes around.</p>
+        <h3>The desktop page title</h3>
+        <p>The browser-tab title of the desktop page comes from UberSDR itself (instance name and location in its admin page), not from <code>station.js</code>.</p>
+        <div class="note"><b>A typo in station.js</b> does not break the page. It shows a red line, "Station settings not loaded: sv1btl/station.js is missing or has a typo". Press <strong>F12</strong>: the browser console shows the line with the error, usually a missing comma or quote.</div>
+      </section>
+
+      <section id="labels">
+        <h2><span class="n">5</span>Station labels</h2>
+        <p>The labels on the frequency scale come from <code>websdr_sv1btl/sv1btl/stationinfo.txt</code>, one per line, as <code>&lt;kHz&gt;&lt;mode&gt; &lt;text&gt;</code>:</p>
+        <div class="code"><pre><code>7074usb FT8
+10136usb FT8
+729am ERT Athens
+14100cw NCDXF beacons</code></pre></div>
+        <p>The mode is <code>am</code>, <code>fm</code>, <code>usb</code>, <code>lsb</code> or <code>cw</code>; clicking the label tunes there in that mode. Lines starting with <code>#</code> are comments, and <code>&lt;br&gt;</code> in the text starts a second line. The file in the package is SV1BTL's list (time signals, European broadcasters, some Athens stations), so adapt it to your area. The page reads it again on each band or zoom change, so after editing just reload.</p>
+      </section>
+
+      <section id="other">
+        <h2><span class="n">6</span>Other things you may want to change</h2>
+        <div class="table"><table>
+          <thead><tr><th>What</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>receiverbook.de registration</td><td><code>websdr-head.html</code>, line 1: paste the <code>&lt;meta name="receiverbook-confirmation" …&gt;</code> line receiverbook gives you</td></tr>
+            <tr><td>"Equipment" box (hidden by default) and <code>sv1btl/setup_bw.gif</code></td><td><code>websdr-controls.html</code>, search for <code>equip_info</code></td></tr>
+            <tr><td>Background images</td><td><code>sv1btl/bg6.jpg</code> (desktop), <code>sv1btl/aluminium.jpg</code> (mobile); replace them with files of the same name</td></tr>
+            <tr><td>Favicon</td><td><code>sv1btl/favicon.ico</code>, <code>sv1btl/favicon.png</code></td></tr>
+            <tr><td>Browser-autoplay guide linked in the header</td><td><code>sv1btl/guide/guide.html</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Please keep the credit line "a layout based on RW3PS's template … modified by SV1BTL".</p>
+      </section>
+
+      <section id="how">
+        <h2><span class="n">7</span>How it works</h2>
+        <p>UberSDR builds its WebSDR page from files in the container's <code>/app/websdr/</code> folder. The package mounts five of them, plus one folder of its own, from <code>~/ubersdr/websdr_sv1btl/</code>:</p>
+        <div class="code"><pre><code>websdr-head.html      page &lt;head&gt;: styles, scripts
+websdr-controls.html  desktop page body (RW3PS layout)
+websdr-base.js        page logic (Twente WebSDR, with RW3PS changes)
+m.html                mobile page
+mobile-controls.html  mobile page body
+sv1btl/               everything else, served as /sv1btl/…
+  station.js          your settings
+  stationinfo.txt     your labels
+  ubersdr-compat.js   glue to UberSDR and all the extras
+  websdr-nr.js        noise-reduction engine
+  images, fonts, less.js, jQuery, guide/</code></pre></div>
+        <p>UberSDR's own <code>websdr-sound.js</code> (Opus audio) and <code>websdr-waterfall.js</code> are not replaced. <code>ubersdr-compat.js</code> hooks into them, which is why the check script verifies them after each UberSDR update.</p>
+        <h3>Editing files safely</h3>
+        <ul>
+          <li><strong>Saving into the same file</strong> (nano, most GUI editors, <code>cat &gt; file</code>) makes the change live at once, with no restart.</li>
+          <li><strong>Replacing the file</strong> (<code>sed -i</code>, copying a new file over it, some vim settings) is not seen until <code>docker restart ka9q_ubersdr</code>. A restart stops listeners' audio for about 15 seconds.</li>
+          <li>Files inside <code>sv1btl/</code>, <code>station.js</code> included, are always seen at once.</li>
+        </ul>
+        <p>Browsers cache scripts, so press <strong>Ctrl+F5</strong> after editing a <code>.js</code> file. To make every visitor's browser fetch a changed <code>ubersdr-compat.js</code>, raise the <code>?v=…</code> number after it in both <code>websdr-head.html</code> and <code>mobile-controls.html</code>.</p>
+        <h3>RADE (FreeDV digital voice)</h3>
+        <p>The <strong>RADEL</strong> and <strong>RADEU</strong> buttons in the Mode row decode RADE V1 on the lower or upper sideband, with a 700–2200 Hz passband (1500 Hz, the width of a RADE signal; the <strong>1.50 kHz</strong> filter button, first in the LSB and USB filter presets, lights up). Pressing the lit button again, or any other mode button, switches it off.</p>
+        <p>UberSDR decodes RADE on the server, with its FreeDV extension (<code>freedv-ka9q</code>). That extension only works on a session of UberSDR's own interface, not on a WebSDR (port 8901) one. So when a listener presses RADEL or RADEU, their browser:</p>
+        <ol>
+          <li>registers a session with UberSDR's main web server (<code>mainServer</code> in <code>station.js</code>);</li>
+          <li>opens an audio session there on the same frequency in LSB or USB, muted, so no audio is sent back for it;</li>
+          <li>asks UberSDR to start the FreeDV decoder on it, and plays the decoded voice through the page's volume, Hi-Boost, notch and NR, while the normal audio is silenced.</li>
+        </ol>
+        <p>Tuning on the page is followed. A status line under the Mode row shows "waiting for a RADE signal…" or "decoding", and the lit button turns green while voice is decoded.</p>
+        <p>Below it, a small <strong>FreeDV Reporter</strong> window lists the stations reported to FreeDV Reporter on the band you are on, as in UberSDR's own FreeDV panel: callsign, country, distance, frequency (a green dot when you are on it), message, TX and last RX. Stations transmitting now come first (red TX badge), then those that transmitted most recently; the TX column shows how long ago ("3m", "2h"). Clicking a station tunes to it. The window shows four rows at a time and scrolls for more.</p>
+        <p>On the <strong>mobile page</strong>, RADEL and RADEU are at the end of the mode list, with the same status line under the buttons (the reporter window is on the desktop page only).</p>
+        <ul>
+          <li><strong>Your visitors must be able to reach <code>mainServer</code>.</strong> The installer fills in the public address from UberSDR's instance settings (for example a <code>…tunnel.ubersdr.org</code> address). Without one, the page uses port 8080 of the same host; forward that port too in that case.</li>
+          <li><strong><code>server.enable_cors: true</code></strong> must be set in UberSDR's <code>config.yaml</code>, because the page contacts another address. The installer warns if it is off.</li>
+          <li><strong>Each RADE listener uses one more UberSDR session</strong> and one FreeDV decoder (<code>freedv_extension.max_users</code>, 15 by default).</li>
+          <li>The decoder reads the sideband when it starts, so switching between RADEL and RADEU restarts it. UberSDR allows one restart every 2 seconds; the page waits and retries.</li>
+        </ul>
+        <h3>What listeners' browsers contact</h3>
+        <p>Your UberSDR for the page, audio and waterfall, and its main web server (<code>mainServer</code>) only while RADE is on. Also <code>get.geojs.io</code> (with <code>ipwho.is</code> as a fallback) once a day per visitor, to find the visitor's own country and city for the users list. <a href="#advanced">Section 13</a> shows how to switch that off.</p>
+      </section>
+
+      <section id="updates">
+        <h2><span class="n">8</span>After an UberSDR update</h2>
+        <p>UberSDR's updater only adds missing services to <code>docker-compose.yml</code> and never changes the <code>ubersdr</code> service, so the mount lines stay. After each update, run:</p>
+        <div class="code"><pre><code>bash ~/ubersdr/websdr_sv1btl/check-after-update.sh</code></pre></div>
+        <p>If every line says <strong>OK</strong>, everything is in place. A <strong>FAIL</strong> line says what is wrong. The usual case is missing mount lines; <code>compose-mounts.txt</code> in the package has them. The other is "websdr-sound.js changed shape", meaning a new UberSDR renamed something the audio extras use. The page still plays; please report it on <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">GitHub Issues</a>.</p>
+        <p>With another folder or container name:</p>
+        <div class="code"><pre><code>UBERSDR_DIR=/path/to/ubersdr CONTAINER=my_container URL=http://localhost:8901 \
+  bash /path/to/ubersdr/websdr_sv1btl/check-after-update.sh</code></pre></div>
+      </section>
+
+      <section id="upgrade">
+        <h2><span class="n">9</span>Upgrading to a newer package</h2>
+        <p>Get the new version and run its <code>install.sh</code> again:</p>
+        <div class="code"><pre><code>cd WebSDR-emulation-for-UberSDR   # the folder you cloned
+git pull
+bash install.sh</code></pre></div>
+        <p>Without git, download and unpack the new ZIP or release archive and run its <code>install.sh</code>. The installer saves the current folder as <code>websdr_sv1btl.bak.&lt;date&gt;</code>, writes the new files in place (live at once, no restart), and <strong>keeps your <code>station.js</code> and <code>stationinfo.txt</code></strong>. Settings that are new in the version are added to your <code>station.js</code> with their default value; your own values are not changed, and the installer lists what it added.</p>
+      </section>
+
+      <section id="uninstall">
+        <h2><span class="n">10</span>Uninstalling</h2>
+        <div class="code"><pre><code>bash uninstall.sh                  # or: bash uninstall.sh /path/to/ubersdr</code></pre></div>
+        <p>This removes the 6 mount lines (keeping <code>docker-compose.yml.bak.&lt;date&gt;</code>) and, after asking, recreates the container, so UberSDR's own WebSDR page is back. The <code>websdr_sv1btl</code> folder stays; delete it by hand if you want.</p>
+      </section>
+
+      <section id="manual">
+        <h2><span class="n">11</span>Manual installation</h2>
+        <ol>
+          <li>Copy the <code>websdr_sv1btl</code> folder next to <code>docker-compose.yml</code>.</li>
+          <li>Under <code>services:</code> → <code>ubersdr:</code> → <code>volumes:</code>, add these lines, indented like the ones already there:
+            <div class="code"><pre><code>      - ./websdr_sv1btl/websdr-head.html:/app/websdr/websdr-head.html
+      - ./websdr_sv1btl/websdr-controls.html:/app/websdr/websdr-controls.html
+      - ./websdr_sv1btl/websdr-base.js:/app/websdr/websdr-base.js
+      - ./websdr_sv1btl/m.html:/app/websdr/m.html
+      - ./websdr_sv1btl/mobile-controls.html:/app/websdr/mobile-controls.html
+      - ./websdr_sv1btl/sv1btl:/app/websdr/sv1btl</code></pre></div></li>
+          <li>Set <code>waterfallCalibration</code> in <code>sv1btl/station.js</code> to the value this prints:
+            <div class="code"><pre><code>docker exec ka9q_ubersdr grep websdr_waterfall_calibration /app/config/config.yaml</code></pre></div></li>
+          <li>Apply it with <code>cd ~/ubersdr &amp;&amp; docker compose up -d ubersdr</code>, then check it with <code>bash ~/ubersdr/websdr_sv1btl/check-after-update.sh</code>.</li>
+        </ol>
+      </section>
+
+      <section id="trouble">
+        <h2><span class="n">12</span>Troubleshooting</h2>
+        <div class="table"><table>
+          <thead><tr><th>Problem</th><th>Cause and fix</th></tr></thead>
+          <tbody>
+            <tr><td>Port 8901 shows UberSDR's own page</td><td>The mounts aren't active. Run <code>docker compose up -d ubersdr</code> in the UberSDR folder, then the check script.</td></tr>
+            <tr><td>The check says "http://localhost:… does not answer" (older versions: many FAIL lines with <code>HTTP 000</code>)</td><td>UberSDR was still starting, the WebSDR server is off, or the port is published under another number. Wait a minute and run the check again; see <code>docker port ka9q_ubersdr</code>; for another port run <code>URL=http://localhost:&lt;port&gt; bash ~/ubersdr/websdr_sv1btl/check-after-update.sh</code>. The installation itself is fine if sections 1 and 2 say OK.</td></tr>
+            <tr><td>Port 8901 doesn't answer</td><td><code>enable_websdr</code> is off, or the port isn't published or forwarded. Check <code>config.yaml</code> and the <code>ports:</code> of the <code>ubersdr</code> service (<code>8901:8901</code>).</td></tr>
+            <tr><td>Red "Station settings not loaded" line</td><td>A typo in <code>station.js</code> (<a href="#station">section 4</a>).</td></tr>
+            <tr><td>Header still says "N0CALL / Your City"</td><td><code>station.js</code> wasn't edited, or the browser cached the old one. Press Ctrl+F5.</td></tr>
+            <tr><td>An HTML edit doesn't show</td><td>The file was replaced instead of saved in place. Run <code>docker restart ka9q_ubersdr</code>.</td></tr>
+            <tr><td>Spectrum dB numbers look wrong</td><td><code>waterfallCalibration</code> doesn't match <code>websdr_waterfall_calibration</code>.</td></tr>
+            <tr><td>No sound until clicking</td><td>Browsers need one click before playing audio; the page shows a "start audio" button.</td></tr>
+            <tr><td>A phone doesn't get the mobile page</td><td>Open <code>/m.html?mobile</code> once; that clears a saved "desktop version" choice.</td></tr>
+            <tr><td>"RADE unavailable: cannot reach …"</td><td><code>mainServer</code> in <code>station.js</code> is wrong or not reachable from outside, or <code>server.enable_cors</code> is off (<a href="#how">section 7</a>).</td></tr>
+            <tr><td>RADE stays on "waiting for a RADE signal…"</td><td>Nobody is transmitting RADE there right now. Common RADE frequencies: 7177 kHz LSB, 14236 kHz USB.</td></tr>
+            <tr><td>Anything else</td><td>Open <code>http://…:8901/?ubersdr_debug</code>. Script errors then show in a red panel at the bottom; please include them in a report on <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">GitHub Issues</a>.</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="advanced">
+        <h2><span class="n">13</span>Settings for advanced users</h2>
+        <p>These constants are in <code>sv1btl/ubersdr-compat.js</code>. After editing, raise its <code>?v=</code> number (<a href="#how">section 7</a>).</p>
+        <div class="table"><table>
+          <thead><tr><th>Constant</th><th>Default</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>WAGC_TARGET_DB</code>, <code>WAGC_MAX_DB</code>, <code>WAGC_NOISE_MAX_DB</code></td><td>−20, 15, 3</td><td>Weak-signal AGC: target level (dBFS), most boost with a signal, most boost on an empty channel</td></tr>
+            <tr><td><code>WAGC_HANG_S</code>, <code>WAGC_RELEASE_DBS</code></td><td>2, 4</td><td>Weak-signal AGC hang time (s) and release (dB/s)</td></tr>
+            <tr><td><code>NR_MULT</code>, <code>NR_FLOOR</code></td><td>per level</td><td>noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong</td></tr>
+            <tr><td><code>SQL_OPEN_DB</code>, <code>SQL_CLOSE_DB</code>, <code>SQL_HANG_S</code></td><td>8, 4, 0.6</td><td>squelch opens this many dB above the noise</td></tr>
+            <tr><td><code>LIM_CEIL</code>, <code>LIM_KNEE</code></td><td>0.7, 0.8</td><td>soft limiter</td></tr>
+            <tr><td><code>WF_NOISE_T</code>, <code>WF_SIG_T</code>, <code>WF_GRAIN_MAX</code></td><td>0.10, 0.70, 0.22</td><td>auto brightness: where the noise floor and strong signals sit in the colour scale</td></tr>
+            <tr><td><code>WFTYPE_DEFAULT</code></td><td><code>'2'</code></td><td>first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall</td></tr>
+            <tr><td><code>GEO_SERVICES</code></td><td>geojs.io, ipwho.is</td><td>location lookup; <code>[]</code> switches the location in the users list off</td></tr>
+            <tr><td><code>SPEC_RANGE_DB</code></td><td>70</td><td>spectrum height in dB</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="credits">
+        <h2><span class="n">14</span>Credits and licences</h2>
+        <ul>
+          <li><strong>WebSDR</strong> client pages and scripts, © 2007–2014 Pieter-Tjerk de Boer, PA3FWM (<a href="http://www.websdr.org" target="_blank" rel="noopener">websdr.org</a>).</li>
+          <li><strong>RW3PS</strong>'s WebSDR template: layout, styles and the waterfall colour map.</li>
+          <li><strong>UberSDR</strong> by madpsy (<a href="https://github.com/madpsy/ka9q_ubersdr" target="_blank" rel="noopener">github.com/madpsy/ka9q_ubersdr</a>).</li>
+          <li><strong>websdr-nr.js</strong> noise reduction © 2026 joshuah.rainstar@gmail.com. MIT terms, with a caveat about commercial use in its header; read it before using the package on a paid service. SV1BTL added a residual floor.</li>
+          <li><strong>jQuery 3.1.1</strong> (MIT), <strong>Less.js 3.12</strong> (Apache 2.0), <strong>Roboto Condensed</strong> (Apache 2.0).</li>
+          <li><strong>DS-Digital</strong> font (frequency display) © Dusit Supasawat, "All Rights Reserved", usually free for personal use only. Replace <code>sv1btl/DS-DIGII.TTF</code> with another digital-style font of the same name if that matters for your station.</li>
+          <li>The spectrum is drawn after the style of PhantomSDR-Plus.</li>
+          <li>Adaptation to UberSDR, audio tools, spectrum, tuning features, installer and this guide: <strong>SV1BTL</strong>, 2026.</li>
+        </ul>
+        <p>SV1BTL's own work in the package is released under the <strong>MIT licence</strong> (the <code>LICENSE</code> file). The third-party parts above keep their own terms.</p>
+      </section>
+
+      <footer>The same guide is in the repository as <code>README.md</code>: <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">github.com/sv1btl/WebSDR-emulation-for-UberSDR</a>.</footer>
+    </main>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.code').forEach(function (box) {
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'copy'; b.textContent = 'Copy';
+  b.addEventListener('click', function () {
+    var text = box.querySelector('pre').innerText;
+    function done(ok) { b.textContent = ok ? 'Copied' : 'Select and copy'; setTimeout(function () { b.textContent = 'Copy'; }, 1600); }
+    try {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { selectIt(); done(false); });
+    } catch (e) { selectIt(); done(false); }
+    function selectIt() { var r = document.createRange(); r.selectNodeContents(box.querySelector('pre')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  });
+  box.appendChild(b);
+});
+</script>
+
+</body>
+</html>

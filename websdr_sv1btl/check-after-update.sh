@@ -7,11 +7,16 @@
 #
 # Exit code 0 = all OK, 1 = something needs attention (each problem is listed).
 
-UBERSDR_DIR="${UBERSDR_DIR:-$HOME/ubersdr}"      # override: UBERSDR_DIR=/path bash check-after-update.sh
+USER_HOME="$HOME"   # run with sudo: the home of the user who ran sudo
+if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then USER_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"; fi
+UBERSDR_DIR="${UBERSDR_DIR:-$USER_HOME/ubersdr}"      # override: UBERSDR_DIR=/path bash check-after-update.sh
 DIR="$UBERSDR_DIR/websdr_sv1btl"
 COMPOSE="$UBERSDR_DIR/docker-compose.yml"
+for c in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do   # the first one that exists
+    [ -f "$UBERSDR_DIR/$c" ] && { COMPOSE="$UBERSDR_DIR/$c"; break; }
+done
 CONTAINER="${CONTAINER:-ka9q_ubersdr}"
-URL="${URL:-http://localhost:8901}"
+URL="${URL:-}"                  # empty: found below from UberSDR's config and the published port
 FILES="websdr-head.html websdr-controls.html websdr-base.js m.html mobile-controls.html sv1btl"
 
 problems=0
@@ -20,8 +25,9 @@ warn() { echo "  FAIL  $*"; problems=$((problems + 1)); }
 
 echo "1. docker-compose.yml mounts"
 for f in $FILES; do
-    if grep -q "^ *- \./websdr_sv1btl/$f:/app/websdr/$f *$" "$COMPOSE"; then ok "$f"
-    else warn "$f is not mounted in $COMPOSE — copy the lines from docker-compose.yml.bak.with-sv1btl"; fi
+    # any form of the line counts: relative or absolute path, quoted or not
+    if grep -v '^ *#' "$COMPOSE" | grep -q "websdr_sv1btl/$f[\"']*:/app/websdr/$f\([\"' :]\|$\)"; then ok "$f"
+    else warn "$f is not mounted in $COMPOSE — add the line from compose-mounts.txt (in the package) or run install.sh again"; fi
     [ -e "$DIR/$f" ] || warn "$DIR/$f is missing — restore it from the websdr_sv1btl.bak.* folder"
 done
 
@@ -31,14 +37,41 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
 else
     mounts=$(docker inspect "$CONTAINER" --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}')
     n=$(echo "$mounts" | grep -c "/websdr_sv1btl/")
-    if [ "$n" -eq 6 ]; then ok "all 6 mounts active"
-    else warn "$n of 6 mounts active — run: cd ~/ubersdr && docker compose up -d ubersdr"; fi
+    if [ "$n" -ge 6 ]; then ok "all 6 mounts active"
+    else warn "$n of 6 mounts active — run: cd $UBERSDR_DIR && docker compose up -d ubersdr"; fi
     if docker logs "$CONTAINER" 2>&1 | grep -q "WebSDR: .* not patched"; then
         warn "UberSDR reports a WebSDR file it could not patch (docker logs $CONTAINER | grep 'not patched')"
     else ok "no 'not patched' warnings from UberSDR"; fi
 fi
 
 echo "3. Pages served"
+# Where the WebSDR port answers on this host: websdr_tcp_port from UberSDR's config,
+# published by Docker under the same or another number
+if [ -z "$URL" ]; then
+    wport=$(docker exec "$CONTAINER" cat /app/config/config.yaml 2>/dev/null | sed -n "s/^ *websdr_tcp_port: *[\"']*\([0-9]*\).*/\1/p" | head -1)
+    wport=${wport:-8901}
+    hport=$(docker port "$CONTAINER" "$wport/tcp" 2>/dev/null | head -1 | sed 's/.*://')
+    URL="http://localhost:${hport:-$wport}"
+fi
+# UberSDR needs a little while after a (re)start: wait up to 2 minutes for an answer
+code=000
+for i in $(seq 24); do
+    code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$URL/")
+    [ "$code" != 000 ] && break
+    [ "$i" = 1 ] && echo "  …  $URL does not answer yet; waiting for UberSDR (up to 2 minutes)"
+    sleep 5
+done
+if [ "$code" = 000 ]; then
+    warn "$URL does not answer, so the page checks below were skipped. Possible causes:"
+    echo "        - UberSDR is still starting: wait a minute and run this check again"
+    echo "        - the WebSDR server is off: set server.enable_websdr: true in UberSDR's config.yaml"
+    echo "        - it is published on another port: see 'docker port $CONTAINER', then run"
+    echo "          URL=http://localhost:<port> bash $0"
+    echo
+    echo "$problems problem(s) found — see FAIL lines above."
+    exit 1
+fi
+echo "  (checking $URL)"
 page=$(curl -s "$URL/")
 echo "$page" | grep -q "sv1btl/ubersdr-compat.js" && ok "desktop page uses the SV1BTL layout" || warn "desktop page is not the SV1BTL layout"
 curl -s "$URL/m.html" | grep -q "ubersdr_mobile_audio_start" && ok "mobile page uses the SV1BTL layout" || warn "mobile page is not the SV1BTL layout"
