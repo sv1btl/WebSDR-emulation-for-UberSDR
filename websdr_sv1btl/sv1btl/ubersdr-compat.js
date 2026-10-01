@@ -541,6 +541,11 @@
     };
     }
 
+    if (has('_connect')) {                 // later audio (re)connections: pair the waterfall again
+      var origConnect = proto._connect;
+      proto._connect = function () { var r = origConnect.apply(this, arguments); wfPair(); return r; };
+    }
+
     proto.audioresume = function () {
       if (this._audioCtx) this._audioCtx.resume().catch(function () {});
       var b = document.getElementById('audiostartbutton');
@@ -592,6 +597,76 @@
       ' — the related extras (notch, NR, Hi-Boost, L/R, squelch, weak-signal AGC, recording) may not work');
   }
 
+  // ── Keep the waterfall paired with the audio ────────────────────────────────
+  // UberSDR names a WebSDR connection "websdr-<second>-<IP>" from the second it arrives
+  // in, and pairs the waterfall with the audio by that name. It closes a waterfall that
+  // has no audio of the same name after server.spectrum_only_timeout (60 s here), so a
+  // page whose audio connected a second later than its waterfall (the audio waits for
+  // its Opus library; about 1 visitor in 15) saw waterfall and spectrum freeze after a
+  // minute. So: every time the audio connects, the waterfall reconnects in the same
+  // instant (its picture, zoom and position stay). Browsers open connections to one
+  // server one after the other, so the two still arrive some milliseconds apart; to keep
+  // them inside one second, the page first finds where the server's second begins (from
+  // the Date header of a few tiny requests) and connects both just after it. At page
+  // load nothing is audible yet, so the first audio connection is simply redone. If
+  // UberSDR still closes the waterfall, audio and waterfall reconnect together the same
+  // way and the tuning is sent again (at most once every 30 s).
+  var WF_PAIR_MARGIN_MS = 60;
+  function serverSecondEdge(cb) {          // client time (ms) of a server-second boundary, or null
+    var lastDate = null, lastMid = 0, t0 = Date.now(), done = false;
+    function finish(v) { if (!done) { done = true; cb(v); } }
+    function probe() {
+      var x = new XMLHttpRequest(), sent = Date.now();
+      x.open('GET', '/~~othersjj?chseq=0&t=' + sent, true);
+      x.onload = function () {
+        var now = Date.now(), mid = (sent + now) / 2, d = x.getResponseHeader('Date');
+        if (!d) { finish(null); return; }
+        if (lastDate !== null && d !== lastDate) { finish((lastMid + mid) / 2); return; }
+        lastDate = d; lastMid = mid;
+        if (now - t0 < 2500) setTimeout(probe, 40); else finish(null);
+      };
+      x.onerror = x.ontimeout = function () { finish(null); };
+      x.send(null);
+    }
+    probe();
+  }
+  function wfPairAligned(sa, after) {      // reconnect audio + waterfall just after a server-second boundary
+    try { if (sa._ws) { sa._ws.onopen = sa._ws.onclose = null; sa._ws.close(); } } catch (e) {}
+    serverSecondEdge(function (edge) {
+      var wait = 0;
+      if (edge !== null) {
+        var now = Date.now(), next = edge;
+        while (next < now + 20) next += 1000;
+        wait = next - now + WF_PAIR_MARGIN_MS;
+      }
+      setTimeout(function () {
+        sa._connect();                     // the _connect wrapper reopens the waterfall in the same instant
+        if (after && sa._ws) sa._ws.addEventListener('open', after);
+      }, wait);
+    });
+  }
+  function wfPair() {
+    var wa = window.waterfallapplet || [];
+    for (var i = 0; i < wa.length; i++) {
+      var w = wa[i];
+      if (w && w.d && typeof w.startstop === 'function') { w.startstop(0); w.startstop(1); }
+    }
+  }
+  var wfLastRecover = 0;
+  setInterval(function () {
+    var sa = window.soundapplet, wa = window.waterfallapplet || [], dead = false;
+    for (var i = 0; i < wa.length; i++) if (wa[i] && wa[i].d && wa[i].d.readyState === 3) dead = true;   // closed, not stopped by the page
+    if (!dead || !sa || typeof sa._connect !== 'function' || Date.now() - wfLastRecover < 30000) return;
+    wfLastRecover = Date.now();
+    console.log('ubersdr-compat: the waterfall was closed by the server; reconnecting audio and waterfall together');
+    wfPairAligned(sa, function () {
+      setTimeout(function () {             // the new audio session starts untuned: send the settings again
+        try { if (typeof window.send_soundsettings_to_server === 'function') send_soundsettings_to_server(); } catch (e) {}
+        sa._connected = true;
+      }, 300);
+    });
+  }, 5000);
+
   // websdr-base.js declares `var soundapplet`, and UberSDR's websdr-sound.js assigns
   // window.soundapplet. Catching the assignment lets the player be patched before the
   // page calls any of the methods above.
@@ -601,7 +676,11 @@
     get: function () { return current; },
     set: function (v) {
       current = v;
-      if (v && typeof v === 'object' && typeof v.getid === 'function') patch(Object.getPrototypeOf(v));
+      if (v && typeof v === 'object' && typeof v.getid === 'function') {
+        patch(Object.getPrototypeOf(v));
+        if (typeof v._connect === 'function') wfPairAligned(v, null);   // redo its first connection, paired
+        else wfPair();
+      }
     }
   });
 

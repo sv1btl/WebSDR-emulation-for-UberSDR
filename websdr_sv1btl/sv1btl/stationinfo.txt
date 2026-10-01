@@ -20,86 +20,30 @@
 216am Monte Carlo (FR)
 225am Polskie R.RP1
 252am RTA Algeria)
-
 474.2usb Begin 630m
 479usb End 630m
 501usb Begin 600m
 504usb End 600m
-
 531am R.Yavne (ISR)
 540am R.Kossuth (HU)
 549am R.Ukrainian
 558am R.Slovenija
 567am R.Romania
 576am BNRHorizont (BG)
-585am IRIB (Iran)
 603am R.Actualite (RO)
-612am Al-Quran al-Karim (Bahrain)
-621am Sawt al-Arab (Batrah)
-630am R.Timisoara (RO)
-639am Ceska Rozhlas Dvojka
-657am RAI 1 (IT)
-666am R. Barcelona (ESP)
-675am Sawt Ul Libya
-693am Diaulos
-711am IRIB (Iran)
 729am ERA
-738am RNE R.Nacional (Spain)
 756am R.Romania Actualite
-774am ERTU Al-Sharq al-Awsat (EGY)
-783am R. Barcelona (SP)
 801am Studio 1 Athens
-810am Radio Skopje
-819am ERTU Al-Barnameg al-Aam (EGY)
 828am Studio 54 Athens
-855am R.Romania
-864am ERTU Al-Quran (EGY)
 873am R.Actualite (RO)
-900am RAI 1 (IT)
-909am R.Actualite (RO)
 918am R.Croatia
-927am TRT 1 (TUR)
-936am Rai Uno (IT)
-954am R.Dvojka (Cesky)
-963am RIK (CY)
-990am Voice of Iran
 999am Voice of Russia
-1008am R. Corfu (GR)
-1026am IRIB R.Tabriz (IRAN)
 1044am Radio Daffy (GR)
-1053am SRR R.Iași (RO)
-1062am RAI Radio1
-1107AM R.322 (GR)
-1125am R.Miniwatt (GR)
-1143am Radio Galaxy (GR)
-1152am R.Romania Actualite
-1161am Voice of Iran
-1170am R. Capodistria Ljubljana
-1179am R. Romania Cluj
-1188am R. Nikolas (GR)
-1197am R. Targu Mure (RO)
 1215am Absolute Radio (GB)
 1221am R. Nobel (GR)
-1233am Qatar Radio
-1242am R. Sultanate Oman
-1251am Dankó Rádió (HU)
-1278am R.IRIB (IRAN)
-1296am COPE Ciudad Real (ESP)
-1305am ERTU Al-Barnameg al-Aam (EGY)
-1314am R.Romania Ant. Satelor
-1332am R.Actualite (RO)
-1341am R. Kuwait
-1350am C-QUAM Stereo
 1386am R.Svoboda Moscow
-1377am R.Kermanshah (Iran)
 1404am Romania Sighet
 1413am R.Vesti(RU)
-1458am R.Cluj (RO)
-1494am R. Moldova
-1503am R.IRIB (Iran)
-1521am Saudi Radio
-1530am R.Actualite (RO)
-1548am TWR Europe
 1557am A44 (GR)
 1620am >180m
 1780am <180m
@@ -120,12 +64,10 @@
 3573usb FT8
 3575usb FT4
 3595 WSPR
-3695lsb 3695
+3685lsb 3685
 3720lsb 3720
 3750lsb 3750
 3785lsb 3785
-3955am BBC
-3965am DRM France
 5288.6usb WSPR
 5357usb FT8
 5360usb 5360
@@ -134,7 +76,9 @@
 5680usb Int Rescue
 7038.6usb WSPR
 7047.5usb FT4
+7087lsb FreeDV
 7120lsb 7120
+7177lsb FreeDV
 7197lsb 7197
 9420am ERT5 (GR)
 9996cw RWM Russian time signal 
@@ -148,6 +92,7 @@
 14080usb FT4
 14090usb FT2
 14095.usb WSPR
+14236usb FreeDV
 14280usb 14280
 18104.6usb WSPR
 18104usb FT4

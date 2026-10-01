@@ -1055,11 +1055,15 @@ function mem_uploadCSV(what)
 
 function mem_deleteall()
 {
-   if (memories.length<=2) return;  // prevent clicking delete twice from making revert inoperable
+   // SV1BTL: was "if (memories.length<=2) return;", which made Delete all do nothing with
+   // one or two memories. Only an empty list is skipped (so a second click cannot
+   // overwrite the copy that the undo button brings back).
+   if (memories.length==0) return;
    memories_backup=memories;
    memories=[];
    mem_show();
    mem_save();
+   showdx(band);   // remove their labels from the frequency scale
 }
 
 function mem_revert()
@@ -1069,6 +1073,7 @@ function mem_revert()
    memories_backup=tmp;
    mem_show();
    mem_save();
+   showdx(band);
 }
 
 function vfos_toggle()

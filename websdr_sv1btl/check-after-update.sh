@@ -49,7 +49,7 @@ done
 
 echo "4. UberSDR sound player still has what ubersdr-compat.js hooks into"
 sound=$(curl -s "$URL/websdr-sound.js")
-for name in "prototype._onMessage" "prototype._ensureAudio" "prototype._playDecoded" "prototype.setparam" \
+for name in "prototype._connect" "prototype._onMessage" "prototype._ensureAudio" "prototype._playDecoded" "prototype.setparam" \
             "prototype.getid" "_audioCtx" "_gainNode" "_nextPlayTime" "_basebandPower" "_decoderSR" \
             "HEADER_SIZE      = 21" "getFloat32(13, true)" "window.prep_html5sound"; do
     echo "$sound" | grep -qF "$name" && ok "$name" || warn "$name not found in websdr-sound.js — some extras (notch, NR, gain, squelch, recording) may stop working"
