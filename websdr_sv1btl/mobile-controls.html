@@ -612,7 +612,8 @@ function freqstep(st)
    }
    var steps_ssb= [0.01, 0.5, 1];
    var steps_am5= [0.1, 1, 5];
-   var steps_am9= [0.1, 1, 9];
+   // MW channel step: mwStepKHz in sv1btl/station.js (9 kHz when not set; 10 in the Americas)
+   var steps_am9= [0.1, 1, (window.STATION && Number(window.STATION.mwStepKHz)) || 9];
    var steps_fm= [1, 5, 12.5 ];
    var steps=steps_ssb;
    var grid=false;

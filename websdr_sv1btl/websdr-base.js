@@ -783,8 +783,10 @@ function freqstep(st)
    if (minstep<0.02) minstep=0.01;
    var steps_ssb= [0.01, 0.5, 1];
    var steps_am5= [0.1, 1, 5];
-   var steps_am9= [0.1, 1, 9];
-   // var steps_am10= [0.1, 1, 10];
+   // MW channel step (the large step in AM below 1620 kHz): mwStepKHz in sv1btl/station.js,
+   // 9 kHz when not set (Europe, Africa, Asia); 10 kHz in the Americas
+   var mwstep = (window.STATION && Number(window.STATION.mwStepKHz)) || 9;
+   var steps_am9= [0.1, 1, mwstep];
    var steps_fm= [1, 5, 12.5 ];
    var steps=steps_ssb;
    var grid=true;
@@ -808,7 +810,7 @@ if (mode=="AM") {
    else {
       var f0=f;
       f=d*Math.ceil(f/d+0.1);
-      if (steps==steps_am9)
+      if (steps==steps_am9 && mwstep==9)
          if (f==180) f=183;  // Europe1 is not on a nice 9 kHz multiple
          else if (f==-180) if (f0<-183) f=-183; else f=-171;
    }

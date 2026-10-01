@@ -213,6 +213,7 @@ bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
             <tr><td><code>startMode</code></td><td><code>'LSB'</code></td><td><code>'LSB'</code>, <code>'USB'</code>, <code>'AM'</code>, <code>'CW'</code> or <code>'FM'</code></td></tr>
             <tr><td><code>waterfallCalibration</code></td><td><code>12</code></td><td>must equal <code>websdr_waterfall_calibration</code> in UberSDR's config (the installer copies it); sets the spectrum's dB scale</td></tr>
             <tr><td><code>mainServer</code></td><td><code>'https://sv1abc.tunnel.ubersdr.org'</code></td><td>where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; <code>''</code> means this host on port 8080</td></tr>
+            <tr><td><code>mwStepKHz</code></td><td><code>9</code></td><td>medium-wave channel step of the &gt;&gt;&gt; / &lt;&lt;&lt; buttons in AM: 9 kHz in Europe, Africa and Asia, <code>10</code> in the Americas</td></tr>
             <tr><td><code>showListenerCity</code></td><td><code>true</code></td><td><code>true</code> gives "GR,Athens" in the users list, <code>false</code> the country only</td></tr>
             <tr><td><code>otherWebSDRs</code></td><td><code>[ 'Twente', 'http://…' ],</code></td><td>"Switch to another WebSDR" buttons, 6 per row, as many rows as needed</td></tr>
             <tr><td><code>hamBands</code></td><td><em>commented out</em></td><td>your own band-button table; leave it out for the built-in IARU Region 1 table</td></tr>

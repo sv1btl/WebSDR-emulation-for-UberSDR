@@ -40,6 +40,11 @@ window.STATION = {
   // false to show the country only, without the city.
   showListenerCity: true,
 
+  // ── Tuning ────────────────────────────────────────────────────────────────
+  // Medium-wave channel step for the >>> / <<< buttons in AM: 9 kHz in Europe, Africa
+  // and Asia (ITU Regions 1 and 3), 10 kHz in the Americas (Region 2).
+  mwStepKHz: 9,
+
   // ── "Switch to another WebSDR" buttons (up to 6 per row) ──────────────────
   // [ 'button text', 'address' ],
   otherWebSDRs: [

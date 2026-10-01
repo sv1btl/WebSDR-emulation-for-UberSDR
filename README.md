@@ -143,6 +143,7 @@ and the comma at the end of each line.
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
 | `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
+| `mwStepKHz` | `9` | medium-wave channel step of the >>> / <<< buttons in AM: 9 kHz in Europe, Africa and Asia, `10` in the Americas |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
 | `otherWebSDRs` | `[ 'Twente', 'http://…' ],` | the "Switch to another WebSDR" buttons, up to 6 per row, as many rows as needed |
 | `hamBands` | *(commented out)* | your own band-button table (see below); leave it out to use the built-in IARU Region 1 table |
