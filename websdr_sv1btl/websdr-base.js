@@ -716,7 +716,10 @@ function setfreqif_fut(str)
 // called when typing in the frequency field; schedules a frequency update in the future, in case no more key presses follow soon
 {
    try { clearTimeout(setfreqif_fut_timer); } catch (e) {} ;
-   setfreqif_fut_timer = setTimeout('setfreqif('+str+')',10);
+   setfreqif_fut_timer = setTimeout(function () {
+      window.ubersdr_typed_freq = true;          // typed by a person: the band-plan mode applies
+      try { setfreqif(str); } finally { window.ubersdr_typed_freq = false; }
+   },10);
 }
 
 function pushButton(mode, lo, hi)
@@ -1149,7 +1152,10 @@ function setfreqb(f)
       // new frequency is in the current band
       setwaterfall(band,f);
       setfreq(f);
-      if (initmodeflag==1 || mode=="USB") modeperfreq(f);
+      // SV1BTL: RW3PS's band-plan table (modeperfreq) only for a frequency typed in the box
+      // by a person; a change of amateur band sets the band's mode in setfreq
+      // (ubersdr-compat.js, also for CAT tools), and within a band a mode set by software is kept.
+      if (window.ubersdr_typed_freq && (initmodeflag==1 || mode=="USB")) modeperfreq(f);
       initmodeflag=1;
       return;
    }

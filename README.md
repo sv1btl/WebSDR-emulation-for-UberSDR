@@ -23,6 +23,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
   to their frequency and mode;
+- works with **DJ0MY's CATSync** (Windows): your own transceiver and the WebSDR follow each
+  other's frequency and mode, both ways;
 - a **mobile page** (phones are sent there automatically) with the same audio tools and
   S-meter;
 - **station labels** on the frequency scale, taken from a simple text file.

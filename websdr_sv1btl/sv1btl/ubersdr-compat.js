@@ -700,6 +700,13 @@
     ['10m',  28000, 29700,  28585,  'USB']
   ];
 
+  // Which band a frequency (kHz) is in, for setfreqb in websdr-base.js: the amateur band
+  // of HAM_BANDS, else the megahertz it falls in (broadcast and other segments)
+  window.ubersdr_bandkey = function (f) {
+    for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) return 'ham' + i;
+    return 'mhz' + Math.floor(f / 1000);
+  };
+
   window.ubersdr_gotoband = function (i) {
     var hb = HAM_BANDS[i];
     var e = bi[band];
@@ -1218,6 +1225,66 @@
     window.setfreq = function () { var r = origFreq.apply(this, arguments); radeFollowTune(); return r; };
   });
 
+  // ── CAT diagnostic log: open the page with ?catlog ───────────────────────────
+  // Shows every frequency and mode change, what made it (a click on the page, or
+  // software such as CATSync, with the calling code), and the mode before and after.
+  // For finding out how a CAT program drives the page. Off unless ?catlog is in the URL.
+  var CATLOG = /[?&]catlog\b/.test(window.location.search);
+  var catlogBox = null, catlogLines = [], lastTrusted = { t: 0, what: '' };
+  function catlogAdd(text) {
+    if (!CATLOG) return;
+    var d = new Date(), ts = d.toTimeString().slice(0, 8) + '.' + ('00' + d.getMilliseconds()).slice(-3);
+    catlogLines.push(ts + '  ' + text);
+    if (catlogLines.length > 300) catlogLines.shift();
+    if (!catlogBox && document.body) {
+      catlogBox = document.createElement('div');
+      catlogBox.style.cssText = 'position:fixed;left:6px;bottom:6px;width:640px;max-width:95vw;height:260px;z-index:100001;' +
+        'background:#111;color:#cfc;font:11px/1.35 monospace;border:2px solid #4c4;border-radius:6px;display:flex;flex-direction:column';
+      catlogBox.innerHTML = '<div style="padding:3px 6px;background:#262;color:#fff">CAT log (?catlog) — ' +
+        '<a href="#" style="color:#ff9" id="catlogsel">select all</a> · <a href="#" style="color:#ff9" id="catlogclr">clear</a></div>' +
+        '<pre id="catlogpre" style="margin:0;padding:4px 6px;overflow:auto;flex:1;white-space:pre-wrap"></pre>';
+      document.body.appendChild(catlogBox);
+      document.getElementById('catlogsel').onclick = function (e) {
+        e.preventDefault(); var r = document.createRange(); r.selectNodeContents(document.getElementById('catlogpre'));
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      };
+      document.getElementById('catlogclr').onclick = function (e) { e.preventDefault(); catlogLines = []; catlogAdd('(cleared)'); };
+    }
+    if (catlogBox) { var pre = document.getElementById('catlogpre'); pre.textContent = catlogLines.join('\n'); pre.scrollTop = pre.scrollHeight; }
+  }
+  function catlogWho() {
+    if (Date.now() - lastTrusted.t < 600) return 'CLICK ' + lastTrusted.what;
+    var st = (new Error().stack || '').split('\n').slice(2, 6).map(function (l) {
+      return l.replace(/^\s*at\s+/, '').replace(/https?:\/\/[^/]+\//g, '').slice(0, 60);
+    }).filter(Boolean).join(' < ');
+    return 'SOFTWARE [' + st + ']';
+  }
+  if (CATLOG) {
+    ['mousedown', 'keydown', 'touchstart'].forEach(function (t) {
+      document.addEventListener(t, function (e) {
+        if (!e.isTrusted) return;
+        var el = e.target, id = el && (el.id || el.value || el.textContent || el.tagName);
+        lastTrusted = { t: Date.now(), what: t + ':' + String(id).trim().slice(0, 24) };
+      }, true);
+    });
+    window.addEventListener('load', function () {
+      ['set_mode', 'setmf', 'setfreq', 'setfreqb', 'setfreqif', 'setfreqm'].forEach(function (name) {
+        var orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+          var before = window.mode + ' ' + (typeof nominalfreq === 'function' ? nominalfreq() : '');
+          var who = catlogWho();
+          var r = orig.apply(this, arguments);
+          var after = window.mode + ' ' + (typeof nominalfreq === 'function' ? nominalfreq() : '');
+          catlogAdd(name + '(' + [].map.call(arguments, function (a) { return JSON.stringify(a); }).join(',') + ')  ' +
+                    before + ' -> ' + after + '  ' + who);
+          return r;
+        };
+      });
+      catlogAdd('CAT log started — ' + navigator.userAgent.slice(0, 110));
+    });
+  }
+
   window.ubersdr_compat_after_base = function () {
     var origBandButtons = window.document_bandbuttons;
     window.document_bandbuttons = function () {
@@ -1237,12 +1304,16 @@
     // (and passes the carrier where a displayed frequency is expected, which would move a
     // CW signal by (hi+lo)/2). From then on every retune and mode/filter change is saved.
     var origBodyonload = window.bodyonload, posReady = false;
+    var restoring = false;
     function applyPos(p) {
-      set_mode(p.mode);
-      setmf(p.mode.toLowerCase(), p.lo, p.hi);
-      var carrier = p.nom - (iscw() ? (hi + lo) / 2 : 0);
-      setwaterfall(band, carrier);
-      setfreq(carrier);
+      restoring = true;                    // the saved mode is kept, whatever band it is on
+      try {
+        set_mode(p.mode);
+        setmf(p.mode.toLowerCase(), p.lo, p.hi);
+        var carrier = p.nom - (iscw() ? (hi + lo) / 2 : 0);
+        setwaterfall(band, carrier);
+        setfreq(carrier);
+      } finally { restoring = false; }
     }
     window.bodyonload = function () {
       origBodyonload.apply(this, arguments);
@@ -1256,10 +1327,50 @@
       if (lastPos && !soundRestored) { soundRestored = true; applyPos(lastPos); }
     };
     function savePos() { if (posReady) window.ubersdr_savepos(nominalfreq(), mode, lo, hi); }
+    // Band-plan mode on a band change (CAT sync, e.g. DJ0MY's CATSync): whenever the
+    // frequency moves into another amateur band - from this page or from a radio - the
+    // band's mode in HAM_BANDS is set (40m LSB, 20m USB, MW AM…). For BAND_MODE_HOLD_MS
+    // after that, a different mode set by software (the radio echoing the mode it last had
+    // there) is ignored, so the band-plan mode wins and is passed on to the radio. A mode
+    // chosen by the visitor (a click on a mode control) always goes through, and within a band
+    // any mode is kept (CW, FT8 in USB on 40m…).
+    var BAND_MODE_HOLD_MS = 2500, bandHold = { until: 0, mode: '' }, lastHuman = 0, applyingBand = false;
+    // only a click on a mode control counts as the visitor choosing a mode: the mode
+    // buttons, the filter presets, the RADE buttons and a listener in the users list
+    var MODE_CONTROLS = '[id^="btn-"], .btnBandW, .userbtn, #modesel';
+    ['pointerdown', 'mousedown', 'touchstart', 'change'].forEach(function (t) {
+      document.addEventListener(t, function (e) {
+        if (e.isTrusted && e.target && e.target.closest && e.target.closest(MODE_CONTROLS)) lastHuman = Date.now();
+      }, true);
+    });
+    function hamIndex(fk) {
+      for (var i = 0; i < HAM_BANDS.length; i++) if (fk >= HAM_BANDS[i][1] && fk <= HAM_BANDS[i][2]) return i;
+      return -1;
+    }
     var origSetfreq = window.setfreq;
-    window.setfreq = function (f) { origSetfreq.apply(this, arguments); savePos(); bandLight(); radeFollowTune(); };
+    window.setfreq = function (f) {
+      var before = hamIndex(nominalfreq());
+      origSetfreq.apply(this, arguments);
+      var after = hamIndex(nominalfreq());
+      if (posReady && !restoring && after >= 0 && after !== before) {
+        var bm = String(HAM_BANDS[after][4]).toUpperCase();
+        if (String(window.mode).toUpperCase() !== bm) {
+          var nom = nominalfreq();
+          applyingBand = true;
+          try { set_mode(bm); } finally { applyingBand = false; }
+          if (Math.abs(nominalfreq() - nom) > 0.001) origSetfreq(nom - (iscw() ? (hi + lo) / 2 : 0));   // keep the shown frequency (CW)
+        }
+        bandHold = { until: Date.now() + BAND_MODE_HOLD_MS, mode: bm };
+      }
+      savePos(); bandLight(); radeFollowTune();
+    };
     var origSetmf = window.setmf;
-    window.setmf = function () { origSetmf.apply(this, arguments); savePos(); bandLight(); radeFollowMode(); };
+    window.setmf = function (m) {
+      var now = Date.now();
+      if (!applyingBand && now < bandHold.until && now - lastHuman > 1500 &&
+          String(m).toUpperCase() !== bandHold.mode) return;      // software echo of the old mode: ignore
+      origSetmf.apply(this, arguments); savePos(); bandLight(); radeFollowMode();
+    };
     // Clicking a listener in the users strip: tune to the exact frequency they are on
     // (the RW3PS click also shifted it by this page's own passband offset) and switch to
     // their mode — sent at the end of their name by these pages; for other clients the
@@ -1275,9 +1386,9 @@
       var mm = NAME_MODES.exec(uu_names[i] || ''), mo = mm ? mm[1] : null;
       if (!mo) for (var k = 0; k < HAM_BANDS.length; k++) if (f >= HAM_BANDS[k][1] && f <= HAM_BANDS[k][2]) { mo = HAM_BANDS[k][4]; break; }
       if (b !== band) setband(b);
-      if (mo && mo !== mode) set_mode(mo);
       setwaterfall(band, f);
-      setfreq(f);
+      setfreq(f);                          // (sets the band-plan mode if the band changes)
+      if (mo && mo !== mode) { set_mode(mo); setfreq(f); }   // then the listener's own mode
     };
     var origDouu = window.douu;
     window.douu = function () {
