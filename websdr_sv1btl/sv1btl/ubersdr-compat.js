@@ -645,11 +645,32 @@
       }, wait);
     });
   }
+  // A setting sent while a renewed waterfall connection is still opening threw
+  // InvalidStateError and was lost: hold such messages and send them once it is open.
+  function wfSafeSend(w) {
+    if (w._ubersdrSafeSend || typeof w.e !== 'function') return;
+    w._ubersdrSafeSend = true;
+    w.e = function (msg) {
+      var ws = this.d;
+      if (!ws) return;
+      if (ws.readyState === 1) { ws.send(msg); return; }
+      if (ws.readyState === 0) {
+        if (!ws._ubersdrQueue) {
+          ws._ubersdrQueue = [];
+          ws.addEventListener('open', function () {
+            var q = ws._ubersdrQueue; ws._ubersdrQueue = [];
+            for (var k = 0; k < q.length; k++) try { ws.send(q[k]); } catch (e) {}
+          });
+        }
+        ws._ubersdrQueue.push(msg);
+      }
+    };
+  }
   function wfPair() {
     var wa = window.waterfallapplet || [];
     for (var i = 0; i < wa.length; i++) {
       var w = wa[i];
-      if (w && w.d && typeof w.startstop === 'function') { w.startstop(0); w.startstop(1); }
+      if (w && w.d && typeof w.startstop === 'function') { wfSafeSend(w); w.startstop(0); w.startstop(1); }
     }
   }
   var wfLastRecover = 0;
@@ -1714,7 +1735,7 @@
   // config.yaml (12 on this receiver).
   // The vertical scale follows the noise floor, as PhantomSDR-Plus's follows its
   // waterfall window: bottom = floor - SPEC_BELOW_DB, top = bottom + SPEC_RANGE_DB.
-  var WF_CAL_DB = (typeof STN.waterfallCalibration === 'number') ? STN.waterfallCalibration : 12, SPEC_ALPHA = 0.5, SPEC_BELOW_DB = 10, SPEC_RANGE_DB = 70;
+  var WF_CAL_DB = (typeof STN.waterfallCalibration === 'number') ? STN.waterfallCalibration : 12, SPEC_ALPHA = 0.5, SPEC_BELOW_DB = 3, SPEC_RANGE_DB = 70;   // SPEC_BELOW_DB was 10: the noise now sits at the bottom of the panel (2026-10-06)
   var SPLIT_H = 100;   // spectrum height (px) in Type = spectrum + waterfall
   var spec = { on: false, split: false, canvas: null, ctx: null, row: null, lvl: null, filt: null,
                view: '', hoverX: null, grad: null, gradH: 0, dirty: true, minDb: null };
