@@ -200,6 +200,16 @@ function tuneKHz(f) {
     W.setfreqif(f.toFixed(3));
   } catch (e) { console.error('decoders: tune', e); }
 }
+// A station or frequency picked in a decoder's list stays shown there while the dial is on
+// it; tuning elsewhere puts the list back to its first line (so the same station can be
+// picked again). The list goes with the window when the decoder is switched off.
+let pickedDial = 0;
+function picked(dial) { pickedDial = dial || 0; }
+function pickedFollow() {
+  const sel = $('.dw-tune');
+  if (!sel || !sel.value || !pickedDial) return;
+  if (Math.abs(dialKHz() - pickedDial) > 0.02) { sel.value = ''; pickedDial = 0; }
+}
 // The page's band-plan guard (ubersdr-compat.js) ignores mode changes by software for a
 // moment after a band change; a decoder's mode and filter are the listener's own choice.
 function listener() { if (W.ubersdr_listener_mode) W.ubersdr_listener_mode(); }
@@ -565,7 +575,7 @@ function sstvWindow() {
   msel.onchange = () => { lsSet('ubersdr_sstvmode', msel.value); sstv.setMode(msel.value); sstv.reset({ mode: msel.value }); sstvBlank(sstvH); };
   $('.dw-reset').onclick = () => { sstv.reset({ mode: msel.value }); sstvBlank(sstvH); status('Waiting for a picture (VIS header)…'); };
   $('.dw-save').onclick = () => savePng(cv, 'sstv');
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f); applyFilter('sstv'); } e.target.value = ''; };
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f); applyFilter('sstv'); picked(f); } };
   status('Waiting for a picture (VIS header)…');
 }
 function sstvBlank(h) {
@@ -617,7 +627,7 @@ function faxWindow() {
     const [i, j] = e.target.value.split(':').map(Number), s = FAX_STATIONS[i];
     ls.value = String(s.lpm); is.value = String(s.ioc); params();
     tuneKHz(s.freqs[j] - 1.9);                      // centre 1900 Hz above the USB dial
-    applyFilter('fax'); e.target.value = '';
+    applyFilter('fax'); picked(s.freqs[j] - 1.9);
   };
   status('Receiving — a picture starts with the start tone and phasing lines');
 }
@@ -673,7 +683,7 @@ function navtexWindow() {
     else if (ev.type === 'status') status(ev.text);
   } });
   fsk.setEnabled(true);
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('navtex'); } e.target.value = ''; };
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('navtex'); picked(f - 0.5); } };
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
 const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 } };
@@ -693,9 +703,9 @@ function rttyWindow() {
   fsk.setVariant(v); fsk.setConfig(null); fsk.setEnabled(true);
   vs.onchange = () => {
     lsSet('ubersdr_rtty', vs.value); fsk.setVariant(vs.value); fsk.setConfig(null);
-    $('.dw-tune').innerHTML = rttyFreqOptions(vs.value); applyFilter('rtty');
+    $('.dw-tune').innerHTML = rttyFreqOptions(vs.value); picked(0); applyFilter('rtty');
   };
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - RTTY[rttyVariant()].center / 1000); applyFilter('rtty'); } e.target.value = ''; };
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter('rtty'); picked(d); } };
   status(`Listening (tones centred on ${RTTY[v].center} Hz)…`);
 }
 
@@ -711,7 +721,7 @@ function start(k) {
   if (W.ubersdr_rade_active && W.ubersdr_rade_active() && W.ubersdr_rade_stop) W.ubersdr_rade_stop();
   const d = DEC[k];
   st.on = k; capReset(); lightButtons();
-  lastBand = '';
+  lastBand = ''; pickedDial = 0;
   // Off the mode's usual frequencies: go to the nearest one (same as PhantomSDR-Plus's band plan)
   if (d.dials) {
     const f = dialKHz(), near = nearest(d.dials, f);
@@ -733,7 +743,7 @@ function stop(quiet) {
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
   for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }
   sstv = fax = fsk = null; js8.re = null;
-  barStop(); closeWindow(); lightButtons();
+  barStop(); closeWindow(); lightButtons(); pickedDial = 0;
   // As PhantomSDR-Plus: back to the band's usual mode (LSB on 40 m, CW on 30 m…, from the
   // page's band table), with that mode's usual filter (the page's default, or the preset
   // the listener chose for it). Outside the amateur bands the sideband in use stays and
@@ -777,6 +787,7 @@ setInterval(() => {
   const bk = W.ubersdr_bandkey ? W.ubersdr_bandkey(f) : '';
   if (lastBand && bk !== lastBand) applyFilter(st.on);
   lastF = f; lastBand = bk;
+  pickedFollow();
 }, 500);
 buildRow();
 W.ubersdr_decoders = { start, stop, state: () => ({ on: st.on, sr: st.sr, cap: { on: cap.on, len: cap.len, busy: cap.busy } }) };
