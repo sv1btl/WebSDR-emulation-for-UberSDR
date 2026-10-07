@@ -38,6 +38,10 @@ Third-party parts keep their own terms and are NOT relicensed:
     (SV1BTL's residual-floor change to it is under the same terms)
   - sv1btl/cw-decoder.js CW decoder: from PhantomSDR-Plus
     (github.com/sv1btl/PhantomSDR-Plus), GNU General Public License v3
+  - sv1btl/psdr/ (FT8/FT4/FT2/JS8/WSPR/SSTV/FAX/NAVTEX/RTTY decoders) and
+    sv1btl/decoders.js: from PhantomSDR-Plus, GNU General Public License v3;
+    inside them ft8_lib.wasm (ft8_lib by Karlis Goba, MIT), js8.wasm (built
+    on ft8_lib with tables from JS8Call) and js8_dict.bin (JS8Call, GPL v3)
   - jQuery 3.1.1: MIT licence, (c) jQuery Foundation
   - Less.js 3.12: Apache License 2.0
   - Roboto Condensed font: Apache License 2.0, (c) Google

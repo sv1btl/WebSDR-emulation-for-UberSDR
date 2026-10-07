@@ -21,6 +21,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   decoded by UberSDR's own FreeDV extension;
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
   PhantomSDR-Plus's CW decoder in the listener's browser;
+- **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY) from
+  PhantomSDR-Plus, with a Decoder button row under the Mode buttons;
 - **audio tools** that run in the listener's browser: Weak-signal AGC, noise reduction,
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
@@ -312,6 +314,37 @@ no extra session, no `mainServer`, no `enable_cors`. Things to know:
 - It needs a few seconds of a signal to lock on to its speed.
 - Desktop page only.
 
+### Digital-mode decoders
+
+A **Decoder** row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in
+the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY**. Its window
+opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW
+or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on
+30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or
+the preset the listener chose for it). Tuning into another band while a decoder runs
+keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received
+audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.
+
+| Decoder | What the button does | Window |
+|---|---|---|
+| FT8, FT4, FT2 | USB, filter 0.1–3.0 kHz; FT8/FT4 move to the band's usual frequency if the dial is not on one | UTC, dB, DT, Hz, message, locator and distance from your locator; 15 / 7.5 / 3.75 s slots |
+| JS8 | USB 0.1–3.0 kHz, the band's JS8 frequency | messages put together from JS8 frames; speed Normal/Fast/Turbo/Slow/Ultra |
+| WSPR | USB 1.3–1.7 kHz, the band's WSPR frequency | spots every 2 minutes (even UTC minutes): call, locator, dBm, kHz, SNR, distance |
+| SSTV | LSB below 10 MHz, USB above; 1.0–2.5 kHz | the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies |
+| FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency |
+| NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations |
+| RTTY | USB around 1000 Hz | text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists |
+
+- FT8, FT4, FT2 and JS8 start each capture a little after the UTC slot boundary, to
+  allow for the time the audio takes to arrive. The page learns this "time shift" from
+  the decoded DT values (shown in the window) and keeps it in the listener's browser.
+  The listener's PC clock must be right (within about a second).
+- The distance column needs the station locator in `station.js` (`locator`).
+- The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files) and
+  `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
+  downloaded when JS8 is used.
+- Desktop page only.
+
 ### What listeners' browsers contact
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
@@ -442,6 +475,11 @@ editing, raise the `?v=` number (see section 6).
 - **sv1btl/cw-decoder.js**, the CW decoder, comes from PhantomSDR-Plus
   ([github.com/sv1btl/PhantomSDR-Plus](https://github.com/sv1btl/PhantomSDR-Plus)) and is
   under its licence, the **GNU GPL v3**.
+- The **digital-mode decoders** in `sv1btl/psdr/` come from PhantomSDR-Plus too, and with
+  `sv1btl/decoders.js` are under the **GNU GPL v3**. The FT8/FT4/FT2 engine
+  (`ft8_lib.wasm`, from Karlis Goba's ft8_lib, MIT) and the JS8 engine and dictionary
+  (`js8.wasm`, built on ft8_lib with tables from JS8Call, and `js8_dict.bin`, from
+  JS8Call, GPL v3) keep their own terms.
 - Adaptation to UberSDR, the audio tools, spectrum, tuning features, installer and this
   guide: **SV1BTL** (2026).
 

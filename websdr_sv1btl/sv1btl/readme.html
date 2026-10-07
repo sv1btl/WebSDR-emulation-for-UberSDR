@@ -148,6 +148,7 @@ html { scroll-behavior: smooth; }
           <li><strong>Band buttons</strong> that zoom to the band and follow the frequency.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
           <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using PhantomSDR-Plus's CW decoder in the listener's browser.</li>
+          <li><strong>Digital-mode decoders</strong> from PhantomSDR-Plus (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY), with a Decoder button row under the Mode buttons.</li>
           <li><strong>Audio tools</strong> in the listener's browser: Weak-signal AGC, noise reduction, two autonotch filters, squelch, soft limiter, Hi-Boost, L/R output, WAV recording.</li>
           <li><strong>Users list</strong> with each listener's country and city; clicking a listener tunes to their frequency and mode.</li>
           <li>Works with <strong>DJ0MY's CATSync</strong> (Windows): your own transceiver and the WebSDR follow each other's frequency and mode, both ways.</li>
@@ -300,6 +301,26 @@ sv1btl/               everything else, served as /sv1btl/…
           <li>It needs a few seconds of a signal to lock on to its speed.</li>
           <li>Desktop page only.</li>
         </ul>
+        <h3>Digital-mode decoders</h3>
+        <p>A <strong>Decoder</strong> row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in the listener's browser: <strong>FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY</strong>. Its window opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on 30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or the preset the listener chose for it). Tuning into another band while a decoder runs keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.</p>
+        <div class="table"><table>
+          <thead><tr><th>Decoder</th><th>What the button does</th><th>Window</th></tr></thead>
+          <tbody>
+            <tr><td>FT8, FT4, FT2</td><td>USB, filter 0.1–3.0 kHz; FT8/FT4 move to the band's usual frequency if the dial is not on one</td><td>UTC, dB, DT, Hz, message, locator and distance from your locator; 15 / 7.5 / 3.75 s slots</td></tr>
+            <tr><td>JS8</td><td>USB 0.1–3.0 kHz, the band's JS8 frequency</td><td>messages put together from JS8 frames; speed Normal/Fast/Turbo/Slow/Ultra</td></tr>
+            <tr><td>WSPR</td><td>USB 1.3–1.7 kHz, the band's WSPR frequency</td><td>spots every 2 minutes (even UTC minutes): call, locator, dBm, kHz, SNR, distance</td></tr>
+            <tr><td>SSTV</td><td>LSB below 10 MHz, USB above; 1.0–2.5 kHz</td><td>the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies</td></tr>
+            <tr><td>FAX</td><td>USB 1.1–2.7 kHz</td><td>the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency</td></tr>
+            <tr><td>NAVTEX</td><td>USB 0.25–0.75 kHz</td><td>the messages (ZCZC … NNNN); list of NAVTEX stations</td></tr>
+            <tr><td>RTTY</td><td>USB around 1000 Hz</td><td>text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li>FT8, FT4, FT2 and JS8 start each capture a little after the UTC slot boundary, to allow for the time the audio takes to arrive. The page learns this "time shift" from the decoded DT values (shown in the window) and keeps it in the listener's browser. The listener's PC clock must be right (within about a second).</li>
+          <li>The distance column needs the station locator in <code>station.js</code> (<code>locator</code>).</li>
+          <li>The decoder files are in <code>sv1btl/psdr/</code> (PhantomSDR-Plus's own files) and <code>sv1btl/decoders.js</code> (the buttons and windows). The JS8 dictionary (1.9 MB) is only downloaded when JS8 is used.</li>
+          <li>Desktop page only.</li>
+        </ul>
         <h3>What listeners' browsers contact</h3>
         <p>Your UberSDR for the page, audio and waterfall, and its main web server (<code>mainServer</code>) only while RADE is on. Also <code>get.geojs.io</code> (with <code>ipwho.is</code> as a fallback) once a day per visitor, to find the visitor's own country and city for the users list. <a href="#advanced">Section 13</a> shows how to switch that off.</p>
       </section>
@@ -397,6 +418,7 @@ bash install.sh</code></pre></div>
           <li><strong>DS-Digital</strong> font (frequency display) © Dusit Supasawat, "All Rights Reserved", usually free for personal use only. Replace <code>sv1btl/DS-DIGII.TTF</code> with another digital-style font of the same name if that matters for your station.</li>
           <li>The spectrum is drawn after the style of PhantomSDR-Plus.</li>
           <li><code>sv1btl/cw-decoder.js</code>, the CW decoder, comes from PhantomSDR-Plus (<a href="https://github.com/sv1btl/PhantomSDR-Plus">github.com/sv1btl/PhantomSDR-Plus</a>) and is under its licence, the GNU GPL v3.</li>
+          <li>The digital-mode decoders in <code>sv1btl/psdr/</code> come from PhantomSDR-Plus too, and with <code>sv1btl/decoders.js</code> are under the GNU GPL v3. The FT8/FT4/FT2 engine (<code>ft8_lib.wasm</code>, from Karlis Goba's ft8_lib, MIT) and the JS8 engine and dictionary (<code>js8.wasm</code>, built on ft8_lib with tables from JS8Call, and <code>js8_dict.bin</code>, from JS8Call, GPL v3) keep their own terms.</li>
           <li>Adaptation to UberSDR, audio tools, spectrum, tuning features, installer and this guide: <strong>SV1BTL</strong>, 2026.</li>
         </ul>
         <p>SV1BTL's own work in the package is released under the <strong>MIT licence</strong> (the <code>LICENSE</code> file). The third-party parts above keep their own terms.</p>

@@ -539,6 +539,7 @@
         this._nextPlayTime = ctx.currentTime + state.lead;   // refill to the chosen buffer depth
       }
       if (cwd.on && decoded.channelData.length) cwFeed(decoded.channelData[0], this._decoderSR);   // raw audio, as PhantomSDR-Plus
+      if (window.ubersdr_dec_tap && decoded.channelData.length) window.ubersdr_dec_tap(decoded.channelData[0], this._decoderSR);   // sv1btl/decoders.js
       if (state.squelch || state.agcBoost || this._lvl) {
         if (decoded.channelData.length) levelProcess(this, decoded.channelData);
         if (!(state.squelch || state.agcBoost)) this._lvl = null;   // all off again
@@ -735,6 +736,12 @@
   window.ubersdr_bandkey = function (f) {
     for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) return 'ham' + i;
     return 'mhz' + Math.floor(f / 1000);
+  };
+
+  // The band-plan mode of an amateur band (kHz), else null: used by sv1btl/decoders.js
+  window.ubersdr_bandmode = function (f) {
+    for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) return String(HAM_BANDS[i][4]).toUpperCase();
+    return null;
   };
 
   window.ubersdr_gotoband = function (i) {
@@ -1275,7 +1282,7 @@
       '.cwdec .cw-title{font-weight:bold;flex:1}' +
       '.cwdec .cw-stat{color:#555}.cwdec .cw-stat b{color:#111}' +
       '.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
-      '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#10161a;color:#9fe8b8;' +
+      '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#1a1a1a;' +
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
       '.cwdec .cw-status{padding:1px 6px 2px;color:#777;font-style:italic;border-top:1px solid #ddd}' +
       '.cwdec .cw-status.err{color:#c00;font-style:normal}';
@@ -1409,6 +1416,42 @@
     setInterval(cwFollow, 350);
   });
   window.addEventListener('beforeunload', cwStop);
+
+  // ── Digital-mode decoders (desktop): FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY ──
+  // PhantomSDR-Plus's decoders, in sv1btl/decoders.js (an ES module) and sv1btl/psdr/.
+  window.addEventListener('load', function () {
+    if (!document.getElementById('wfmode')) return;   // desktop page only
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'sv1btl/decoders.js?v=20261007h';
+    s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
+    document.head.appendChild(s);
+  });
+
+  // ── Centre column grows the panel (desktop) ─────────────────────────────────
+  // RW3PS's layout places the centre column with position:absolute and height:93%,
+  // so the grey panel takes its height from the left and right columns only and a
+  // taller centre (RADE reporter, CW window) spilled out below it. The column now
+  // takes its own content height and the panel is kept at least that tall.
+  function midFit() {
+    var col = document.getElementById('moderow');
+    while (col && getComputedStyle(col).position !== 'absolute') col = col.parentElement;
+    if (!col || !col.parentElement) return;
+    var box = col.parentElement;
+    if (col.style.height !== 'auto') col.style.height = 'auto';
+    var need = col.offsetTop + col.offsetHeight + 12;
+    if (box.style.minHeight !== need + 'px') box.style.minHeight = need + 'px';
+  }
+  window.addEventListener('load', function () {
+    if (!document.getElementById('wfmode')) return;   // desktop page only
+    midFit();
+    var col = document.getElementById('moderow');
+    if (window.ResizeObserver && col) {
+      while (col && getComputedStyle(col).position !== 'absolute') col = col.parentElement;
+      if (col && col.firstElementChild) new ResizeObserver(midFit).observe(col.firstElementChild);
+    }
+    setInterval(midFit, 1000);                         // fallback, and after font loading
+  });
   window.ubersdr_cw_state = function () { return cwd; };   // for diagnosis
 
   // ── CAT diagnostic log: open the page with ?catlog ───────────────────────────
@@ -1523,7 +1566,7 @@
     var BAND_MODE_HOLD_MS = 2500, bandHold = { until: 0, mode: '' }, lastHuman = 0, applyingBand = false;
     // only a click on a mode control counts as the visitor choosing a mode: the mode
     // buttons, the filter presets, the RADE buttons and a listener in the users list
-    var MODE_CONTROLS = '[id^="btn-"], .btnBandW, .userbtn, #modesel';
+    var MODE_CONTROLS = '[id^="btn-"], .btnBandW, .userbtn, #modesel, .decbtn, .dec-sel';   // .decbtn/.dec-sel: sv1btl/decoders.js
     ['pointerdown', 'mousedown', 'touchstart', 'change'].forEach(function (t) {
       document.addEventListener(t, function (e) {
         if (e.isTrusted && e.target && e.target.closest && e.target.closest(MODE_CONTROLS)) lastHuman = Date.now();
@@ -1550,6 +1593,8 @@
       }
       savePos(); bandLight(); radeFollowTune();
     };
+    // sv1btl/decoders.js: a decoder's mode and filter are the listener's choice too
+    window.ubersdr_listener_mode = function () { lastHuman = Date.now(); };
     var origSetmf = window.setmf;
     window.setmf = function (m) {
       var now = Date.now();
