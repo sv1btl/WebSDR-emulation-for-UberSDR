@@ -1280,11 +1280,11 @@
         'border-radius:6px;font:11px/1.3 Arial,sans-serif;color:#222;text-align:left;box-shadow:1px 2px 5px rgba(0,0,0,.15)}' +
       '.cwdec .cw-head{display:flex;align-items:center;gap:8px;padding:3px 6px;background:#dfe6e4;border-radius:6px 6px 0 0}' +
       '.cwdec .cw-title{font-weight:bold;flex:1}' +
-      '.cwdec .cw-stat{color:#555}.cwdec .cw-stat b{color:#111}' +
+      '.cwdec .cw-stat{color:#222}.cwdec .cw-stat b{color:#000}' +
       '.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
-      '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#1a1a1a;' +
+      '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#000;' +
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
-      '.cwdec .cw-status{padding:1px 6px 2px;color:#777;font-style:italic;border-top:1px solid #ddd}' +
+      '.cwdec .cw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd}' +
       '.cwdec .cw-status.err{color:#c00;font-style:normal}';
     (document.head || document.documentElement).appendChild(st);
   })();
@@ -1423,7 +1423,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261007h';
+    s.src = 'sv1btl/decoders.js?v=20261007i';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });

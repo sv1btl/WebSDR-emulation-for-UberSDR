@@ -227,25 +227,25 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
   font:11px/1.3 Arial,sans-serif;color:#222;text-align:left;box-shadow:1px 2px 5px rgba(0,0,0,.15)}
 .decwin .dw-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:3px 6px;background:#dfe6e4;border-radius:6px 6px 0 0}
 .decwin .dw-title{font-weight:bold;flex:1;white-space:nowrap}
-.decwin .dw-head span{color:#555}.decwin .dw-head b{color:#111}
+.decwin .dw-head span{color:#222}.decwin .dw-head b{color:#000}
 .decwin select,.decwin button{font-size:10px;padding:0 3px;height:17px;max-width:190px}
 .decwin label{white-space:nowrap}
-.decwin .dw-list{height:120px;overflow-y:auto;background:#f7f7f7;color:#222;font:11px/14px "Courier New",monospace}
+.decwin .dw-list{height:120px;overflow-y:auto;background:#f7f7f7;color:#222;font:bold 11px/14px "Courier New",monospace}
 .decwin table{border-collapse:collapse;width:100%}
-.decwin th{position:sticky;top:0;background:#eee;color:#444;font:bold 11px Arial,sans-serif;text-align:left;padding:1px 3px;border-bottom:1px solid #ccc}
-.decwin td{padding:0 3px;white-space:nowrap;border-bottom:1px solid #e4e4e4;color:#555}
-.decwin td.n{text-align:right;color:#0b4f8a}
-.decwin td.n.warn{color:#c25400;font-weight:bold}
-.decwin td.m{color:#111;white-space:normal}
-.decwin td.c{color:#0a6b2a;font-weight:bold}
+.decwin th{position:sticky;top:0;background:#e4e4e4;color:#000;font:bold 11px Arial,sans-serif;text-align:left;padding:1px 3px;border-bottom:1px solid #ccc}
+.decwin td{padding:0 3px;white-space:nowrap;border-bottom:1px solid #ddd;color:#222}
+.decwin td.n{text-align:right;color:#06305a}
+.decwin td.n.warn{color:#9a3a00}
+.decwin td.m{color:#000;white-space:normal}
+.decwin td.c{color:#054a1c}
 .decwin tr.sep td{border-top:1px solid #aaa}
 .decwin tr:hover td{background:#e3f1ee}
-.decwin a{color:#0b7a72;font-weight:bold;text-decoration:none}
+.decwin a{color:#04504a;font-weight:bold;text-decoration:none}
 .decwin a:hover{text-decoration:underline}
-.decwin .dw-text{height:120px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#1a1a1a;
+.decwin .dw-text{height:120px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#000;
   font:12px/15px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}
 .decwin canvas{display:block;margin:0 auto;background:#000;image-rendering:auto}
-.decwin .dw-status{padding:1px 6px 2px;color:#777;font-style:italic;border-top:1px solid #ddd;min-height:13px}
+.decwin .dw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd;min-height:13px}
 `;
   document.head.appendChild(s);
 })();
