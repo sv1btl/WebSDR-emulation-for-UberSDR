@@ -147,7 +147,7 @@ html { scroll-behavior: smooth; }
           <li><strong>Digit tuning</strong> on the frequency display: mouse wheel over a digit, left click up, right click down.</li>
           <li><strong>Band buttons</strong> that zoom to the band and follow the frequency.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
-          <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using UberSDR's own CW decoder.</li>
+          <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using PhantomSDR-Plus's CW decoder in the listener's browser.</li>
           <li><strong>Audio tools</strong> in the listener's browser: Weak-signal AGC, noise reduction, two autonotch filters, squelch, soft limiter, Hi-Boost, L/R output, WAV recording.</li>
           <li><strong>Users list</strong> with each listener's country and city; clicking a listener tunes to their frequency and mode.</li>
           <li>Works with <strong>DJ0MY's CATSync</strong> (Windows): your own transceiver and the WebSDR follow each other's frequency and mode, both ways.</li>
@@ -169,7 +169,6 @@ html { scroll-behavior: smooth; }
             Check that <code>http://&lt;your-address&gt;:8901/</code> shows UberSDR's own WebSDR page before you install.</li>
           <li><code>python3</code> and <code>docker</code> on the host. Both are already there on a normal UberSDR machine.</li>
           <li>For the <strong>RADE</strong> buttons (optional): UberSDR's FreeDV extension (standard in current UberSDR) and <code>server.enable_cors: true</code> in its <code>config.yaml</code>. See <a href="#how">section 7</a>.</li>
-          <li>For the <strong>CW decoder</strong> window (optional): UberSDR's CW decoder extension (<code>morse</code>, standard in current UberSDR) and the same <code>enable_cors</code> setting.</li>
         </ul>
       </section>
 
@@ -215,7 +214,7 @@ bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
             <tr><td><code>startKHz</code></td><td><code>7120</code></td><td>where a first-time visitor starts; returning visitors start where they left off</td></tr>
             <tr><td><code>startMode</code></td><td><code>'LSB'</code></td><td><code>'LSB'</code>, <code>'USB'</code>, <code>'AM'</code>, <code>'CW'</code> or <code>'FM'</code></td></tr>
             <tr><td><code>waterfallCalibration</code></td><td><code>12</code></td><td>must equal <code>websdr_waterfall_calibration</code> in UberSDR's config (the installer copies it); sets the spectrum's dB scale</td></tr>
-            <tr><td><code>mainServer</code></td><td><code>'https://sv1abc.tunnel.ubersdr.org'</code></td><td>where visitors' browsers reach UberSDR's main web server, for RADE and the CW decoder; the installer fills in UberSDR's public address; <code>''</code> means this host on port 8080</td></tr>
+            <tr><td><code>mainServer</code></td><td><code>'https://sv1abc.tunnel.ubersdr.org'</code></td><td>where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; <code>''</code> means this host on port 8080</td></tr>
             <tr><td><code>mwStepKHz</code></td><td><code>9</code></td><td>medium-wave channel step of the &gt;&gt;&gt; / &lt;&lt;&lt; buttons in AM: 9 kHz in Europe, Africa and Asia, <code>10</code> in the Americas</td></tr>
             <tr><td><code>showListenerCity</code></td><td><code>true</code></td><td><code>true</code> gives "GR,Athens" in the users list, <code>false</code> the country only</td></tr>
             <tr><td><code>otherWebSDRs</code></td><td><code>[ 'Twente', 'http://…' ],</code></td><td>"Switch to another WebSDR" buttons, 6 per row, as many rows as needed</td></tr>
@@ -294,16 +293,15 @@ sv1btl/               everything else, served as /sv1btl/…
           <li>The decoder reads the sideband when it starts, so switching between RADEL and RADEU restarts it. UberSDR allows one restart every 2 seconds; the page waits and retries.</li>
         </ul>
         <h3>CW decoder</h3>
-        <p>While the mode is <strong>CW</strong> (the CW button, CW narrow or wide, a keyboard key or CAT software), a window opens under the Mode buttons with the text decoded by UberSDR's own CW decoder (the <code>morse</code> extension, ggmorse: it finds the pitch and the speed by itself). It shows the pitch, the speed in WPM and the decode quality; text decoded poorly is coloured yellow, orange or red, and the list box hides text below the quality you choose. <strong>Clear</strong> empties the window. Choosing another mode closes it.</p>
-        <p>It works like RADE: the listener's browser opens a muted session on UberSDR's main web server (<code>mainServer</code>) with the same frequency and passband as the page, and attaches the decoder to it. The page's own audio is not changed.</p>
+        <p>While the mode is <strong>CW</strong> (the CW button, CW narrow or wide, a keyboard key or CAT software), a window opens under the Mode buttons with the decoded text. The decoder is the one from <strong>PhantomSDR-Plus</strong> (<code>sv1btl/cw-decoder.js</code>): it locks on the strongest steady tone in the audio, finds the speed by itself and decodes even weak or fading signals. It shows the pitch and the speed in WPM; a line break marks a pause or a new frequency. <strong>Clear</strong> empties the window. Choosing another mode closes it.</p>
+        <p>It runs in the listener's browser, on the audio the page receives (before squelch, NR and the notch filters, so muting does not stop it). Nothing extra is asked of UberSDR: no extra session, no <code>mainServer</code>, no <code>enable_cors</code>.</p>
         <ul>
-          <li>It needs the same <code>mainServer</code> and <code>server.enable_cors: true</code> as RADE.</li>
-          <li><strong>Each listener with the CW window open uses one more UberSDR session</strong> and one CW decoder.</li>
-          <li>It decodes what passes the page's filter, so tune the signal into the passband (the yellow band). If UberSDR cannot be reached, the window says so and tries again every 20 seconds.</li>
+          <li>It decodes what passes the page's filter, so tune the signal into the passband (the yellow band). With several signals in a wide filter it takes the strongest; narrow the filter (CW narrow) to pick one.</li>
+          <li>It needs a few seconds of a signal to lock on to its speed.</li>
           <li>Desktop page only.</li>
         </ul>
         <h3>What listeners' browsers contact</h3>
-        <p>Your UberSDR for the page, audio and waterfall, and its main web server (<code>mainServer</code>) only while RADE is on or the mode is CW. Also <code>get.geojs.io</code> (with <code>ipwho.is</code> as a fallback) once a day per visitor, to find the visitor's own country and city for the users list. <a href="#advanced">Section 13</a> shows how to switch that off.</p>
+        <p>Your UberSDR for the page, audio and waterfall, and its main web server (<code>mainServer</code>) only while RADE is on. Also <code>get.geojs.io</code> (with <code>ipwho.is</code> as a fallback) once a day per visitor, to find the visitor's own country and city for the users list. <a href="#advanced">Section 13</a> shows how to switch that off.</p>
       </section>
 
       <section id="updates">
@@ -398,6 +396,7 @@ bash install.sh</code></pre></div>
           <li><strong>jQuery 3.1.1</strong> (MIT), <strong>Less.js 3.12</strong> (Apache 2.0), <strong>Roboto Condensed</strong> (Apache 2.0).</li>
           <li><strong>DS-Digital</strong> font (frequency display) © Dusit Supasawat, "All Rights Reserved", usually free for personal use only. Replace <code>sv1btl/DS-DIGII.TTF</code> with another digital-style font of the same name if that matters for your station.</li>
           <li>The spectrum is drawn after the style of PhantomSDR-Plus.</li>
+          <li><code>sv1btl/cw-decoder.js</code>, the CW decoder, comes from PhantomSDR-Plus (<a href="https://github.com/sv1btl/PhantomSDR-Plus">github.com/sv1btl/PhantomSDR-Plus</a>) and is under its licence, the GNU GPL v3.</li>
           <li>Adaptation to UberSDR, audio tools, spectrum, tuning features, installer and this guide: <strong>SV1BTL</strong>, 2026.</li>
         </ul>
         <p>SV1BTL's own work in the package is released under the <strong>MIT licence</strong> (the <code>LICENSE</code> file). The third-party parts above keep their own terms.</p>

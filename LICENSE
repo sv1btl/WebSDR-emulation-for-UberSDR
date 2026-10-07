@@ -36,6 +36,8 @@ Third-party parts keep their own terms and are NOT relicensed:
   - websdr-nr.js noise reduction: (c) 2026 joshuah.rainstar@gmail.com, MIT
     terms with a caveat on commercial use, see the header of that file
     (SV1BTL's residual-floor change to it is under the same terms)
+  - sv1btl/cw-decoder.js CW decoder: from PhantomSDR-Plus
+    (github.com/sv1btl/PhantomSDR-Plus), GNU General Public License v3
   - jQuery 3.1.1: MIT licence, (c) jQuery Foundation
   - Less.js 3.12: Apache License 2.0
   - Roboto Condensed font: Apache License 2.0, (c) Google

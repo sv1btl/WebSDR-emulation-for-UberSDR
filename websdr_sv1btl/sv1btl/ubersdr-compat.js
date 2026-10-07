@@ -538,6 +538,7 @@
       if (ctx && ctx.state === 'running' && this._nextPlayTime < ctx.currentTime) {
         this._nextPlayTime = ctx.currentTime + state.lead;   // refill to the chosen buffer depth
       }
+      if (cwd.on && decoded.channelData.length) cwFeed(decoded.channelData[0], this._decoderSR);   // raw audio, as PhantomSDR-Plus
       if (state.squelch || state.agcBoost || this._lvl) {
         if (decoded.channelData.length) levelProcess(this, decoded.channelData);
         if (!(state.squelch || state.agcBoost)) this._lvl = null;   // all off again
@@ -1256,17 +1257,15 @@
 
   // ── CW decoder window (desktop page; 2026-10-07) ────────────────────────────
   // While the mode is CW (the CW button, CW narrow/wide, a key or CAT software), a
-  // window below the Mode buttons shows the text decoded by UberSDR's own CW decoder
-  // (its "morse" audio extension: ggmorse, auto pitch and speed). Like RADE, it needs a
-  // session of UberSDR's own interface: POST /connection, a muted /ws audio session on
-  // the same frequency and passband as this page, and /ws/dxcluster with
-  // "audio_extension_attach" morse. Binary frames from the decoder:
-  //   0x10 text  [conf:1][cost f32][pitch f32][speed f32][len u32][UTF-8]   (big-endian)
-  //   0x11 stats [pitch f32][speed f32]      0x12 error [len u32][UTF-8]
-  // The page's own audio is untouched. Leaving CW closes the window and the session.
+  // window below the Mode buttons shows decoded text. The decoder is PhantomSDR-Plus's
+  // (sv1btl/cw-decoder.js: averaged-spectrum tone lock, I/Q envelope, dot-period
+  // search, matched filter, dictionary MAP decode), running in this browser on the
+  // audio this page receives, in a Web Worker (in the page if Workers are blocked).
+  // Like PhantomSDR-Plus it gets the raw received audio, before squelch, AGC boost,
+  // notch and NR, so muting or squelch do not stop it. Nothing is sent to the server.
   var CW_MAX_CHARS = 3000;
-  var cwd = { on: false, ws: null, dx: null, gen: 0, sent: '', timer: null, pingTimer: null,
-              retryTimer: null, failUntil: 0, minConf: 3 };
+  var CW_JS = 'sv1btl/cw-decoder.js?v=20261007a';
+  var cwd = { on: false, worker: null, local: null, sr: 0, loading: false, tuned: '', fed: 0 };
   (function cwStyle() {
     var st = document.createElement('style');
     st.textContent =
@@ -1275,10 +1274,9 @@
       '.cwdec .cw-head{display:flex;align-items:center;gap:8px;padding:3px 6px;background:#dfe6e4;border-radius:6px 6px 0 0}' +
       '.cwdec .cw-title{font-weight:bold;flex:1}' +
       '.cwdec .cw-stat{color:#555}.cwdec .cw-stat b{color:#111}' +
-      '.cwdec select,.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
+      '.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
       '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#10161a;color:#9fe8b8;' +
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
-      '.cwdec .cw-text .q1{color:#e0e040}.cwdec .cw-text .q2{color:#ff9020}.cwdec .cw-text .q3{color:#ff6060;opacity:.75}' +
       '.cwdec .cw-status{padding:1px 6px 2px;color:#777;font-style:italic;border-top:1px solid #ddd}' +
       '.cwdec .cw-status.err{color:#c00;font-style:normal}';
     (document.head || document.documentElement).appendChild(st);
@@ -1291,163 +1289,118 @@
     p = document.createElement('div');
     p.id = 'cwdecoder'; p.className = 'cwdec'; p.hidden = true;
     p.innerHTML =
-      '<div class="cw-head"><span class="cw-title">CW decoder (UberSDR)</span>' +
+      '<div class="cw-head"><span class="cw-title">CW decoder</span>' +
       '<span class="cw-stat">Pitch <b class="cw-pitch">---</b> Hz</span>' +
       '<span class="cw-stat"><b class="cw-wpm">---</b> WPM</span>' +
-      '<span class="cw-stat">Quality <b class="cw-q">---</b></span>' +
-      '<select class="cw-min" title="Show only text decoded at least this well">' +
-        '<option value="3">All</option><option value="2">Low+</option><option value="1">Medium+</option><option value="0">High</option></select>' +
       '<button type="button" class="cw-clear">Clear</button></div>' +
       '<div class="cw-text"></div><div class="cw-status"></div>';
     var rp = document.getElementById('radereporter');
     (rp || anchor).parentNode.insertBefore(p, (rp || anchor).nextSibling);
     p.querySelector('.cw-clear').onclick = function () { p.querySelector('.cw-text').textContent = ''; };
-    var sel = p.querySelector('.cw-min');
-    try { var m = localStorage.getItem('ubersdr_cwmin'); if (m) sel.value = m; } catch (e) {}
-    cwd.minConf = +sel.value;
-    sel.onchange = function () {
-      cwd.minConf = +sel.value;
-      try { localStorage.setItem('ubersdr_cwmin', sel.value); } catch (e) {}
-    };
     return p;
   }
   function cwStatus(t, err) {
     var p = cwPanel(false); if (!p) return;
     var s = p.querySelector('.cw-status'); s.textContent = t || ''; s.className = 'cw-status' + (err ? ' err' : '');
   }
-  function cwStats(pitch, wpm, q) {
+  function cwStats(hz, wpm) {
     var p = cwPanel(false); if (!p) return;
-    p.querySelector('.cw-pitch').textContent = pitch != null ? Math.round(pitch) : '---';
-    p.querySelector('.cw-wpm').textContent = wpm != null ? wpm.toFixed(0) : '---';
-    if (q !== undefined) p.querySelector('.cw-q').textContent = q == null ? '---' : ['High', 'Medium', 'Low', 'Poor'][q] || '---';
+    p.querySelector('.cw-pitch').textContent = hz ? Math.round(hz) : '---';
+    p.querySelector('.cw-wpm').textContent = wpm ? Math.round(wpm) : '---';
   }
-  function cwText(t, q) {
-    if (q > cwd.minConf) return;
+  function cwText(t) {
     var p = cwPanel(false); if (!p) return;
     var box = p.querySelector('.cw-text'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
-    var sp = document.createElement('span');
-    if (q) sp.className = 'q' + q;
-    sp.textContent = t;
-    box.appendChild(sp);
+    var last = box.lastChild;
+    if (last && last.nodeType === 3 && last.data.length < 500) last.appendData(t);   // few DOM nodes
+    else box.appendChild(document.createTextNode(t));
     while (box.textContent.length > CW_MAX_CHARS && box.firstChild) box.removeChild(box.firstChild);
     if (atEnd) box.scrollTop = box.scrollHeight;
   }
-  // The decoder's session hears the signal at the centre of this page's passband, but
-  // as a CW_DEC_PITCH tone: the decoder's automatic pitch search only locks up to about
-  // 700 Hz, and this page's CW tone is 750 Hz (tested with clean CW: 500-700 Hz decode,
-  // 750-800 Hz give only noise). Its filter is as wide as the page's, at least
-  // CW_DEC_MIN_BW and at most CW_DEC_MAX_BW. What the listener hears is not changed.
-  var CW_DEC_PITCH = 600, CW_DEC_MIN_BW = 400, CW_DEC_MAX_BW = 1000;
-  function cwTune() {
-    var lo_ = window.lo || 0, hi_ = window.hi || 0;
-    var sig = (window.freq || 0) + (lo_ + hi_) / 2;              // kHz: the signal in the middle of the filter
-    var w = Math.max(CW_DEC_MIN_BW, Math.min(CW_DEC_MAX_BW, Math.abs(hi_ - lo_) * 1000));
-    return { frequency: Math.round(sig * 1000 - CW_DEC_PITCH), mode: 'usb',
-             bandwidthLow: Math.round(CW_DEC_PITCH - w / 2), bandwidthHigh: Math.round(CW_DEC_PITCH + w / 2) };
-  }
-  function cwClose() {
-    cwd.gen++;
-    clearInterval(cwd.pingTimer); clearTimeout(cwd.retryTimer);
-    if (cwd.dx) {
-      try { if (cwd.dx.readyState === 1) cwd.dx.send(JSON.stringify({ type: 'audio_extension_detach' })); } catch (e) {}
-      try { cwd.dx.close(); } catch (e) {}
-    }
-    if (cwd.ws) try { cwd.ws.close(); } catch (e) {}
-    cwd.ws = cwd.dx = null; cwd.sent = '';
-  }
-  function cwFail(msg) {
-    cwClose();
-    cwStatus('CW decoder unavailable: ' + msg + ' (trying again shortly)', true);
-    cwd.failUntil = Date.now() + 20000;      // the follow loop starts it again after this
-  }
-  function cwAttach(gen) {
-    if (gen !== cwd.gen || !cwd.dx || cwd.dx.readyState !== 1) return;
-    cwd.dx.send(JSON.stringify({ type: 'audio_extension_attach', extension_name: 'morse', params: {} }));
-  }
-  function cwBinary(buf) {
-    if (buf.byteLength < 1) return;
-    var v = new DataView(buf), t = v.getUint8(0), n;
-    if (t === 0x10 && buf.byteLength >= 18) {
-      n = v.getUint32(14, false);
-      if (buf.byteLength < 18 + n) return;
-      var q = v.getUint8(1);
-      cwText(new TextDecoder().decode(new Uint8Array(buf, 18, n)), q);
-      cwStats(v.getFloat32(6, false), v.getFloat32(10, false), q);
-      cwStatus('');
-    } else if (t === 0x11 && buf.byteLength >= 9) {
-      cwStats(v.getFloat32(1, false), v.getFloat32(5, false));
-    } else if (t === 0x12 && buf.byteLength >= 5) {
-      n = v.getUint32(1, false);
-      cwFail(new TextDecoder().decode(new Uint8Array(buf, 5, Math.min(n, buf.byteLength - 5))));
+  function cwTail() { var p = cwPanel(false); return p ? p.querySelector('.cw-text').textContent.slice(-1) : ''; }
+  // The decoder's events, handled as in PhantomSDR-Plus (App.svelte)
+  function cwEvent(ev) {
+    if (!ev || !cwd.on) return;
+    if (ev.type === 'char') { cwText(ev.char); cwStatus(''); }
+    else if (ev.type === 'word') { var e = cwTail(); if (e && e !== ' ' && e !== '\n') cwText(' '); }
+    else if (ev.type === 'freq') { cwStats(ev.hz, ev.wpm); cwStatus(''); }
+    else if (ev.type === 'silence') {
+      var t = cwTail(); if (t && t !== '\n') cwText('\n');
+      cwStats(0, 0); cwStatus('Listening for CW…');
     }
   }
-  function cwConnect() {
-    cwClose();
-    var gen = cwd.gen, base = radeBase(), uuid = radeUUID(), tn = cwTune();
-    cwStatus('Connecting to the CW decoder…');
-    var x = new XMLHttpRequest();
-    x.open('POST', base + '/connection', true);
-    x.setRequestHeader('Content-Type', 'application/json');
-    x.onerror = function () { if (gen === cwd.gen) cwFail('cannot reach ' + base); };
-    x.onload = function () {
-      if (gen !== cwd.gen) return;
-      var r = null;
-      try { r = JSON.parse(x.responseText); } catch (e) {}
-      if (x.status !== 200 || !r || !r.allowed) { cwFail((r && r.reason) || ('server answered ' + x.status)); return; }
-      var wsBase = base.replace(/^http/, 'ws');
-      var ws = cwd.ws = new WebSocket(wsBase + '/ws?user_session_id=' + uuid + '&frequency=' + tn.frequency +
-        '&mode=' + tn.mode + '&bandwidthLow=' + tn.bandwidthLow + '&bandwidthHigh=' + tn.bandwidthHigh + '&format=opus&muted=true');
-      cwd.sent = JSON.stringify(tn);
-      ws.onmessage = function (ev) {
-        if (typeof ev.data !== 'string') return;
-        cwd.lastMsg = ev.data.slice(0, 200);
-        try { var m = JSON.parse(ev.data); if (m.type === 'error' && gen === cwd.gen) cwStatus('CW decoder: ' + (m.error || m.message || 'error'), true); } catch (e) {}
-      };
-      ws.onclose = function () { if (gen === cwd.gen && cwd.on) cwFail('connection to the receiver closed'); };
-      ws.onopen = function () {
-        if (gen !== cwd.gen) return;
-        cwd.pingTimer = setInterval(function () { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 30000);
-        var dx = cwd.dx = new WebSocket(wsBase + '/ws/dxcluster?user_session_id=' + uuid);
-        dx.binaryType = 'arraybuffer';
-        dx.onopen = function () { setTimeout(function () { cwAttach(gen); }, 500); };
-        dx.onmessage = function (ev) {
-          if (gen !== cwd.gen) return;
-          if (ev.data instanceof ArrayBuffer) { cwBinary(ev.data); return; }
-          var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-          if (m.type === 'audio_extension_attached') cwStatus('Listening for CW…');
-          else if (m.type === 'audio_extension_error') {
-            var err = m.error || 'decoder error';
-            if (/too quickly|wait|no active audio session/i.test(err))
-              cwd.retryTimer = setTimeout(function () { cwAttach(gen); }, 2500);
-            else cwFail(err);
-          }
-        };
-        dx.onclose = function () { if (gen === cwd.gen && cwd.on) cwFail('decoder connection closed'); };
-      };
-    };
-    x.send(JSON.stringify({ user_session_id: uuid }));
+  function cwLocal() {
+    if (cwd.local) return;
+    if (window.CWDecoder) { cwd.local = new window.CWDecoder({ sampleRate: cwd.sr || 12000, callback: cwEvent }); return; }
+    if (cwd.loading) return;
+    cwd.loading = true;
+    var s = document.createElement('script');
+    s.src = CW_JS;
+    s.onload = function () { cwd.loading = false; if (cwd.on) cwLocal(); };
+    s.onerror = function () { cwd.loading = false; cwStatus('CW decoder could not be loaded', true); };
+    document.head.appendChild(s);
   }
-  // Follows this page: opens with CW, closes when another mode is chosen, and moves the
-  // decoder's session with the tuning and filter (changes only, at most ~3 a second)
+  function cwStart() {
+    if (cwd.worker || cwd.local) return;
+    try {
+      var w = cwd.worker = new Worker(CW_JS);
+      w.onmessage = function (e) { cwEvent(e.data); };
+      w.onerror = function (e) {
+        console.error('ubersdr-compat: CW worker failed, decoding in the page', e);
+        try { w.terminate(); } catch (x) {}
+        if (cwd.worker === w) { cwd.worker = null; if (cwd.on) cwLocal(); }
+      };
+      w.postMessage({ t: 'init', sampleRate: cwd.sr || 12000 });
+    } catch (e) {
+      cwd.worker = null;
+      cwLocal();
+    }
+  }
+  function cwStop() {
+    if (cwd.worker) { try { cwd.worker.postMessage({ t: 'destroy' }); cwd.worker.terminate(); } catch (e) {} }
+    cwd.worker = null; cwd.local = null;
+  }
+  function cwReset() {
+    if (cwd.worker) cwd.worker.postMessage({ t: 'reset', sampleRate: cwd.sr || 12000 });
+    else if (cwd.local) cwd.local.reset();
+    cwStats(0, 0);
+  }
+  // Called from _playDecoded with every decoded audio block (raw, before any processing)
+  function cwFeed(pcm, sr) {
+    if (!pcm || !pcm.length) return;
+    cwd.fed += pcm.length;
+    if (sr && sr !== cwd.sr) {
+      cwd.sr = sr;
+      if (cwd.worker) cwd.worker.postMessage({ t: 'sampleRate', sampleRate: sr });
+      else if (cwd.local) cwd.local.setSampleRate(sr);
+    }
+    if (cwd.worker) {
+      var copy = new Float32Array(pcm);           // the player still needs its own buffer
+      try { cwd.worker.postMessage({ t: 'pcm', pcm: copy, sampleRate: cwd.sr }, [copy.buffer]); } catch (e) {}
+    } else if (cwd.local) {
+      try { cwd.local.feed(pcm); } catch (e) { console.error('ubersdr-compat: CW decode', e); }
+    }
+  }
+  // Follows this page: opens with CW, closes when another mode is chosen; a new
+  // frequency starts the decoder afresh (no left-over timing from the last signal)
   function cwFollow() {
     var want = String(window.mode || '').toUpperCase() === 'CW' && !(window.ubersdr_rade_active && window.ubersdr_rade_active());
     if (want && !cwd.on) {
       var p = cwPanel(true);
       if (!p) return;
-      cwd.on = true; p.hidden = false; cwStats(null, null, null);
-      if (Date.now() >= cwd.failUntil) cwConnect();
+      cwd.on = true; p.hidden = false; cwStats(0, 0);
+      cwd.tuned = String(window.freq);
+      cwStart();
+      cwStatus('Listening for CW…');
     } else if (!want && cwd.on) {
-      cwd.on = false; cwClose(); cwStatus('');
+      cwd.on = false; cwStop(); cwStatus('');
       var q = cwPanel(false); if (q) q.hidden = true;
     } else if (cwd.on) {
-      if (!cwd.ws && Date.now() >= cwd.failUntil) { cwConnect(); return; }
-      if (cwd.ws && cwd.ws.readyState === 1) {
-        var tn = cwTune(), js = JSON.stringify(tn);
-        if (js !== cwd.sent) {
-          cwd.sent = js;
-          var m = { type: 'tune' }; for (var k in tn) m[k] = tn[k];
-          try { cwd.ws.send(JSON.stringify(m)); } catch (e) {}
-        }
+      var f = String(window.freq);
+      if (f !== cwd.tuned) {
+        cwd.tuned = f; cwReset();
+        var t = cwTail(); if (t && t !== '\n') cwText('\n');
+        cwStatus('Listening for CW…');
       }
     }
   }
@@ -1455,7 +1408,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     setInterval(cwFollow, 350);
   });
-  window.addEventListener('beforeunload', cwClose);
+  window.addEventListener('beforeunload', cwStop);
   window.ubersdr_cw_state = function () { return cwd; };   // for diagnosis
 
   // ── CAT diagnostic log: open the page with ?catlog ───────────────────────────

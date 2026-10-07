@@ -20,7 +20,7 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
-  UberSDR's own CW decoder;
+  PhantomSDR-Plus's CW decoder in the listener's browser;
 - **audio tools** that run in the listener's browser: Weak-signal AGC, noise reduction,
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
@@ -78,8 +78,6 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
 - `python3` and `docker` on the host. Both are already there on a normal UberSDR machine.
 - For the **RADE** buttons (optional): UberSDR's FreeDV extension (standard in current
   UberSDR) and `server.enable_cors: true` in its `config.yaml`. See section 6.
-- For the **CW decoder** window (optional): UberSDR's CW decoder extension (`morse`,
-  standard in current UberSDR) and the same `enable_cors` setting.
 
 ## 2. Quick install
 
@@ -148,7 +146,7 @@ and the comma at the end of each line.
 | `startKHz` | `7120` | where a **first-time** visitor starts, in kHz (returning visitors start where they left off) |
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
-| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE and the CW decoder; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
+| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
 | `mwStepKHz` | `9` | medium-wave channel step of the >>> / <<< buttons in AM: 9 kHz in Europe, Africa and Asia, `10` in the Americas |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
 | `otherWebSDRs` | `[ 'Twente', 'http://…' ],` | the "Switch to another WebSDR" buttons, up to 6 per row, as many rows as needed |
@@ -298,28 +296,26 @@ Things to know:
 ### CW decoder
 
 While the mode is **CW** (the CW button, CW narrow or wide, a keyboard key or CAT
-software), a window opens under the Mode buttons with the text decoded by UberSDR's own
-CW decoder (the `morse` extension, ggmorse: it finds the pitch and the speed by itself).
-It shows the pitch, the speed in WPM and the decode quality; text decoded poorly is
-coloured yellow, orange or red, and the list box hides text below the quality you choose.
-**Clear** empties the window. Choosing another mode closes the window.
+software), a window opens under the Mode buttons with the decoded text. The decoder is
+the one from **PhantomSDR-Plus** (`sv1btl/cw-decoder.js`): it locks on the strongest
+steady tone in the audio, finds the speed by itself and decodes even weak or fading
+signals. It shows the pitch and the speed in WPM; a line break marks a pause or a new
+frequency. **Clear** empties the window. Choosing another mode closes it.
 
-It works like RADE: the listener's browser opens a muted session on UberSDR's main web
-server (`mainServer`), with the same frequency and passband as the page, and attaches
-the decoder to it. The page's own audio is not changed. Things to know:
+It runs in the listener's browser, on the audio the page receives (before squelch, NR
+and the notch filters, so muting does not stop it). Nothing extra is asked of UberSDR:
+no extra session, no `mainServer`, no `enable_cors`. Things to know:
 
-- It needs the same `mainServer` and `server.enable_cors: true` as RADE.
-- **Each listener with the CW window open uses one more UberSDR session** and one CW
-  decoder.
 - It decodes what passes the page's filter, so tune the signal into the passband (the
-  yellow band). If UberSDR cannot be reached, the window says so and tries again every
-  20 seconds.
+  yellow band). With several signals in a wide filter it takes the strongest; narrow
+  the filter (CW narrow) to pick one.
+- It needs a few seconds of a signal to lock on to its speed.
 - Desktop page only.
 
 ### What listeners' browsers contact
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
-- Your UberSDR's main web server (`mainServer`), only while RADE is on or the mode is CW.
+- Your UberSDR's main web server (`mainServer`), only while RADE is on.
 - `get.geojs.io`, or `ipwho.is` as a fallback, once a day per visitor. This finds the
   visitor's own country and city for the users list. Nothing is sent to it except the
   normal web request. To switch it off, see section 12.
@@ -443,6 +439,9 @@ editing, raise the `?v=` number (see section 6).
   "All Rights Reserved". It is usually free for personal use only. If that is a concern
   for your station, replace it with another digital-style font of the same file name.
 - The **spectrum** is drawn after the style of PhantomSDR-Plus.
+- **sv1btl/cw-decoder.js**, the CW decoder, comes from PhantomSDR-Plus
+  ([github.com/sv1btl/PhantomSDR-Plus](https://github.com/sv1btl/PhantomSDR-Plus)) and is
+  under its licence, the **GNU GPL v3**.
 - Adaptation to UberSDR, the audio tools, spectrum, tuning features, installer and this
   guide: **SV1BTL** (2026).
 
