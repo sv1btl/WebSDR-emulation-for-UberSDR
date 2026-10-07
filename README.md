@@ -19,6 +19,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - **band buttons** that zoom to the band and follow the frequency;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
+- a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
+  UberSDR's own CW decoder;
 - **audio tools** that run in the listener's browser: Weak-signal AGC, noise reduction,
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
@@ -76,6 +78,8 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
 - `python3` and `docker` on the host. Both are already there on a normal UberSDR machine.
 - For the **RADE** buttons (optional): UberSDR's FreeDV extension (standard in current
   UberSDR) and `server.enable_cors: true` in its `config.yaml`. See section 6.
+- For the **CW decoder** window (optional): UberSDR's CW decoder extension (`morse`,
+  standard in current UberSDR) and the same `enable_cors` setting.
 
 ## 2. Quick install
 
@@ -144,7 +148,7 @@ and the comma at the end of each line.
 | `startKHz` | `7120` | where a **first-time** visitor starts, in kHz (returning visitors start where they left off) |
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
-| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
+| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE and the CW decoder; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
 | `mwStepKHz` | `9` | medium-wave channel step of the >>> / <<< buttons in AM: 9 kHz in Europe, Africa and Asia, `10` in the Americas |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
 | `otherWebSDRs` | `[ 'Twente', 'http://…' ],` | the "Switch to another WebSDR" buttons, up to 6 per row, as many rows as needed |
@@ -291,10 +295,31 @@ Things to know:
 - The decoder reads the sideband when it starts, so switching between RADEL and RADEU
   restarts it. UberSDR allows one restart every 2 seconds; the page waits and retries.
 
+### CW decoder
+
+While the mode is **CW** (the CW button, CW narrow or wide, a keyboard key or CAT
+software), a window opens under the Mode buttons with the text decoded by UberSDR's own
+CW decoder (the `morse` extension, ggmorse: it finds the pitch and the speed by itself).
+It shows the pitch, the speed in WPM and the decode quality; text decoded poorly is
+coloured yellow, orange or red, and the list box hides text below the quality you choose.
+**Clear** empties the window. Choosing another mode closes the window.
+
+It works like RADE: the listener's browser opens a muted session on UberSDR's main web
+server (`mainServer`), with the same frequency and passband as the page, and attaches
+the decoder to it. The page's own audio is not changed. Things to know:
+
+- It needs the same `mainServer` and `server.enable_cors: true` as RADE.
+- **Each listener with the CW window open uses one more UberSDR session** and one CW
+  decoder.
+- It decodes what passes the page's filter, so tune the signal into the passband (the
+  yellow band). If UberSDR cannot be reached, the window says so and tries again every
+  20 seconds.
+- Desktop page only.
+
 ### What listeners' browsers contact
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
-- Your UberSDR's main web server (`mainServer`), only while RADE is on.
+- Your UberSDR's main web server (`mainServer`), only while RADE is on or the mode is CW.
 - `get.geojs.io`, or `ipwho.is` as a fallback, once a day per visitor. This finds the
   visitor's own country and city for the users list. Nothing is sent to it except the
   normal web request. To switch it off, see section 12.

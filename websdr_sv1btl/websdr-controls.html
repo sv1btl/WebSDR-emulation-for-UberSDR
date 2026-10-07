@@ -909,9 +909,11 @@ Max    </span>
 
 <br>
 <!-- UberSDR: automatic waterfall brightness, see ubersdr_wfauto in sv1btl/ubersdr-compat.js -->
-<div class="toggleWrapper" style="display: inline-block; font-size: 0.85rem; margin-top: 4px;" title="Keep the waterfall noise floor at dark blue by adjusting the brightness automatically; Contrast stays yours">
-<input type="checkbox" name="wfautocheckbox" class="mobileToggle" id="wfautocheckbox" onClick="ubersdr_wfauto(this.checked);"><label for="wfautocheckbox"></label><div style="display: inline-block; margin: -13px 7px 0px 6px; vertical-align: middle;">Auto brightness</div>
-</div>
+<div style="display: flex; align-items: center; justify-content: flex-start; text-align: left; font-size: 0.85rem; white-space: nowrap; padding: 5px 0 5px 5px;" title="Keep the waterfall noise floor at dark blue by adjusting the brightness automatically; Contrast stays yours">
+<div class="toggleWrapper" style="display: contents;">
+<div style="display: inline-block; margin: 0px 7px 0px 0px; vertical-align: middle;">Auto brightness</div>
+<input type="checkbox" name="wfautocheckbox" class="mobileToggle" id="wfautocheckbox" onClick="ubersdr_wfauto(this.checked);"><label for="wfautocheckbox"></label>
+</div></div>
 
 <div style="font-size:0.85rem !important; margin-top:3px">
   <center style="
@@ -1020,12 +1022,13 @@ Max    </span>
     <!-- Weak-signal AGC (sv1btl/ubersdr-compat.js): raises weak stations towards the level of strong ones; on by default -->
     <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; white-space: nowrap; padding: 5px 0 5px 5px;" title="Raises weak stations towards the level of strong ones (up to +15 dB).">
 		<div class="toggleWrapper" style="display: contents;">
-		  <input type="checkbox" name="agcboostcheckbox" class="mobileToggle" id="agcboostcheckbox" checked onClick="ubersdr_agcboost(this.checked);">
-		<label for="agcboostcheckbox"></label><div style="
+		<div style="
 			display: inline-block;
-			margin: -13px 7px 0px 6px;
+			margin: 0px 7px 0px 0px;
 			vertical-align: middle;
-		">Weak-signal AGC</div></div>
+		">Weak-signal AGC</div>
+		  <input type="checkbox" name="agcboostcheckbox" class="mobileToggle" id="agcboostcheckbox" checked onClick="ubersdr_agcboost(this.checked);">
+		<label for="agcboostcheckbox"></label></div>
     </div>
   
 

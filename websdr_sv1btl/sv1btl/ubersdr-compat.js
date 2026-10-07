@@ -243,10 +243,18 @@
   //   - it only adds gain: strong signals are left alone (the limiter guards the peaks).
   var WAGC_TARGET_DB = -20, WAGC_MAX_DB = 15, WAGC_NOISE_MAX_DB = 3;
   var WAGC_HANG_S = 2, WAGC_RELEASE_DBS = 4, WAGC_SNR_LO = 3, WAGC_SNR_HI = 9;   // hang 2 s: SSB pauses do not raise the hiss
+  // While a signal is still there (a weaker station took over, not a pause) the gain
+  // comes back much faster: it used to take ~6 s after a strong station (2026-10-07)
+  var WAGC_HANG_SIG_S = 0.6, WAGC_RELEASE_SIG_DBS = 12;
   function weakAgcGain(st, rms, snr, dt) {
     var now = Date.now(), lv = 20 * Math.log(rms + 1e-12) / Math.LN10;
+    if (st.agcF !== window.freq) { st.agcF = window.freq; st.envDb = undefined; st.sigDb = undefined; }   // retuned: start afresh
     if (st.envDb === undefined || lv >= st.envDb) { st.envDb = lv; st.envT = now; }
-    else if (now - st.envT > WAGC_HANG_S * 1000) st.envDb = Math.max(lv, st.envDb - WAGC_RELEASE_DBS * dt);
+    else {
+      var sig = snr >= WAGC_SNR_LO;
+      if (now - st.envT > (sig ? WAGC_HANG_SIG_S : WAGC_HANG_S) * 1000)
+        st.envDb = Math.max(lv, st.envDb - (sig ? WAGC_RELEASE_SIG_DBS : WAGC_RELEASE_DBS) * dt);
+    }
     if (st.sigDb === undefined || snr >= st.sigDb) { st.sigDb = snr; st.sigT = now; }
     else if (now - st.sigT > 2000) st.sigDb = Math.max(snr, st.sigDb - 15 * dt);   // falls before the gain can climb
     var k = Math.max(0, Math.min(1, (st.sigDb - WAGC_SNR_LO) / (WAGC_SNR_HI - WAGC_SNR_LO)));
@@ -1246,6 +1254,210 @@
     window.setfreq = function () { var r = origFreq.apply(this, arguments); radeFollowTune(); return r; };
   });
 
+  // ── CW decoder window (desktop page; 2026-10-07) ────────────────────────────
+  // While the mode is CW (the CW button, CW narrow/wide, a key or CAT software), a
+  // window below the Mode buttons shows the text decoded by UberSDR's own CW decoder
+  // (its "morse" audio extension: ggmorse, auto pitch and speed). Like RADE, it needs a
+  // session of UberSDR's own interface: POST /connection, a muted /ws audio session on
+  // the same frequency and passband as this page, and /ws/dxcluster with
+  // "audio_extension_attach" morse. Binary frames from the decoder:
+  //   0x10 text  [conf:1][cost f32][pitch f32][speed f32][len u32][UTF-8]   (big-endian)
+  //   0x11 stats [pitch f32][speed f32]      0x12 error [len u32][UTF-8]
+  // The page's own audio is untouched. Leaving CW closes the window and the session.
+  var CW_MAX_CHARS = 3000;
+  var cwd = { on: false, ws: null, dx: null, gen: 0, sent: '', timer: null, pingTimer: null,
+              retryTimer: null, failUntil: 0, minConf: 3 };
+  (function cwStyle() {
+    var st = document.createElement('style');
+    st.textContent =
+      '.cwdec{width:470px;margin:3px auto 4px;box-sizing:border-box;background:#f7f7f7;border:1px solid #bbb;' +
+        'border-radius:6px;font:11px/1.3 Arial,sans-serif;color:#222;text-align:left;box-shadow:1px 2px 5px rgba(0,0,0,.15)}' +
+      '.cwdec .cw-head{display:flex;align-items:center;gap:8px;padding:3px 6px;background:#dfe6e4;border-radius:6px 6px 0 0}' +
+      '.cwdec .cw-title{font-weight:bold;flex:1}' +
+      '.cwdec .cw-stat{color:#555}.cwdec .cw-stat b{color:#111}' +
+      '.cwdec select,.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
+      '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#10161a;color:#9fe8b8;' +
+        'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
+      '.cwdec .cw-text .q1{color:#e0e040}.cwdec .cw-text .q2{color:#ff9020}.cwdec .cw-text .q3{color:#ff6060;opacity:.75}' +
+      '.cwdec .cw-status{padding:1px 6px 2px;color:#777;font-style:italic;border-top:1px solid #ddd}' +
+      '.cwdec .cw-status.err{color:#c00;font-style:normal}';
+    (document.head || document.documentElement).appendChild(st);
+  })();
+  function cwPanel(create) {
+    var p = document.getElementById('cwdecoder');
+    if (p || !create) return p;
+    var anchor = document.getElementById('radestatus');
+    if (!anchor || !document.getElementById('wfmode')) return null;   // desktop page only
+    p = document.createElement('div');
+    p.id = 'cwdecoder'; p.className = 'cwdec'; p.hidden = true;
+    p.innerHTML =
+      '<div class="cw-head"><span class="cw-title">CW decoder (UberSDR)</span>' +
+      '<span class="cw-stat">Pitch <b class="cw-pitch">---</b> Hz</span>' +
+      '<span class="cw-stat"><b class="cw-wpm">---</b> WPM</span>' +
+      '<span class="cw-stat">Quality <b class="cw-q">---</b></span>' +
+      '<select class="cw-min" title="Show only text decoded at least this well">' +
+        '<option value="3">All</option><option value="2">Low+</option><option value="1">Medium+</option><option value="0">High</option></select>' +
+      '<button type="button" class="cw-clear">Clear</button></div>' +
+      '<div class="cw-text"></div><div class="cw-status"></div>';
+    var rp = document.getElementById('radereporter');
+    (rp || anchor).parentNode.insertBefore(p, (rp || anchor).nextSibling);
+    p.querySelector('.cw-clear').onclick = function () { p.querySelector('.cw-text').textContent = ''; };
+    var sel = p.querySelector('.cw-min');
+    try { var m = localStorage.getItem('ubersdr_cwmin'); if (m) sel.value = m; } catch (e) {}
+    cwd.minConf = +sel.value;
+    sel.onchange = function () {
+      cwd.minConf = +sel.value;
+      try { localStorage.setItem('ubersdr_cwmin', sel.value); } catch (e) {}
+    };
+    return p;
+  }
+  function cwStatus(t, err) {
+    var p = cwPanel(false); if (!p) return;
+    var s = p.querySelector('.cw-status'); s.textContent = t || ''; s.className = 'cw-status' + (err ? ' err' : '');
+  }
+  function cwStats(pitch, wpm, q) {
+    var p = cwPanel(false); if (!p) return;
+    p.querySelector('.cw-pitch').textContent = pitch != null ? Math.round(pitch) : '---';
+    p.querySelector('.cw-wpm').textContent = wpm != null ? wpm.toFixed(0) : '---';
+    if (q !== undefined) p.querySelector('.cw-q').textContent = q == null ? '---' : ['High', 'Medium', 'Low', 'Poor'][q] || '---';
+  }
+  function cwText(t, q) {
+    if (q > cwd.minConf) return;
+    var p = cwPanel(false); if (!p) return;
+    var box = p.querySelector('.cw-text'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+    var sp = document.createElement('span');
+    if (q) sp.className = 'q' + q;
+    sp.textContent = t;
+    box.appendChild(sp);
+    while (box.textContent.length > CW_MAX_CHARS && box.firstChild) box.removeChild(box.firstChild);
+    if (atEnd) box.scrollTop = box.scrollHeight;
+  }
+  // The decoder's session hears the signal at the centre of this page's passband, but
+  // as a CW_DEC_PITCH tone: the decoder's automatic pitch search only locks up to about
+  // 700 Hz, and this page's CW tone is 750 Hz (tested with clean CW: 500-700 Hz decode,
+  // 750-800 Hz give only noise). Its filter is as wide as the page's, at least
+  // CW_DEC_MIN_BW and at most CW_DEC_MAX_BW. What the listener hears is not changed.
+  var CW_DEC_PITCH = 600, CW_DEC_MIN_BW = 400, CW_DEC_MAX_BW = 1000;
+  function cwTune() {
+    var lo_ = window.lo || 0, hi_ = window.hi || 0;
+    var sig = (window.freq || 0) + (lo_ + hi_) / 2;              // kHz: the signal in the middle of the filter
+    var w = Math.max(CW_DEC_MIN_BW, Math.min(CW_DEC_MAX_BW, Math.abs(hi_ - lo_) * 1000));
+    return { frequency: Math.round(sig * 1000 - CW_DEC_PITCH), mode: 'usb',
+             bandwidthLow: Math.round(CW_DEC_PITCH - w / 2), bandwidthHigh: Math.round(CW_DEC_PITCH + w / 2) };
+  }
+  function cwClose() {
+    cwd.gen++;
+    clearInterval(cwd.pingTimer); clearTimeout(cwd.retryTimer);
+    if (cwd.dx) {
+      try { if (cwd.dx.readyState === 1) cwd.dx.send(JSON.stringify({ type: 'audio_extension_detach' })); } catch (e) {}
+      try { cwd.dx.close(); } catch (e) {}
+    }
+    if (cwd.ws) try { cwd.ws.close(); } catch (e) {}
+    cwd.ws = cwd.dx = null; cwd.sent = '';
+  }
+  function cwFail(msg) {
+    cwClose();
+    cwStatus('CW decoder unavailable: ' + msg + ' (trying again shortly)', true);
+    cwd.failUntil = Date.now() + 20000;      // the follow loop starts it again after this
+  }
+  function cwAttach(gen) {
+    if (gen !== cwd.gen || !cwd.dx || cwd.dx.readyState !== 1) return;
+    cwd.dx.send(JSON.stringify({ type: 'audio_extension_attach', extension_name: 'morse', params: {} }));
+  }
+  function cwBinary(buf) {
+    if (buf.byteLength < 1) return;
+    var v = new DataView(buf), t = v.getUint8(0), n;
+    if (t === 0x10 && buf.byteLength >= 18) {
+      n = v.getUint32(14, false);
+      if (buf.byteLength < 18 + n) return;
+      var q = v.getUint8(1);
+      cwText(new TextDecoder().decode(new Uint8Array(buf, 18, n)), q);
+      cwStats(v.getFloat32(6, false), v.getFloat32(10, false), q);
+      cwStatus('');
+    } else if (t === 0x11 && buf.byteLength >= 9) {
+      cwStats(v.getFloat32(1, false), v.getFloat32(5, false));
+    } else if (t === 0x12 && buf.byteLength >= 5) {
+      n = v.getUint32(1, false);
+      cwFail(new TextDecoder().decode(new Uint8Array(buf, 5, Math.min(n, buf.byteLength - 5))));
+    }
+  }
+  function cwConnect() {
+    cwClose();
+    var gen = cwd.gen, base = radeBase(), uuid = radeUUID(), tn = cwTune();
+    cwStatus('Connecting to the CW decoder…');
+    var x = new XMLHttpRequest();
+    x.open('POST', base + '/connection', true);
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.onerror = function () { if (gen === cwd.gen) cwFail('cannot reach ' + base); };
+    x.onload = function () {
+      if (gen !== cwd.gen) return;
+      var r = null;
+      try { r = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status !== 200 || !r || !r.allowed) { cwFail((r && r.reason) || ('server answered ' + x.status)); return; }
+      var wsBase = base.replace(/^http/, 'ws');
+      var ws = cwd.ws = new WebSocket(wsBase + '/ws?user_session_id=' + uuid + '&frequency=' + tn.frequency +
+        '&mode=' + tn.mode + '&bandwidthLow=' + tn.bandwidthLow + '&bandwidthHigh=' + tn.bandwidthHigh + '&format=opus&muted=true');
+      cwd.sent = JSON.stringify(tn);
+      ws.onmessage = function (ev) {
+        if (typeof ev.data !== 'string') return;
+        cwd.lastMsg = ev.data.slice(0, 200);
+        try { var m = JSON.parse(ev.data); if (m.type === 'error' && gen === cwd.gen) cwStatus('CW decoder: ' + (m.error || m.message || 'error'), true); } catch (e) {}
+      };
+      ws.onclose = function () { if (gen === cwd.gen && cwd.on) cwFail('connection to the receiver closed'); };
+      ws.onopen = function () {
+        if (gen !== cwd.gen) return;
+        cwd.pingTimer = setInterval(function () { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 30000);
+        var dx = cwd.dx = new WebSocket(wsBase + '/ws/dxcluster?user_session_id=' + uuid);
+        dx.binaryType = 'arraybuffer';
+        dx.onopen = function () { setTimeout(function () { cwAttach(gen); }, 500); };
+        dx.onmessage = function (ev) {
+          if (gen !== cwd.gen) return;
+          if (ev.data instanceof ArrayBuffer) { cwBinary(ev.data); return; }
+          var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+          if (m.type === 'audio_extension_attached') cwStatus('Listening for CW…');
+          else if (m.type === 'audio_extension_error') {
+            var err = m.error || 'decoder error';
+            if (/too quickly|wait|no active audio session/i.test(err))
+              cwd.retryTimer = setTimeout(function () { cwAttach(gen); }, 2500);
+            else cwFail(err);
+          }
+        };
+        dx.onclose = function () { if (gen === cwd.gen && cwd.on) cwFail('decoder connection closed'); };
+      };
+    };
+    x.send(JSON.stringify({ user_session_id: uuid }));
+  }
+  // Follows this page: opens with CW, closes when another mode is chosen, and moves the
+  // decoder's session with the tuning and filter (changes only, at most ~3 a second)
+  function cwFollow() {
+    var want = String(window.mode || '').toUpperCase() === 'CW' && !(window.ubersdr_rade_active && window.ubersdr_rade_active());
+    if (want && !cwd.on) {
+      var p = cwPanel(true);
+      if (!p) return;
+      cwd.on = true; p.hidden = false; cwStats(null, null, null);
+      if (Date.now() >= cwd.failUntil) cwConnect();
+    } else if (!want && cwd.on) {
+      cwd.on = false; cwClose(); cwStatus('');
+      var q = cwPanel(false); if (q) q.hidden = true;
+    } else if (cwd.on) {
+      if (!cwd.ws && Date.now() >= cwd.failUntil) { cwConnect(); return; }
+      if (cwd.ws && cwd.ws.readyState === 1) {
+        var tn = cwTune(), js = JSON.stringify(tn);
+        if (js !== cwd.sent) {
+          cwd.sent = js;
+          var m = { type: 'tune' }; for (var k in tn) m[k] = tn[k];
+          try { cwd.ws.send(JSON.stringify(m)); } catch (e) {}
+        }
+      }
+    }
+  }
+  window.addEventListener('load', function () {
+    if (!document.getElementById('wfmode')) return;   // desktop page only
+    setInterval(cwFollow, 350);
+  });
+  window.addEventListener('beforeunload', cwClose);
+  window.ubersdr_cw_state = function () { return cwd; };   // for diagnosis
+
   // ── CAT diagnostic log: open the page with ?catlog ───────────────────────────
   // Shows every frequency and mode change, what made it (a click on the page, or
   // software such as CATSync, with the calling code), and the mode before and after.
@@ -1796,7 +2008,7 @@
       // mouse passes through to the waterfall (tuning, dragging, wheel zoom)
       var c = document.createElement('canvas');
       c.id = 'ubersdr-spectrum';
-      c.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:3;display:none;';
+      c.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:1;display:none;';   // under the passband shade (.vl, z-index 2)
       wfdiv.style.position = 'relative';
       wfdiv.appendChild(c);
       spec.canvas = c; spec.ctx = c.getContext('2d'); spec.dirty = true;
@@ -1970,6 +2182,7 @@
     var c = spec.canvas, want = spec.split ? 'split' : 'over';
     if (c._layout === want) return;
     c._layout = want;
+    vlSpan(spec.split);
     if (spec.split) {
       c.style.position = 'relative'; c.style.pointerEvents = 'auto'; c.style.cursor = 'crosshair';
       c.style.height = SPLIT_H + 'px';
@@ -1982,7 +2195,19 @@
     }
     spec.dirty = true;
   }
+  // The transparent passband shade (.vl, under the yellow bar) covers the waterfall;
+  // with Type = spectrum + waterfall it is made taller so it covers the spectrum too.
+  function vlSpan(on) {
+    if (!document.getElementById('ubersdr-vl-style')) {
+      var st = document.createElement('style');
+      st.id = 'ubersdr-vl-style';
+      st.textContent = 'body.ubersdr-split .vl{height:' + (100 + SPLIT_H) + 'px;top:' + (-117 - SPLIT_H) + 'px}';
+      document.head.appendChild(st);
+    }
+    document.body.classList.toggle('ubersdr-split', !!on);
+  }
   function specHide() {
+    vlSpan(false);
     if (!spec.canvas) return;
     spec.canvas.style.display = 'none';
     var wfc = document.getElementById('wfcdiv0');

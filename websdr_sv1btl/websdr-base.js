@@ -1715,8 +1715,8 @@ function updatesmeter()
    }
 
    // plot the actual data point
-   ct.fillStyle="blue";
-   ct.fillRect(sgraph.width-1,s2y(s),1,1);
+   ct.fillStyle="#00008b";   // dark blue, 2 px tall (was "blue", 1 px): easier to see (2026-10-07)
+   ct.fillRect(sgraph.width-1,Math.round(s2y(s))-1,1,2);
 }
 
 function getnoise()
