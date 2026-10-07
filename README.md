@@ -335,6 +335,9 @@ audio before squelch, NR and the notch filters, and nothing extra is asked of Ub
 | NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations |
 | RTTY | USB around 1000 Hz | text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists |
 
+- JS8 and WSPR show a bar under the window title: it fills over the
+  current slot (teal while capturing, grey while waiting for the first slot) with the
+  time to the next decode.
 - FT8, FT4, FT2 and JS8 start each capture a little after the UTC slot boundary, to
   allow for the time the audio takes to arrive. The page learns this "time shift" from
   the decoded DT values (shown in the window) and keeps it in the listener's browser.

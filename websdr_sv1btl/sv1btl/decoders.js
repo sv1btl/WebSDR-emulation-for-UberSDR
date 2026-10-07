@@ -245,6 +245,10 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
 .decwin .dw-text{height:120px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#000;
   font:12px/15px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}
 .decwin canvas{display:block;margin:0 auto;background:#000;image-rendering:auto}
+.decwin .dw-bar{position:relative;height:15px;background:#e4e4e4;border-bottom:1px solid #ccc;overflow:hidden}
+.decwin .dw-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#7cc7bd;transition:width .2s linear}
+.decwin .dw-fill.wait{background:#b4b4b4}
+.decwin .dw-bartxt{position:relative;display:block;text-align:center;font:bold 11px/15px Arial,sans-serif;color:#000}
 .decwin .dw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd;min-height:13px}
 `;
   document.head.appendChild(s);
@@ -398,7 +402,7 @@ function ftxFeed(pcm) {
   if (!cap.on) {
     const pos = d.kind === 'js8' ? js8SlotPos(Date.now(), period, shift) : slotPos(period, shift);
     if (pos <= win) { cap.on = true; cap.len = 0; cap.t0 = Date.now() - pos * 1000 - shift * 1000; }
-    else { countdown(period - pos); return; }
+    else return;
   }
   capPush(pcm);
   if (cap.len >= samples) {
@@ -412,10 +416,34 @@ function ftxFeed(pcm) {
        .finally(() => { cap.busy--; });
   }
 }
-let lastCd = 0;
-function countdown(s) {
-  const now = Date.now(); if (now - lastCd < 500) return; lastCd = now;
-  if (!cap.busy) status(`Next slot in ${Math.ceil(s)} s`);
+// ── Slot bar (JS8 and WSPR): how far the current slot is, and the time to the
+// next decode. Runs on its own clock, so it moves even between audio blocks.
+const BAR_HTML = '<div class="dw-bar"><div class="dw-fill"></div><span class="dw-bartxt"></span></div>';
+let barTimer = null;
+function barStart() { barStop(); barTimer = setInterval(barTick, 200); barTick(); }
+function barStop() { if (barTimer) clearInterval(barTimer); barTimer = null; }
+function barTick() {
+  const fill = $('.dw-fill'), txt = $('.dw-bartxt');
+  if (!st.on || !fill || !txt) { barStop(); return; }
+  const d = DEC[st.on];
+  let period, capLen, pos;
+  if (d.kind === 'wspr') { period = 120; capLen = 119; pos = wspr2SlotPosition() + (Date.now() % 1000) / 1000; }
+  else if (d.kind === 'js8') {
+    period = js8Period(js8.sub); capLen = js8CaptureSamples(js8.sub, 1000) / 1000;
+    pos = js8SlotPos(Date.now(), period, shiftGet(ftxMode()));
+  } else { period = d.slot; capLen = d.slot - 0.4; pos = slotPos(period, shiftGet(ftxMode())); }
+  // capturing: the decode comes at the end of this capture; otherwise (joined in the
+  // middle of a slot, or the gap before the next one) at the end of the next capture
+  const left = cap.on ? Math.max(0, capLen - pos) : (period - pos) + capLen;
+  fill.style.width = (100 * Math.min(1, pos / capLen)).toFixed(1) + '%';
+  fill.classList.toggle('wait', !cap.on);
+  txt.textContent = cap.busy && left > capLen - 1.5
+    ? 'Decoding…'
+    : (cap.on ? 'Next decode in ' : 'Waiting for the slot start — first decode in ') + fmtSec(left);
+}
+function fmtSec(s) {
+  s = Math.ceil(s);
+  return s >= 60 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' min' : s + ' s';
 }
 
 function ftxWindow(k) {
@@ -458,7 +486,8 @@ function js8Window() {
   openWindow(`<div class="dw-head"><span class="dw-title">JS8 decoder</span>
     <label>Speed <select class="dw-sub">${JS8_NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('')}</select></label>
     <span>Time shift <b class="dw-shift">-</b> s</span><button type="button" class="dw-clear">Clear</button></div>
-    <div class="dw-list"><table><thead><tr><th>UTC</th><th>dB</th><th>Hz</th><th>Message</th></tr></thead><tbody></tbody></table></div>`);
+    ${BAR_HTML}<div class="dw-list"><table><thead><tr><th>UTC</th><th>dB</th><th>Hz</th><th>Message</th></tr></thead><tbody></tbody></table></div>`);
+  barStart();
   const sel = $('.dw-sub'); sel.value = String(js8.sub);
   sel.onchange = () => { js8.sub = +sel.value; lsSet('ubersdr_js8sub', sel.value); js8.re.reset(); capReset(); showShift(); };
   $('.dw-clear').onclick = () => { $('tbody').innerHTML = ''; };
@@ -488,13 +517,14 @@ function js8Results(raw, t0) {
 function wsprWindow() {
   openWindow(`<div class="dw-head"><span class="dw-title">WSPR decoder</span><span>Spots <b class="dw-count">0</b></span>
     <button type="button" class="dw-clear">Clear</button></div>
-    <div class="dw-list"><table><thead><tr><th>UTC</th><th>Call</th><th>Locator</th><th>dBm</th><th>kHz</th><th>SNR</th><th>Distance</th></tr></thead><tbody></tbody></table></div>`);
+    ${BAR_HTML}<div class="dw-list"><table><thead><tr><th>UTC</th><th>Call</th><th>Locator</th><th>dBm</th><th>kHz</th><th>SNR</th><th>Distance</th></tr></thead><tbody></tbody></table></div>`);
+  barStart();
   $('.dw-clear').onclick = () => { $('tbody').innerHTML = ''; $('.dw-count').textContent = '0'; };
 }
 function wsprFeed(pcm) {
   const pos = wspr2SlotPosition();
   if (!cap.on && pos < 2) { cap.on = true; cap.len = 0; cap.t0 = Date.now() - pos * 1000; }
-  if (!cap.on) { if (!cap.busy) countdown(120 - pos); return; }
+  if (!cap.on) return;
   capPush(pcm);
   if (pos >= 119 && pos < 120) {
     cap.on = false;
@@ -703,7 +733,7 @@ function stop(quiet) {
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
   for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }
   sstv = fax = fsk = null; js8.re = null;
-  closeWindow(); lightButtons();
+  barStop(); closeWindow(); lightButtons();
   // As PhantomSDR-Plus: back to the band's usual mode (LSB on 40 m, CW on 30 m…, from the
   // page's band table), with that mode's usual filter (the page's default, or the preset
   // the listener chose for it). Outside the amateur bands the sideband in use stays and

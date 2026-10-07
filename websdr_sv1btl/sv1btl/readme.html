@@ -316,6 +316,7 @@ sv1btl/               everything else, served as /sv1btl/…
           </tbody>
         </table></div>
         <ul>
+          <li>JS8 and WSPR show a bar under the window title: it fills over the current slot (teal while capturing, grey while waiting for the first slot) with the time to the next decode.</li>
           <li>FT8, FT4, FT2 and JS8 start each capture a little after the UTC slot boundary, to allow for the time the audio takes to arrive. The page learns this "time shift" from the decoded DT values (shown in the window) and keeps it in the listener's browser. The listener's PC clock must be right (within about a second).</li>
           <li>The distance column needs the station locator in <code>station.js</code> (<code>locator</code>).</li>
           <li>The decoder files are in <code>sv1btl/psdr/</code> (PhantomSDR-Plus's own files) and <code>sv1btl/decoders.js</code> (the buttons and windows). The JS8 dictionary (1.9 MB) is only downloaded when JS8 is used.</li>
