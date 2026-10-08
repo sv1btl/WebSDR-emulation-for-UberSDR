@@ -990,7 +990,13 @@ display: inline-block;
   #audiostartbutton .ctl { display: table; margin: 150px auto !important; background: rgb(241, 241, 241); border: solid #ffffff 1px; border-radius: 10px; box-shadow: 4px 4px 15px 0px rgba(0,0,0); }
   #audiostartbutton input[type=button] { font-size: 1.25rem; padding: 10px; margin-left: 15px; cursor: pointer; }
   /* UberSDR credit line, moved to the bottom of the page by ubersdr-compat.js */
-  #ubersdr-credit { width: 1024px; margin: 10px auto; font-size: 0.8rem; text-align: center; color: #333; }
+  #ubersdr-credit { width: 1024px; margin: 10px auto; font-size: 0.8rem; text-align: center; color: lightgreen; }
+  #ubersdr-credit a { color: cyan; }
+  /* Statistics block at the bottom (websdr-controls.html): light green, links cyan, the
+     numbers of users, audio and waterfall yellow (.statnum, set in websdr-base.js) */
+  #statsbox, #statsbox * { color: lightgreen; }
+  #statsbox a { color: cyan; }
+  #statsbox .statnum { color: yellow; }
   /* UberSDR's waterfall canvases are position:absolute with no left, so inside the
      centred RW3PS layout they would start at the middle; anchor them to the left edge */
   #waterfalls { text-align: left; }
