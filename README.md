@@ -100,10 +100,10 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
    cd WebSDR-emulation-for-UberSDR-main
    ```
 
-   Or download `websdr_sv1btl_package_<date>.tar.gz` from the repository's
+   Or download `websdr_sv1btl_package.zip` from the repository's
    [Releases](https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/releases) page and unpack it with
-   `tar xzf websdr_sv1btl_package_*.tar.gz && cd websdr_sv1btl_package`. Check it first
-   with `sha256sum -c websdr_sv1btl_package_*.tar.gz.sha256`, using the `.sha256` file
+   `unzip websdr_sv1btl_package.zip && cd websdr_sv1btl_package`. Check it first
+   with `sha256sum -c websdr_sv1btl_package.zip.sha256`, using the `.sha256` file
    from the same page.
 
 2. **Run the installer:**
@@ -324,6 +324,12 @@ or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, 
 the preset the listener chose for it). Tuning into another band while a decoder runs
 keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received
 audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.
+
+While a decoder runs, the **Mode Filters' presets** on the left are replaced by
+**Decoder Filters' presets**: one button per decoder with its filter width (FT8, FT4,
+FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz, RTTY
+300 Hz, or 593 Hz for DWD weather). A button sets that decoder's sideband and filter;
+the one in use is lit. The Mode presets come back when the decoder stops.
 
 | Decoder | What the button does | Window |
 |---|---|---|

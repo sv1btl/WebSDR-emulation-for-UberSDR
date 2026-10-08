@@ -729,6 +729,7 @@ function pushButton(mode, lo, hi)
     command = "setmf('"+mode+"', "+lo+', '+hi+");  rememberpreset();";
     document.querySelector(`[onclick="${command}"]`).classList.add('btn-selected')
   } catch(e) {};
+  try { if (window.ubersdr_decpresets_light) window.ubersdr_decpresets_light(); } catch(e) {};   // decoder filter presets (sv1btl/decoders.js)
 }
 
 function setmf(m, l, h)  

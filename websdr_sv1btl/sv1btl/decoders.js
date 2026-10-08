@@ -231,6 +231,9 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
   const s = document.createElement('style');
   s.textContent = `
 #decrow{margin:1px 0 2px}
+#decpresets .decpre{height:32px;line-height:1.15;padding:0 2px}
+#decpresets .dp-n{display:block;font-weight:bold}
+#decpresets .dp-v{display:block;font-size:.7rem}
 #decrow b{font-size:13px}
 #moderow #decrow .btnMode.decbtn{width:auto;min-width:40px;padding:0 4px;margin:2px 1px;font-size:.75rem}
 .decwin{width:470px;margin:3px auto 4px;box-sizing:border-box;background:#f7f7f7;border:1px solid #bbb;border-radius:6px;
@@ -282,6 +285,7 @@ function buildRow() {
   return true;
 }
 function lightButtons() {
+  lightPresets();
   if (!st.row) return;
   st.row.querySelectorAll('.decbtn').forEach((b) => b.classList.toggle('btn-selected', b.dataset.dec === st.on));
 }
@@ -710,12 +714,76 @@ function rttyWindow() {
 }
 
 // ── Start / stop / follow ───────────────────────────────────────────────────────
-function applyFilter(k) {
+// A decoder's sideband and filter: [sb, lo, hi], kHz of audio
+function decFilter(k) {
   const d = DEC[k];
-  if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = r.shift / 2 + 1.43 * r.baud; setFilter('usb', (r.center - hw) / 1000, (r.center + hw) / 1000); return; }
-  if (k === 'sstv') { setFilter(sstvSideband(dialKHz()), d.lo, d.hi); return; }
-  setFilter('usb', d.lo, d.hi);
+  if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = r.shift / 2 + 1.43 * r.baud; return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000]; }
+  if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
+  return ['usb', d.lo, d.hi];
 }
+function applyFilter(k) { const [sb, lo, hi] = decFilter(k); setFilter(sb, lo, hi); }
+
+// ── Decoder filter presets (#decpresets, below the Mode filter presets) ──────────
+// Shown only while a decoder runs, in place of the Mode presets. One button per decoder: it
+// sets that decoder's sideband and filter, without starting that decoder (and without
+// changing the sideband's usual filter, as rememberpreset would). The button of the filter
+// in use is lit: the running decoder's, else the last one pressed.
+// websdr-base.js pushButton() clears every .btnBandW and then calls ubersdr_decpresets_light.
+let presetPicked = null;
+function filterInUse(k) {
+  const [sb, l, h] = decFilter(k);
+  const lo = Number(W.lo), hi = Number(W.hi), near = (a, b) => Math.abs(a - b) < 0.005;
+  if (pageMode() !== sb.toUpperCase()) return false;
+  return sb === 'lsb' ? near(lo, -h) && near(hi, -l) : near(lo, l) && near(hi, h);
+}
+// While a decoder runs its presets take the place of the Mode presets (caption and buttons)
+function showPresets() {
+  const on = !!st.on, show = (id, v) => { const e = document.getElementById(id); if (e) e.style.display = v ? '' : 'none'; };
+  show('modepresetscap', !on); show('modepresets', !on);
+  show('decpresetscap', on); show('decpresets', on);
+}
+function lightPresets() {
+  const box = document.getElementById('decpresets');
+  if (!box) return;
+  showPresets();
+  const lit = [st.on, presetPicked].find((k) => k && filterInUse(k)) || null;
+  box.querySelectorAll('.decpre').forEach((b) => {
+    b.classList.toggle('btn-selected', b.dataset.dec === lit);
+    const v = b.querySelector('.dp-v'), t = presetValue(b.dataset.dec);    // RTTY: follows its variant
+    if (v && v.textContent !== t) v.textContent = t;
+  });
+}
+// The filter's width, as shown under the decoder's name
+function presetValue(k) {
+  const [, lo, hi] = decFilter(k), bw = Math.round((hi - lo) * 1000);
+  return bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz';
+}
+function presetTitle(k) {
+  if (k === 'rtty') return 'Filter preset (RTTY): tones centred on 1000 Hz, USB; 0.85–1.15 kHz for ham 45.45 Bd / 170 Hz, 0.70–1.30 kHz for DWD weather 50 Bd / 450 Hz (the variant chosen in the RTTY window)';
+  const d = DEC[k], bw = Math.round((d.hi - d.lo) * 1000);
+  const sb = k === 'sstv' ? 'LSB below 10 MHz, USB above' : 'USB';
+  return `Filter preset (${d.title}): ${d.lo.toFixed(2)}–${d.hi.toFixed(2)} kHz, ${bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz'}, ${sb}`;
+}
+function buildPresets() {
+  const box = document.getElementById('decpresets');
+  if (!box || box.dataset.built) return;
+  const keys = Object.keys(DEC);
+  let html = '<table align=center><tbody>';
+  for (let i = 0; i < keys.length; i += 3) {
+    html += '<tr>' + keys.slice(i, i + 3).map((k) =>
+      `<td><button type="button" class="btnBandW decpre" data-dec="${k}" title="${esc(presetTitle(k))}"><span class="dp-n">${DEC[k].label}</span><span class="dp-v">${presetValue(k)}</span></button></td>`).join('') + '</tr>';
+  }
+  box.innerHTML = html + '</tbody></table>';
+  box.dataset.built = '1';
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('.decpre'); if (!b) return;
+    presetPicked = b.dataset.dec;
+    applyFilter(presetPicked);
+    lightPresets();
+  });
+  lightPresets();
+}
+W.ubersdr_decpresets_light = lightPresets;
 function start(k) {
   stop(true);
   if (W.ubersdr_rade_active && W.ubersdr_rade_active() && W.ubersdr_rade_stop) W.ubersdr_rade_stop();
@@ -777,6 +845,7 @@ W.ubersdr_dec_tap = function (pcm, sr) {
 let lastF = 0, lastBand = '';
 setInterval(() => {
   if (!st.row) buildRow();
+  buildPresets();
   if (!st.on) return;
   const m = pageMode();
   if ((m !== 'USB' && m !== 'LSB') || (W.ubersdr_rade_active && W.ubersdr_rade_active())) { stop(); return; }
@@ -790,4 +859,5 @@ setInterval(() => {
   pickedFollow();
 }, 500);
 buildRow();
+buildPresets();
 W.ubersdr_decoders = { start, stop, state: () => ({ on: st.on, sr: st.sr, cap: { on: cap.on, len: cap.len, busy: cap.busy } }) };

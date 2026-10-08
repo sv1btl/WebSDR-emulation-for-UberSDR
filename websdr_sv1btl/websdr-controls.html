@@ -340,10 +340,10 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
  
     
     <br> 
-    <em>Select <b>Mode</b> at the right for Filters' presets!</em>
+    <em id="modepresetscap"><b>Mode</b> Filters' presets!</em>
   </div>
 
-  <table>
+  <table id="modepresets">
   <tbody>
   <tr>
   <td id="lsbpresets" style="display: table-row;">
@@ -440,6 +440,10 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
         </table>
    		</td>
   </tr></tbody></table>
+
+  <!-- Decoder filters: buttons built by sv1btl/decoders.js from its DEC table; shown instead of the Mode presets while a decoder runs; the one in use is lit -->
+  <div id="decpresetscap" style="font-size: 0.85rem; display: none;"><em><b>Decoder</b> Filters' presets!</em></div>
+  <div id="decpresets" style="display: none;"></div>
   </center>
   </td></tr></tbody></table>
 </div>

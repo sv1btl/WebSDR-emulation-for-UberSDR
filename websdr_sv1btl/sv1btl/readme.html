@@ -112,7 +112,7 @@ html { scroll-behavior: smooth; }
       <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
       <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
     </div>
-    <div class="readout">WebSDR port<b>8901</b>package 2026-09-30</div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-10-08</div>
   </header>
 
   <div class="grid">
@@ -184,7 +184,7 @@ cd WebSDR-emulation-for-UberSDR</code></pre></div>
             <div class="code"><pre><code>wget https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/archive/refs/heads/main.zip
 unzip main.zip
 cd WebSDR-emulation-for-UberSDR-main</code></pre></div>
-            <p>Or download <code>websdr_sv1btl_package_&lt;date&gt;.tar.gz</code> and its <code>.sha256</code> file from the <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/releases" target="_blank" rel="noopener">Releases page</a>, check it with <code>sha256sum -c websdr_sv1btl_package_*.tar.gz.sha256</code>, then unpack it with <code>tar xzf websdr_sv1btl_package_*.tar.gz &amp;&amp; cd websdr_sv1btl_package</code>.</p></div></li>
+            <p>Or download <code>websdr_sv1btl_package.zip</code> and its <code>.sha256</code> file from the <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/releases" target="_blank" rel="noopener">Releases page</a>, check it with <code>sha256sum -c websdr_sv1btl_package.zip.sha256</code>, then unpack it with <code>unzip websdr_sv1btl_package.zip &amp;&amp; cd websdr_sv1btl_package</code>.</p></div></li>
           <li><div><strong>Run the installer.</strong>
             <div class="code"><pre><code>bash install.sh                  # UberSDR in ~/ubersdr
 bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
@@ -303,6 +303,7 @@ sv1btl/               everything else, served as /sv1btl/…
         </ul>
         <h3>Digital-mode decoders</h3>
         <p>A <strong>Decoder</strong> row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in the listener's browser: <strong>FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY</strong>. Its window opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on 30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or the preset the listener chose for it). Tuning into another band while a decoder runs keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.</p>
+        <p>While a decoder runs, the <strong>Mode Filters' presets</strong> on the left are replaced by <strong>Decoder Filters' presets</strong>: one button per decoder with its filter width (FT8, FT4, FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz, RTTY 300 Hz, or 593 Hz for DWD weather). A button sets that decoder's sideband and filter; the one in use is lit. The Mode presets come back when the decoder stops.</p>
         <div class="table"><table>
           <thead><tr><th>Decoder</th><th>What the button does</th><th>Window</th></tr></thead>
           <tbody>
