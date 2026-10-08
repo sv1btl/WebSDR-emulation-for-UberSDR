@@ -1819,10 +1819,10 @@ function ajaxFunction3()
         if (xmlHttp.status==200 && xmlHttp.responseText!="") {
           eval(xmlHttp.responseText);
           douu();
-          // numbers of users, audio and waterfall in the Statistics line: yellow (.statnum, websdr-head.html)
+          // numbers of users, audio, waterfall and http in the Statistics line: yellow (.statnum, websdr-head.html)
           if (statsobj) statsobj.innerHTML = statsobj.innerHTML
             .replace(/(\d+)( users?)/, '<span class="statnum">$1</span>$2')
-            .replace(/(audio |waterfall )([\d.]+)/g, '$1<span class="statnum">$2</span>');
+            .replace(/(audio |waterfall |http )([\d.]+)/g, '$1<span class="statnum">$2</span>');
         }
         clearTimeout(interval_ajax3);
         interval_ajax3 = setTimeout('ajaxFunction3()',1000);

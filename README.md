@@ -206,6 +206,7 @@ These are in the HTML files. They're optional.
 | receiverbook.de registration | `websdr-head.html`, line 1: paste the `<meta name="receiverbook-confirmation" …>` line that receiverbook gives you |
 | "Equipment" box (hidden by default) and the picture `sv1btl/setup_bw.gif` | `websdr-controls.html`, search for `equip_info` |
 | Page background images | `sv1btl/bg6.jpg` (desktop), `sv1btl/aluminium.jpg` (mobile): replace them with images of the same name |
+| Colours of the text under the waterfall: the "Chatbox" heading, the Statistics line and the UberSDR credit line (light green, links cyan, the Statistics numbers yellow) | `websdr-head.html`, the rules for `#chatcaption`, `#statsbox` and `#ubersdr-credit` |
 | Favicon | `sv1btl/favicon.ico` / `favicon.png` |
 | The browser-autoplay guide linked in the header | `sv1btl/guide/guide.html` |
 
