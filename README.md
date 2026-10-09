@@ -191,6 +191,10 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
 
 - `mode` is one of `am`, `fm`, `usb`, `lsb` or `cw`. Clicking the label tunes there in
   that mode.
+- A label whose text names a digital mode (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX,
+  RTTY) also starts that decoder, with its own sideband and filter (desktop page). Within
+  2 kHz of the mode's usual frequency it tunes to that frequency. "FT8<br>JT65" starts
+  FT8. Clicking a label without a digital mode stops a running decoder.
 - Lines starting with `#` are comments.
 - `<br>` in the text starts a second line.
 

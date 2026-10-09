@@ -784,14 +784,14 @@ function buildPresets() {
   lightPresets();
 }
 W.ubersdr_decpresets_light = lightPresets;
-function start(k) {
+function start(k, opts) {
   stop(true);
   if (W.ubersdr_rade_active && W.ubersdr_rade_active() && W.ubersdr_rade_stop) W.ubersdr_rade_stop();
   const d = DEC[k];
   st.on = k; capReset(); lightButtons();
   lastBand = ''; pickedDial = 0;
   // Off the mode's usual frequencies: go to the nearest one (same as PhantomSDR-Plus's band plan)
-  if (d.dials) {
+  if (d.dials && !(opts && opts.keepDial)) {
     const f = dialKHz(), near = nearest(d.dials, f);
     if (near !== null && !(f >= near - 0.01 && f <= near + 3)) tuneKHz(near);
   }
@@ -826,6 +826,39 @@ function stop(quiet) {
     } catch (e) { console.error('decoders: restore mode', e); }
   }
 }
+
+// ── Station labels on the frequency scale ─────────────────────────────────────────
+// A label (sv1btl/stationinfo.txt, or a memory) whose text names a digital mode starts
+// that decoder, with its own sideband and filter, after the label's own click (setfreqm)
+// has tuned the dial there. With several modes in one label ("JT65<br>WSPR") the first
+// one the page can decode wins. A label within 2 kHz of the mode's usual dial frequency
+// goes to that frequency (as the Decoder button does); one further away keeps its own.
+// The decoder already running is kept (its window and decodes stay), with its filter.
+// A label without a digital mode stops a running decoder; the label's own mode and its
+// usual filter (set by setfreqm) stay.
+const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2'], [/\bJS8(?:CALL)?\b/i, 'js8'],
+  [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty']];
+function labelMode(html) {
+  const text = String(html).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' ');
+  let best = null, at = Infinity;
+  for (const [re, k] of LABEL_MODES) { const m = re.exec(text); if (m && m.index < at) { best = k; at = m.index; } }
+  return best;
+}
+document.addEventListener('click', (e) => {
+  const lab = e.target.closest && e.target.closest('.statinfo0, .statinfo0l');
+  if (!lab) return;
+  const k = labelMode(lab.innerHTML);
+  if (!k) { if (st.on) stop(true); return; }
+  setTimeout(() => {                               // after setfreqm's tuning has settled
+    try {
+      const d = DEC[k], f = dialKHz(), near = d.dials ? nearest(d.dials, f) : null;
+      const keepDial = near === null || Math.abs(near - f) > 2;
+      if (st.on !== k) { start(k, { keepDial }); return; }
+      if (!keepDial && Math.abs(near - f) > 0.01) tuneKHz(near);
+      applyFilter(k); lightPresets();
+    } catch (err) { console.error('decoders: label', err); }
+  }, 0);
+});
 
 // Every received audio block (raw), from ubersdr-compat.js
 W.ubersdr_dec_tap = function (pcm, sr) {
