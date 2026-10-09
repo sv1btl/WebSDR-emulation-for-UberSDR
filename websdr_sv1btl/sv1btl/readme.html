@@ -112,7 +112,7 @@ html { scroll-behavior: smooth; }
       <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
       <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
     </div>
-    <div class="readout">WebSDR port<b>8901</b>package 2026-10-08</div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-10-09</div>
   </header>
 
   <div class="grid">
@@ -145,7 +145,7 @@ html { scroll-behavior: smooth; }
           <li><strong>Spectrum</strong> in the PhantomSDR style, over the waterfall or above it ("spectrum + waterfall", the default for first-time visitors).</li>
           <li><strong>Click-to-tune</strong> on the waterfall and spectrum, rounded to 0.5 kHz.</li>
           <li><strong>Digit tuning</strong> on the frequency display: mouse wheel over a digit, left click up, right click down.</li>
-          <li><strong>Band buttons</strong> that zoom to the band and follow the frequency.</li>
+          <li><strong>Band buttons</strong> that zoom to the band and follow the frequency; <strong>All</strong> shows the whole receiver range and stays lit while the waterfall is fully zoomed out.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
           <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using PhantomSDR-Plus's CW decoder in the listener's browser.</li>
           <li><strong>Digital-mode decoders</strong> from PhantomSDR-Plus (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY), with a Decoder button row under the Mode buttons.</li>
@@ -237,6 +237,7 @@ bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
 729am ERT Athens
 14100cw NCDXF beacons</code></pre></div>
         <p>The mode is <code>am</code>, <code>fm</code>, <code>usb</code>, <code>lsb</code> or <code>cw</code>; clicking the label tunes there in that mode. Lines starting with <code>#</code> are comments, and <code>&lt;br&gt;</code> in the text starts a second line. The file in the package is SV1BTL's list (time signals, European broadcasters, some Athens stations), so adapt it to your area. The page reads it again on each band or zoom change, so after editing just reload.</p>
+        <p>The labels appear only from a quarter of the way in on the zoom range (25–100 %); further out they would crowd the scale. To change that, edit <code>e.zoom * 4 &lt; e.maxzoom</code> in <code>sv1btl/ubersdr-compat.js</code> (<code>* 2</code> = from half zoom, or delete that line to show them at every zoom).</p>
       </section>
 
       <section id="other">

@@ -16,7 +16,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz;
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
-- **band buttons** that zoom to the band and follow the frequency;
+- **band buttons** that zoom to the band and follow the frequency; **All** shows the
+  whole receiver range and stays lit while the waterfall is fully zoomed out;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
@@ -196,6 +197,10 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
 The file in the package is SV1BTL's list, with time signals and broadcasters heard in
 Europe and some local Athens stations. Replace or edit it for your area. The page reads
 it again on each band or zoom change, so after editing just reload the page.
+
+The labels appear only from a quarter of the way in on the zoom range (25–100 %);
+further out they would crowd the scale. To change that, edit `e.zoom * 4 < e.maxzoom`
+in `sv1btl/ubersdr-compat.js` (`* 2` = from half zoom, or delete that line to show them at every zoom).
 
 ## 5. Other things you may want to change
 

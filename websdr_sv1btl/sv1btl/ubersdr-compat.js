@@ -760,10 +760,12 @@
 
   // QSY: the button of the band the frequency is in stays selected (none outside the
   // bands). Only the highlight changes: no zoom, no mode change.
+  // Fully zoomed out, "All" is the selected button instead.
   function bandLight() {
     if (typeof nominalfreq !== 'function') return;
     var f = nominalfreq(), idx = -1;
-    for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) { idx = i; break; }
+    if (bi[band] && bi[band].zoom === 0) idx = 'all';
+    else for (var i = 0; i < HAM_BANDS.length; i++) if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) { idx = i; break; }
     var btns = document.getElementsByClassName('btnBand');
     for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('btn-selected', btns[k].id === 'btnHam-' + idx);
   }
@@ -1523,7 +1525,7 @@
         s += '<button type="button" class="btnBand" name="group1" id="btnHam-' + i +
              '" onclick="ubersdr_gotoband(' + i + ')">' + HAM_BANDS[i][0] + '</button>';
       }
-      s += '<button type="button" class="btnBand" name="group1" onclick="wfset(4)" title="whole receiver range">All</button>';
+      s += '<button type="button" class="btnBand" name="group1" id="btnHam-all" onclick="wfset(4)" title="whole receiver range">All</button>';
       document.write(s);
     };
     // Returning visitor: restore mode, filter and frequency. The carrier is set directly:
@@ -1629,6 +1631,16 @@
         if (btn) btn.onclick = (function (n) { return function () { ubersdr_gotouser(n); }; })(i);
       }
     };
+    // Station/memory labels only from a quarter zoom (zoom >= maxzoom/4) inwards; further out
+    // they would crowd the scale. Below that showdx runs as if "Hide labels" were on.
+    var origShowdx = window.showdx;
+    window.showdx = function (b) {
+      var e = bi[b], keep = hidedx;
+      if (e && e.zoom * 4 < e.maxzoom) hidedx = 1;
+      try { origShowdx.apply(this, arguments); } finally { hidedx = keep; }
+    };
+    var origZoomchange = window.zoomchange;
+    window.zoomchange = function () { origZoomchange.apply(this, arguments); bandLight(); };
     var origUpdbw = window.updbw;
     window.updbw = function () { origUpdbw.apply(this, arguments); savePos(); };
 
