@@ -190,9 +190,17 @@ function utcHM(ms) { return new Date(ms).toISOString().slice(11, 19); }
 // ── Page control ───────────────────────────────────────────────────────────
 function pageMode() { return String(W.mode || '').toUpperCase(); }
 function dialKHz() { return Number(W.freq) || 0; }
-// Puts the dial on f. With a filter narrower than 1.4 kHz the page counts as "CW-like"
-// (iscw) and tunes the middle of the passband instead of the dial, so a plain USB filter
-// goes in first; the caller then sets the decoder's own (applyFilter).
+// A filter narrower than 1.4 kHz makes the page "CW-like" (iscw): it shows and tunes the
+// middle of the passband instead of the dial (WSPR on 14095.6 would read 14097.10). While
+// a decoder runs the dial is what counts (WSPR 14095.6, NAVTEX 518, the RTTY lists), so
+// the narrow decoder filters are not CW-like then.
+const pageIscw = W.iscw;
+W.iscw = function () { return st.on ? false : pageIscw(); };
+// The display follows when that changes (decoder on/off with a narrow filter)
+function showDial() { try { W.setfreq(W.freq); } catch (e) {} }
+// Puts the dial on f. With a filter narrower than 1.4 kHz and no decoder running the page
+// counts as "CW-like" (iscw) and tunes the middle of the passband instead of the dial, so
+// a plain USB filter goes in first; the caller then sets the decoder's own (applyFilter).
 function tuneKHz(f) {
   try {
     listener();
@@ -806,7 +814,7 @@ function start(k, opts) {
 }
 function stop(quiet) {
   if (!st.on) return;
-  st.on = null; capReset();
+  st.on = null; capReset(); showDial();
   for (const p of pending.values()) p.reject(new Error('stopped')); pending.clear();
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
   for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }

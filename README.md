@@ -358,6 +358,9 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   allow for the time the audio takes to arrive. The page learns this "time shift" from
   the decoded DT values (shown in the window) and keeps it in the listener's browser.
   The listener's PC clock must be right (within about a second).
+- While a decoder runs, the frequency display shows the dial frequency (WSPR 14095.6,
+  NAVTEX 517.5 for the 518 kHz station), also with the narrow WSPR, NAVTEX and RTTY
+  filters. Otherwise the page shows the middle of a filter narrower than 1.4 kHz, as in CW.
 - The distance column needs the station locator in `station.js` (`locator`).
 - The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files) and
   `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
