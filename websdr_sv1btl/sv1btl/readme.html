@@ -387,6 +387,7 @@ bash install.sh</code></pre></div>
             <tr><td>An HTML edit doesn't show</td><td>The file was replaced instead of saved in place. Run <code>docker restart ka9q_ubersdr</code>.</td></tr>
             <tr><td>Spectrum dB numbers look wrong</td><td><code>waterfallCalibration</code> doesn't match <code>websdr_waterfall_calibration</code>.</td></tr>
             <tr><td>No sound until clicking</td><td>Browsers need one click before playing audio; the page shows a "start audio" button.</td></tr>
+            <tr><td>With the Dark Reader browser extension, the passband shade over the waterfall or the S-meter looks dark and solid</td><td>Dark Reader recolours their colour gradients. The pages carry <code>&lt;meta name="darkreader-lock"&gt;</code> in <code>websdr-head.html</code> and <code>m.html</code>, which makes Dark Reader leave them alone. If you still see it, the listener should reload the page; check that the line wasn't lost after editing those files.</td></tr>
             <tr><td>A phone doesn't get the mobile page</td><td>Open <code>/m.html?mobile</code> once; that clears a saved "desktop version" choice.</td></tr>
             <tr><td>"RADE unavailable: cannot reach …"</td><td><code>mainServer</code> in <code>station.js</code> is wrong or not reachable from outside, or <code>server.enable_cors</code> is off (<a href="#how">section 7</a>).</td></tr>
             <tr><td>RADE stays on "waiting for a RADE signal…"</td><td>Nobody is transmitting RADE there right now. Common RADE frequencies: 7177 kHz LSB, 14236 kHz USB.</td></tr>

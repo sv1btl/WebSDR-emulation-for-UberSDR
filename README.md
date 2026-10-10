@@ -459,6 +459,7 @@ and, after asking, recreates the container. UberSDR's own WebSDR page is back.
 | An edit to an HTML file doesn't show | The file was *replaced*, not saved in place (section 6): run `docker restart ka9q_ubersdr`. |
 | The spectrum's dB numbers look wrong | `waterfallCalibration` in `station.js` doesn't match `websdr_waterfall_calibration` in `config.yaml`. |
 | No sound until clicking | Browsers need one click before playing audio; the page shows a "start audio" button. The header links a guide for allowing autoplay. |
+| With the Dark Reader browser extension, the passband shade over the waterfall or the S-meter looks dark and solid | Dark Reader recolours their colour gradients. The pages carry `<meta name="darkreader-lock">` in `websdr-head.html` and `m.html`, which makes Dark Reader leave them alone. If you still see it, the listener should reload the page; check that the line wasn't lost after editing those files. |
 | Phones don't get the mobile page | Open `/m.html?mobile` once; that clears a saved "desktop version" choice. |
 | Audio or extras stopped after an UberSDR update | Run the check script (section 7). |
 | RADE says "RADE unavailable: cannot reach …" | `mainServer` in `station.js` is wrong or not reachable from outside, or `server.enable_cors` is off (section 6). |
