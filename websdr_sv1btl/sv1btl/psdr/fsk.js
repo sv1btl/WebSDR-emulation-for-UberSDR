@@ -12,13 +12,13 @@
  *
  *   role 'navtex' — legacy NAVTEX path: CCIR-476 + ZCZC/NNNN message framing
  *   role 'fsk'    — generic FSK with the maritime / weather / ham presets, plus
- *                   the 'psk31', 'olivia', 'packet' and 'aprs' variants, which
- *                   do not use the discriminator chain at all: they hand the
- *                   audio to psk31.js / olivia.js / mfsk.js / ax25.js and only
- *                   borrow
- *                   this class's config, worker and event plumbing. The
- *                   'olivia' variant also carries MFSK16/32/64 (encoding
- *                   'mfsk'): same panel, a different decoder.
+ *                   the 'psk31', 'olivia', 'packet' and 'aprs' variants and
+ *                   the fldigi-family modems ('mfsk', 'dominoex', 'thor',
+ *                   'throb', 'hell', 'mt63' — see FLDIGI_MODEMS), which do not
+ *                   use the discriminator chain at all: they hand the audio to
+ *                   psk31.js / olivia.js / ax25.js / mfsk.js / ifk.js /
+ *                   throb.js / hell.js / mt63.js and only borrow this class's
+ *                   config, worker and event plumbing.
  *
  * Each instance owns its own state, so the roles can no longer interfere.  The
  * `_navtexCb` / `_fskCb` getters below reproduce the old behaviour exactly: the
@@ -36,8 +36,47 @@ import { PSK31Demodulator } from './psk31.js';
 import { OliviaDecoder, OLIVIA_MODES, SYNC_THRESHOLD_DEFAULT } from './olivia.js';
 import { MfskDecoder, MFSK_MODES, MFSK_SQUELCH_DEFAULT, mfskBandwidth } from './mfsk.js';
 import { PacketDecoder } from './ax25.js';
+import { IfkDecoder, DOMINOEX_MODES, THOR_MODES, ifkBandwidth,
+  DOMINOEX_SQUELCH_DEFAULT, THOR_SQUELCH_DEFAULT } from './ifk.js';
+import { ThrobDecoder, THROB_MODES, throbBandwidth, THROB_SQUELCH_DEFAULT } from './throb.js';
+import { HellDecoder, HELL_MODES, hellBandwidth } from './hell.js';
+import { Mt63Decoder, MT63_MODES, mt63Bandwidth, MT63_SQUELCH_DEFAULT } from './mt63.js';
 
 const _isPacketVariant = (v) => v === 'packet' || v === 'aprs';
+
+/**
+ * The fldigi-family modems. Each is one decoder with a sub-mode list and a
+ * squelch, and they all take the same config: { center, modemMode,
+ * modemSquelch } (+ `reverse` for Hell). `def` is the sub-mode a variant opens
+ * with.
+ */
+export const FLDIGI_MODEMS = {
+  mfsk: {
+    modes: MFSK_MODES, def: 'mfsk16', bw: mfskBandwidth, squelch: MFSK_SQUELCH_DEFAULT,
+    make: (o) => new MfskDecoder(o),
+  },
+  dominoex: {
+    modes: DOMINOEX_MODES, def: 'domex11', bw: ifkBandwidth, squelch: DOMINOEX_SQUELCH_DEFAULT,
+    make: (o) => new IfkDecoder({ ...o, family: 'dominoex' }),
+  },
+  thor: {
+    modes: THOR_MODES, def: 'thor16', bw: ifkBandwidth, squelch: THOR_SQUELCH_DEFAULT,
+    make: (o) => new IfkDecoder({ ...o, family: 'thor' }),
+  },
+  throb: {
+    modes: THROB_MODES, def: 'throb2', bw: throbBandwidth, squelch: THROB_SQUELCH_DEFAULT,
+    make: (o) => new ThrobDecoder(o),
+  },
+  hell: {
+    modes: HELL_MODES, def: 'feld', bw: hellBandwidth, squelch: 0,
+    make: (o) => new HellDecoder(o),
+  },
+  mt63: {
+    modes: MT63_MODES, def: 'mt63-1000l', bw: mt63Bandwidth, squelch: MT63_SQUELCH_DEFAULT,
+    make: (o) => new Mt63Decoder(o),
+  },
+};
+const _isModemVariant = (v) => Object.prototype.hasOwnProperty.call(FLDIGI_MODEMS, v);
 
 // The tones/bandwidth pairs the UI offers, as [tones, bandwidth] for lookup.
 const OLIVIA_PAIRS = OLIVIA_MODES.map((m) => [m.tones, m.bandwidth]);
@@ -104,7 +143,7 @@ export class KiwiFSKDecoder {
     this._fskRecentPCM = [];
     this._psk = null;
     this._olivia = null;
-    this._mfsk = null;
+    this._modem = null;
     this._packet = null;
   }
 
@@ -129,6 +168,7 @@ export class KiwiFSKDecoder {
     // + varicode, and MFSK + Walsh FEC), so they bypass the discriminator chain.
     if (this._variant === 'psk31')  { this._pskFeed(pcm); return; }
     if (this._variant === 'olivia') { this._oliviaFeed(pcm); return; }
+    if (_isModemVariant(this._variant)) { this._modemFeed(pcm); return; }
     if (_isPacketVariant(this._variant)) { this._packetFeed(pcm); return; }
 
     this._nvFeedPCMCommon(pcm, this._variant || 'maritime', false);
@@ -201,7 +241,19 @@ export class KiwiFSKDecoder {
   // ── Olivia (see olivia.js) ────────────────────────────────────────────────
 
   _oliviaFeed(pcm) {
-    const dec = this._olivia || this._mfsk;
+    const dec = this._olivia;
+    if (!dec) return;
+    if (this._fskAutoCenterPending) {
+      this._fskAutoCenterPending = false;
+      this._oliviaAutoCenter();
+    }
+    dec.feed(pcm);
+  }
+
+  // ── fldigi-family modems (see FLDIGI_MODEMS) ─────────────────────────────
+
+  _modemFeed(pcm) {
+    const dec = this._modem;
     if (!dec) return;
     if (this._fskAutoCenterPending) {
       this._fskAutoCenterPending = false;
@@ -211,19 +263,21 @@ export class KiwiFSKDecoder {
   }
 
   /**
-   * One-shot "Auto-tune Center" for Olivia. Olivia fills a whole `bandwidth`
-   * wide block with tones rather than showing a peak, so this slides a window
-   * of that width across the spectrum and takes the centre of the strongest
-   * position. The decoder's own +/-8 bin sync search covers the remainder.
-   * MFSK16/32/64 use the same scan over their own tone block; their AFC
-   * pulls in the last quarter of a tone.
+   * One-shot "Auto-tune Center" for Olivia and the fldigi-family modems. Their
+   * signals fill a whole `bandwidth` wide block with tones (or carriers)
+   * rather than showing one peak, so this slides a window of that width
+   * across the spectrum and takes the centre of the strongest position. Each
+   * decoder's own acquisition covers the remainder: Olivia's +/-8 bin sync
+   * search, MFSK's quarter-tone AFC, DominoEX/THOR's IFK (offset-tolerant by
+   * design), THROB's AFC, MT63's +/-8 carrier scan.
    */
   _oliviaAutoCenter() {
     const spec = this._fskSpectrum();
     if (!spec) return;
     const { mag, binHz, lo, hi, mean } = spec;
 
-    const cfg = this._fskResolveConfig('olivia');
+    const variant = this._variant;
+    const cfg = this._fskResolveConfig(variant);
     const width = Math.max(4, Math.round(cfg.bandwidth / binHz));
     if (hi - lo <= width) return;
 
@@ -237,7 +291,7 @@ export class KiwiFSKDecoder {
 
     if (best < 3 * mean * width) {
       if (this._fskCb) {
-        this._fskCb({ type: 'status', variant: 'olivia',
+        this._fskCb({ type: 'status', variant,
           text: 'Auto-tune: no signal found' });
       }
       return;
@@ -249,10 +303,10 @@ export class KiwiFSKDecoder {
     this._fskReset();
 
     if (this._fskCb) {
-      this._fskCb({ type: 'status', variant: 'olivia',
+      this._fskCb({ type: 'status', variant,
         text: `Auto-tune: center ${centerHz} Hz (was ${oldCenter} Hz)` });
       this._fskCb({
-        type: 'metrics', variant: 'olivia',
+        type: 'metrics', variant,
         snrDb: 0, lockQuality: 0, centerHz, timingLocked: false,
       });
     }
@@ -436,7 +490,7 @@ export class KiwiFSKDecoder {
   setVariant(variant = 'maritime') {
     const v = String(variant || 'maritime').toLowerCase();
     if (v !== 'weather' && v !== 'maritime' && v !== 'ham' &&
-        v !== 'psk31' && v !== 'olivia' && !_isPacketVariant(v)) {
+        v !== 'psk31' && v !== 'olivia' && !_isPacketVariant(v) && !_isModemVariant(v)) {
       console.warn('[FSK] unknown variant:', variant, '— using maritime');
       this._variant = 'maritime';
     } else {
@@ -462,13 +516,19 @@ export class KiwiFSKDecoder {
       this._olivia.setSyncThreshold(cfg.syncThreshold);
       return;
     }
-    // Same for the MFSK squelch (the interleaver and timing loop take a few
-    // seconds to fill).
-    if (this._variant === 'olivia' && this._mfsk && this._customConfig &&
-        _onlyDiffersBy(this._customConfig, cfg, 'mfskSquelch')) {
-      this._customConfig = { ...cfg };
-      this._mfsk.setSquelch(cfg.mfskSquelch);
-      return;
+    // Same for the fldigi-family squelch: their interleavers, FEC and timing
+    // loops take seconds to fill. Hell's reverse only flips the paint.
+    if (_isModemVariant(this._variant) && this._modem && this._customConfig) {
+      if (_onlyDiffersBy(this._customConfig, cfg, 'modemSquelch')) {
+        this._customConfig = { ...cfg };
+        this._modem.setSquelch(cfg.modemSquelch);
+        return;
+      }
+      if (this._modem.setReverse && _onlyDiffersBy(this._customConfig, cfg, 'reverse')) {
+        this._customConfig = { ...cfg };
+        this._modem.setReverse(!!cfg.reverse);
+        return;
+      }
     }
 
     // Packet's "show raw" only changes how frames are printed.
@@ -480,7 +540,8 @@ export class KiwiFSKDecoder {
     }
 
     // Same for the RTTY squelch: it gates printing, not the demodulator.
-    if (this._variant !== 'olivia' && this._variant !== 'psk31' && this._customConfig &&
+    if (this._variant !== 'olivia' && this._variant !== 'psk31' && !_isModemVariant(this._variant) &&
+        this._customConfig &&
         _onlyDiffersBy(this._customConfig, cfg, 'squelch')) {
       this._customConfig = { ...cfg };
       if (this._nvPreset) this._nvPreset.squelch = Number(cfg.squelch);
@@ -585,6 +646,25 @@ export class KiwiFSKDecoder {
           framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
         };
 
+      case 'mfsk':
+      case 'dominoex':
+      case 'thor':
+      case 'throb':
+      case 'hell':
+      case 'mt63': {
+        // fldigi-family modem: a sub-mode, a centre and a squelch. The FSK
+        // fields are carried for the shared plumbing, not used.
+        const v = String(variant).toLowerCase(), m = FLDIGI_MODEMS[v];
+        return {
+          name: v, center: v === 'mt63' ? 500 + m.bw(m.def) / 2 : 1500.0,
+          modemMode: m.def, modemSquelch: m.squelch, bandwidth: m.bw(m.def),
+          reverse: false,
+          shift: 0, baud: 31.25, lowpass: 100.0, audioMinimum: 0,
+          protocol: v, encoding: v,
+          framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
+        };
+      }
+
       case 'packet':
       case 'aprs':
         // AFSK + HDLC; the FSK shift/framing fields are carried, not used.
@@ -656,13 +736,16 @@ export class KiwiFSKDecoder {
       out.showRaw = cfg.showRaw !== false;
       return out;
     }
-    if (wantedEnc === 'mfsk') {
-      // MFSK16/32/64 inside the Olivia panel: a sub-mode and a squelch.
-      out.encoding = out.protocol = 'mfsk';
+    if (_isModemVariant(variant)) {
+      // fldigi-family modem: the sub-mode must be one of its own, or nothing
+      // at all would decode — clamp to the default rather than guess.
+      const m = FLDIGI_MODEMS[variant];
+      out.encoding = out.protocol = variant;
       out.center = Math.max(100, num(cfg.center, out.center));
-      out.mfskMode = MFSK_MODES.some((m) => m.key === cfg.mfskMode) ? cfg.mfskMode : MFSK_MODES[0].key;
-      out.bandwidth = mfskBandwidth(out.mfskMode);
-      out.mfskSquelch = num(cfg.mfskSquelch, MFSK_SQUELCH_DEFAULT);
+      out.modemMode = m.modes.some((x) => x.key === cfg.modemMode) ? cfg.modemMode : m.def;
+      out.bandwidth = m.bw(out.modemMode);
+      out.modemSquelch = num(cfg.modemSquelch, m.squelch);
+      out.reverse = !!cfg.reverse;
       return out;
     }
     if (wantedEnc === 'varicode' || wantedEnc === 'olivia') {
@@ -772,23 +855,26 @@ export class KiwiFSKDecoder {
       this._packet = null;
     }
 
-    if (this._variant === 'olivia' && preset.encoding === 'mfsk') {
-      this._mfsk = new MfskDecoder({
+    if (_isModemVariant(this._variant)) {
+      const v = this._variant;
+      this._modem = FLDIGI_MODEMS[v].make({
         sampleRate: this._sampleRateFn,
         centerHz:   preset.center,
-        mode:       preset.mfskMode,
-        squelch:    preset.mfskSquelch,
-        onChar:   (ch) => { if (this._fskCb) this._fskCb({ type: 'char', variant: 'olivia', char: ch }); },
-        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'olivia', text }); },
+        mode:       preset.modemMode,
+        squelch:    preset.modemSquelch,
+        reverse:    preset.reverse,
+        onChar:   (ch) => { if (this._fskCb) this._fskCb({ type: 'char', variant: v, char: ch }); },
+        onColumn: (column) => { if (this._fskCb) this._fskCb({ type: 'hell', variant: v, column }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: v, text }); },
         onMetrics: (m) => {
-          if (this._fskCb) this._fskCb({ type: 'metrics', variant: 'olivia', ...m });
+          if (this._fskCb) this._fskCb({ type: 'metrics', variant: v, ...m });
         },
       });
     } else {
-      this._mfsk = null;
+      this._modem = null;
     }
 
-    if (this._variant === 'olivia' && preset.encoding !== 'mfsk') {
+    if (this._variant === 'olivia') {
       this._olivia = new OliviaDecoder({
         sampleRate: this._sampleRateFn,
         centerHz:   preset.center,

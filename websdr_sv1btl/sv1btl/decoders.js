@@ -16,6 +16,8 @@
 import { SSTVWorkerProxy } from './psdr/sstvWorkerProxy.js';
 import { FAXWorkerProxy } from './psdr/faxWorkerProxy.js';
 import { FSKWorkerProxy } from './psdr/fskWorkerProxy.js';
+import { FLDIGI_MODEMS } from './psdr/fsk.js';
+import { mt63DefaultCenter } from './psdr/mt63.js';
 import { WSPR_TOTAL_SAMPLES, wspr2SlotPosition } from './psdr/modules/wspr.js';
 import { decodeFrame as js8DecodeFrame, loadDictionary as js8LoadDictionary } from './psdr/modules/js8.js';
 import { Js8Reassembler } from './psdr/modules/js8-reassembler.js';
@@ -169,12 +171,8 @@ const OLIVIA_FREQS = [['80m 3583.00 (8/250)', 3583], ['40m 7040.00 (8/250)', 704
                       ['17m 18099.00 (8/250)', 18099], ['15m 21072.50 (8/250)', 21072.5], ['12m 24922.50 (8/250)', 24922.5],
                       ['10m 28122.50 (8/250)', 28122.5]];
 // The four Olivia set-ups that cover nearly all traffic (PhantomSDR-Plus OLIVIA_MODE_OPTIONS)
-// …and MFSK16/32/64 (IZ8BLY, as fldigi; PhantomSDR-Plus mfsk.js), in the same list: b = the
-// width of the 16-tone block (first to last tone)
 const OLIVIA_MODES = [{ t: 8, b: 250, label: '8/250' }, { t: 16, b: 500, label: '16/500' },
-                      { t: 32, b: 1000, label: '32/1000' }, { t: 16, b: 1000, label: '16/1000' },
-                      { mfsk: 'mfsk16', b: 234.375, label: 'MFSK16' }, { mfsk: 'mfsk32', b: 468.75, label: 'MFSK32' },
-                      { mfsk: 'mfsk64', b: 937.5, label: 'MFSK64' }];
+                      { t: 32, b: 1000, label: '32/1000' }, { t: 16, b: 1000, label: '16/1000' }];
 const SSTV_FREQS = [['80m 3735 LSB', 3735], ['40m 7171 LSB', 7171], ['20m 14230 USB', 14230], ['20m 14233 USB', 14233],
                     ['15m 21340 USB', 21340], ['10m 28680 USB', 28680]];
 const JS8_NAMES = ['Normal', 'Fast', 'Turbo', 'Slow', 'Ultra'];
@@ -189,10 +187,13 @@ const DEC = {
   sstv:   { label: 'SSTV',   title: 'SSTV pictures',         kind: 'sstv',                lo: 1.0, hi: 2.5 },
   fax:    { label: 'FAX',    title: 'HF weather fax',        kind: 'fax',                 lo: 1.1, hi: 2.7 },
   navtex: { label: 'NAVTEX', title: 'NAVTEX / SITOR-B',      kind: 'navtex',              lo: 0.25, hi: 0.75 },
-  rtty:   { label: 'RTTY',   title: 'RTTY (ham 45.45 Bd / DWD weather 50 Bd), PSK31 or Olivia: chosen in the window', kind: 'rtty' },
+  rtty:   { label: 'FLDIGI', title: 'FLDIGI modes: RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63, Packet, APRS (chosen in the window)', kind: 'rtty' },
   // No buttons of their own: chosen in the RTTY window's list (family 'rtty')
   psk31:  { label: 'PSK31',  title: 'PSK31 (BPSK, 31.25 Bd)', kind: 'psk31', centred: true, family: 'rtty' },
-  olivia: { label: 'OLIVIA', title: 'Olivia / MFSK16·32·64',  kind: 'olivia', centred: true, family: 'rtty' }
+  olivia: { label: 'OLIVIA', title: 'Olivia (MFSK)',          kind: 'olivia', centred: true, family: 'rtty' },
+  // PhantomSDR-Plus 5.1.0 fldigi modems (fsk.js FLDIGI_MODEMS) and AX.25 packet, one window each
+  modem:  { label: 'MODEM',  title: 'fldigi modems',          kind: 'modem', centred: true, family: 'rtty' },
+  packet: { label: 'PACKET', title: 'Packet / APRS (300 Bd)', kind: 'packet', centred: true, family: 'rtty' }
 };
 
 const W = window;
@@ -321,18 +322,26 @@ function lightButtons() {
 // The RTTY window's list: ham / DWD weather RTTY (decoder 'rtty'), PSK31, Olivia (decoders of
 // their own, family 'rtty'). The choice is remembered (ubersdr_rtty) for the RTTY button.
 function famKey(k) { return (k && DEC[k] && DEC[k].family) || k; }
-function rttyKey() { const v = lsGet('ubersdr_rtty', 'ham'); return v === 'psk31' || v === 'olivia' ? v : 'rtty'; }
-const FAMILY_OPTS = [['ham', 'Ham RTTY 45.45 Bd / 170 Hz'], ['psk31', 'PSK31 (BPSK)'], ['olivia', 'Olivia / MFSK16·32·64'],
+function rttyKey() {
+  const v = lsGet('ubersdr_rtty', 'ham');
+  if (v === 'psk31' || v === 'olivia') return v;
+  if (MODEM_UI[v]) return 'modem';
+  if (v === 'packet' || v === 'aprs') return 'packet';
+  return 'rtty';
+}
+const FAMILY_OPTS = [['ham', 'Ham RTTY 45.45 Bd / 170 Hz'], ['psk31', 'PSK31 (BPSK)'], ['olivia', 'Olivia'],
+                     ['mfsk', 'MFSK16·32·64'], ['dominoex', 'DominoEX'], ['thor', 'THOR'], ['throb', 'THROB / THROBX'],
+                     ['hell', 'Hellschreiber'], ['mt63', 'MT63'], ['packet', 'Packet (AX.25, 300 Bd)'], ['aprs', 'APRS (300 Bd)'],
                      ['weather', 'DWD weather RTTY 50 Bd / 450 Hz']];
 function familySelect(cur) {
-  return `<select class="dw-var dec-sel" title="RTTY, PSK31 or Olivia">${FAMILY_OPTS.map(([v, n]) =>
+  return `<select class="dw-var dec-sel" title="FLDIGI mode">${FAMILY_OPTS.map(([v, n]) =>
     `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
 }
 // Another member of the family chosen in the list: that decoder takes over (true)
 function familyChange(v) {
   lsSet('ubersdr_rtty', v);
   const k = rttyKey();
-  if (k === st.on) return false;
+  if (k === st.on && k === 'rtty') return false;      // ham ↔ weather: the RTTY window handles it
   start(k); return true;
 }
 function openWindow(html) {
@@ -786,7 +795,8 @@ function rttyWindow() {
 // 1000 Hz of audio. A click on a trace puts it there (narrow filter, see iscw above); the
 // lists tune to the calling frequencies.
 function oliviaMode() {
-  const i = Math.min(OLIVIA_MODES.length - 1, Math.max(0, parseInt(lsGet('ubersdr_olivia', '0'), 10) || 0));
+  let i = parseInt(lsGet('ubersdr_olivia', '0'), 10) || 0;
+  if (i < 0 || i >= OLIVIA_MODES.length) i = 0;
   return OLIVIA_MODES[i];
 }
 function digiMetrics(ev) {
@@ -826,7 +836,7 @@ function psk31Window() {
 // narrow filter again, and the decoder's centre goes back to 1000 Hz.
 let pskAuto = null;
 function pskAutoTune() {
-  if (!fsk || st.on !== 'psk31' || pskAuto) return;
+  if (!fsk || (st.on !== 'psk31' && st.on !== 'modem') || pskAuto) return;
   status('Auto-tune: looking for the strongest carrier (0.3–2.7 kHz)…');
   setFilter('usb', 0.3, 2.7);
   pskAuto = { timer: setTimeout(() => {           // ~1.5 s of wide audio first (the scan uses the last 0.7 s)
@@ -843,49 +853,165 @@ function pskAutoResult(text) {
 function pskAutoDone(hz) {
   if (!pskAuto) return;
   clearTimeout(pskAuto.timer); pskAuto = null;
-  if (st.on !== 'psk31' || !fsk) return;
+  if ((st.on !== 'psk31' && st.on !== 'modem') || !fsk) return;
+  const k = st.on, target = k === 'psk31' ? 1000 : modemCenter(modemVariant());
   if (hz) {
-    tuneKHz(dialKHz() + (hz - 1000) / 1000);
-    fsk.setConfig({ center: 1000, encoding: 'varicode' });
+    tuneKHz(dialKHz() + (hz - target) / 1000);
+    if (k === 'psk31') fsk.setConfig({ center: 1000, encoding: 'varicode' }); else modemSend();
   }
-  applyFilter('psk31');
-  status(hz ? `Auto-tune: carrier found ${hz - 1000 >= 0 ? '+' : ''}${hz - 1000} Hz away, now at 1000 Hz` : 'Auto-tune: no PSK31 carrier found');
+  applyFilter(k);
+  status(hz ? `Auto-tune: signal found ${hz - target >= 0 ? '+' : ''}${hz - target} Hz away, now at ${target} Hz` : 'Auto-tune: no signal found');
 }
 function oliviaWindow() {
-  // Olivia: squelch = FEC S/N 3–15 (default 4). MFSK16/32/64: fldigi's FEC metric 0–60, 0 = off
-  // (default 22: noise alone reaches about 20, clean copy reads above 23) — as PhantomSDR-Plus.
-  const opt = (o, i) => `<option value="${i}">${o.label}</option>`;
+  const sq = parseFloat(lsGet('ubersdr_oliviasq', '4')) || 4;
   digiWindow('olivia', 'Olivia decoder', OLIVIA_FREQS,
-    `<label title="Must match the transmission: Olivia tones / bandwidth, or MFSK16 / 32 / 64">Mode <select class="dw-omode dec-sel">` +
-      `<optgroup label="Olivia">${OLIVIA_MODES.map((o, i) => o.mfsk ? '' : opt(o, i)).join('')}</optgroup>` +
-      `<optgroup label="MFSK (IZ8BLY)">${OLIVIA_MODES.map((o, i) => o.mfsk ? opt(o, i) : '').join('')}</optgroup></select></label>` +
-    `<label class="dw-sqbox">Squelch <input type="range" class="dw-osq"> <b class="dw-sqv"></b></label>`);
-  const ms = $('.dw-omode'), qs = $('.dw-osq'), box = $('.dw-sqbox');
+    `<label title="Tones / bandwidth: must match the transmission">Mode <select class="dw-omode dec-sel">${OLIVIA_MODES.map((o, i) => `<option value="${i}">${o.label}</option>`).join('')}</select></label>` +
+    `<label class="dw-sqbox" title="Squelch (FEC S/N): print only blocks that reach this. Below 3.5 noise starts printing; a good signal reads 8–9.">Squelch <input type="range" class="dw-osq" min="3" max="15" step="0.5" value="${sq}"> <b class="dw-sqv">${sq.toFixed(1)}</b></label>`);
+  const ms = $('.dw-omode'), qs = $('.dw-osq');
   ms.value = String(OLIVIA_MODES.indexOf(oliviaMode()));
-  const sqKey = () => oliviaMode().mfsk ? 'ubersdr_mfsksq' : 'ubersdr_oliviasq';
-  const sqShow = () => {
-    const mf = !!oliviaMode().mfsk, v = parseFloat(lsGet(sqKey(), mf ? '22' : '4'));
-    qs.min = mf ? '0' : '3'; qs.max = mf ? '60' : '15'; qs.step = mf ? '1' : '0.5';
-    qs.value = String(Number.isFinite(v) ? v : (mf ? 22 : 4));
-    $('.dw-sqv').textContent = mf ? (+qs.value <= 0 ? 'off' : String(Math.round(+qs.value))) : (+qs.value).toFixed(1);
-    box.title = mf ? 'Squelch (FEC metric): noise alone reaches about 20; clean copy reads above 23. Far left turns it off.'
-                   : 'Squelch (FEC S/N): print only blocks that reach this. Below 3.5 noise starts printing; a good signal reads 8–9.';
-    $('.dw-title').textContent = mf ? 'MFSK decoder' : 'Olivia decoder';
-  };
   const send = () => {
     const o = oliviaMode();
-    if (o.mfsk) {
-      fsk.setConfig({ center: 1000, encoding: 'mfsk', mfskMode: o.mfsk, bandwidth: o.b, mfskSquelch: +qs.value });
-      status(`Listening for ${o.label} (text comes a couple of seconds behind the signal)…`);
-    } else {
-      fsk.setConfig({ center: 1000, encoding: 'olivia', tones: o.t, bandwidth: o.b, syncThreshold: +qs.value || 4 });
-      status(`Looking for Olivia ${o.label} (no preamble: allow a few seconds for sync)…`);
-    }
+    fsk.setConfig({ center: 1000, encoding: 'olivia', tones: o.t, bandwidth: o.b, syncThreshold: +qs.value || 4 });
+    status(`Looking for Olivia ${o.label} (no preamble: allow a few seconds for sync)…`);
   };
-  ms.onchange = () => { lsSet('ubersdr_olivia', ms.value); sqShow(); send(); applyFilter('olivia'); lightPresets(); };
-  qs.oninput = () => { lsSet(sqKey(), qs.value); sqShow(); send(); };
-  sqShow();
+  ms.onchange = () => { lsSet('ubersdr_olivia', ms.value); send(); applyFilter('olivia'); lightPresets(); };
+  qs.oninput = () => { lsSet('ubersdr_oliviasq', qs.value); $('.dw-sqv').textContent = (+qs.value).toFixed(1); send(); };
   fsk.setVariant('olivia'); send(); fsk.setEnabled(true);
+}
+
+// ── fldigi modems (PhantomSDR-Plus 5.1.0): MFSK16/32/64, DominoEX, THOR, THROB/THROBX,
+// Hellschreiber, MT63. One window; the variant is the FLDIGI list's choice. Each has its
+// mode list and its own squelch scale (MODEM_UI = PhantomSDR-Plus App.svelte); the signal is
+// decoded around modemCenter() (1500 Hz as fldigi, MT63 its lowest carrier at 500 Hz).
+const MODEM_UI = {
+  mfsk:     { name: 'MFSK',          sq: { min: 0, max: 60, step: 1,   fmt: (v) => v <= 0 ? 'off' : String(Math.round(v)),
+              note: 'Squelch (FEC metric): noise alone reaches about 20; clean copy reads above 23.' } },
+  dominoex: { name: 'DominoEX',      sq: { min: 0, max: 80, step: 1,   fmt: (v) => v <= 0 ? 'off' : String(Math.round(v)),
+              note: 'Squelch (tone / noise): noise alone stays under 20; readable copy reads 35 and up.' } },
+  thor:     { name: 'THOR',          sq: { min: 0, max: 80, step: 1,   fmt: (v) => v <= 0 ? 'off' : String(Math.round(v)),
+              note: 'Squelch (tone / noise): noise alone stays under 20; readable copy reads 35 and up.' } },
+  throb:    { name: 'THROB',         sq: { min: 0, max: 20, step: 0.5, fmt: (v) => v <= 0 ? 'off' : Number(v).toFixed(1) + ' dB',
+              note: 'Squelch (S/N): noise alone stays under 1 dB; a copyable signal reads 10 dB and up. THROB must be tuned within ±3 Hz: use Auto-tune.' } },
+  hell:     { name: 'Hellschreiber', sq: null },
+  mt63:     { name: 'MT63',          sq: { min: 0, max: 15, step: 0.5, fmt: (v) => v <= 0 ? 'off' : Number(v).toFixed(1),
+              note: 'Squelch (FEC S/N): noise alone reads about 3; a locked signal 4.5 and up. Text arrives seconds after the signal.' } },
+};
+function modemVariant() { const v = lsGet('ubersdr_rtty', 'mfsk'); return MODEM_UI[v] ? v : 'mfsk'; }
+function modemKey(v) {
+  const k = lsGet('ubersdr_modem_' + v, ''), m = FLDIGI_MODEMS[v];
+  return m.modes.some((x) => x.key === k) ? k : m.def;
+}
+function modemBw(v) { return FLDIGI_MODEMS[v].bw(modemKey(v)); }
+function modemCenter(v) { return v === 'mt63' ? mt63DefaultCenter(modemKey(v)) : 1500; }
+function modemSquelch(v) {
+  const x = parseFloat(lsGet('ubersdr_modemsq_' + v, ''));
+  return Number.isFinite(x) ? x : FLDIGI_MODEMS[v].squelch;
+}
+let hellRev = false;
+function modemSend() {
+  const v = modemVariant();
+  if (!fsk || st.on !== 'modem') return;
+  fsk.setConfig({ center: modemCenter(v), encoding: v, modemMode: modemKey(v), bandwidth: modemBw(v),
+                  modemSquelch: modemSquelch(v), reverse: v === 'hell' ? hellRev : false });
+}
+// Hellschreiber: hell.js sends columns of 2 x 20 pixels (ink 0..255, pixel 0 at the bottom);
+// drawn left to right, 2 px wide, in rows that scroll up (as PhantomSDR-Plus App.svelte)
+const HELL_COL_W = 2, HELL_ROW_H = 44, HELL_ROWS = 6, HELL_W = 460;
+const HELL_BG = [247, 247, 247], HELL_INK = [0, 0, 0];
+let hellCtx = null, hellX = 0, hellRow = 0;
+function hellClear() {
+  hellX = 0; hellRow = 0;
+  if (!hellCtx) return;
+  hellCtx.fillStyle = `rgb(${HELL_BG})`; hellCtx.fillRect(0, 0, HELL_W, HELL_ROW_H * HELL_ROWS);
+}
+function hellPaint(col) {
+  if (!hellCtx || !col) return;
+  const W = HELL_W, H2 = HELL_ROW_H * HELL_ROWS;
+  if (hellX + HELL_COL_W > W) {
+    hellX = 0; hellRow++;
+    if (hellRow >= HELL_ROWS) {
+      hellCtx.drawImage(hellCtx.canvas, 0, HELL_ROW_H, W, H2 - HELL_ROW_H, 0, 0, W, H2 - HELL_ROW_H);
+      hellCtx.fillStyle = `rgb(${HELL_BG})`; hellCtx.fillRect(0, H2 - HELL_ROW_H, W, HELL_ROW_H);
+      hellRow = HELL_ROWS - 1;
+    }
+  }
+  const H = col.length, img = hellCtx.createImageData(HELL_COL_W, H);
+  for (let y = 0; y < H; y++) {
+    const a = col[H - 1 - y] / 255;
+    for (let k = 0; k < HELL_COL_W; k++) {
+      const o = (y * HELL_COL_W + k) * 4;
+      for (let c = 0; c < 3; c++) img.data[o + c] = HELL_BG[c] + (HELL_INK[c] - HELL_BG[c]) * a;
+      img.data[o + 3] = 255;
+    }
+  }
+  hellCtx.putImageData(img, hellX, hellRow * HELL_ROW_H + 2);
+  hellX += HELL_COL_W;
+}
+function modemMetrics(ev) {
+  const m = $('.dw-met'); if (!m) return;
+  const parts = [];
+  if (Number.isFinite(ev.snrDb)) parts.push(`SNR ${ev.snrDb.toFixed(0)} dB`);
+  if (Number.isFinite(ev.metric)) parts.push(`metric ${Math.round(ev.metric)}`);
+  if (Number.isFinite(ev.fecSnr)) parts.push(`FEC ${ev.fecSnr.toFixed(1)}`);
+  if (Number.isFinite(ev.centerHz) && ev.centerHz) parts.push(`${Math.round(ev.centerHz)} Hz`);
+  m.textContent = parts.join(' · ');
+}
+function modemWindow() {
+  const v = modemVariant(), ui = MODEM_UI[v], modes = FLDIGI_MODEMS[v].modes, hell = v === 'hell';
+  const head = `${familySelect(v)}<label title="Must match the transmission">Mode <select class="dw-mmode dec-sel">${modes.map((x) =>
+      `<option value="${x.key}">${esc(x.label)}</option>`).join('')}</select></label>` +
+    (ui.sq ? `<label class="dw-sqbox" title="${esc(ui.sq.note)}">Squelch <input type="range" class="dw-msq" min="${ui.sq.min}" max="${ui.sq.max}" step="${ui.sq.step}"> <b class="dw-sqv"></b></label>` : '') +
+    (hell ? `<label title="FSK Hell / Hell 80: paint the other tone as ink"><input type="checkbox" class="dw-hrev"> Reverse</label><button type="button" class="dw-hsave">Save</button>` : '') +
+    `<button type="button" class="dw-auto" title="Find the strongest signal within 0.3–2.7 kHz and put it in the filter">Auto-tune</button><span class="dw-met"></span>`;
+  if (hell) {
+    openWindow(`<div class="dw-head"><span class="dw-title">Hellschreiber decoder</span>${head}<button type="button" class="dw-clear">Clear</button></div>` +
+      `<canvas width="${HELL_W}" height="${HELL_ROW_H * HELL_ROWS}" style="width:${HELL_W}px;height:${HELL_ROW_H * HELL_ROWS}px;background:#f7f7f7"></canvas>`);
+    hellCtx = $('canvas').getContext('2d', { willReadFrequently: true }); hellClear();
+    $('.dw-clear').onclick = hellClear;
+    $('.dw-hsave').onclick = () => savePng($('canvas'), 'hell-' + modemKey(v));
+    hellRev = false; $('.dw-hrev').onchange = (e) => { hellRev = e.target.checked; modemSend(); };
+  } else {
+    textWindow(ui.name + ' decoder', head);
+  }
+  $('.dw-var').onchange = (e) => familyChange(e.target.value);
+  const ms = $('.dw-mmode'); ms.value = modemKey(v);
+  const sqShow = () => {
+    const r = $('.dw-msq'); if (!r) return;
+    r.value = String(modemSquelch(v)); $('.dw-sqv').textContent = ui.sq.fmt(+r.value);
+  };
+  ms.onchange = () => { lsSet('ubersdr_modem_' + v, ms.value); modemSend(); applyFilter('modem'); lightPresets(); modemStatus(); };
+  if ($('.dw-msq')) $('.dw-msq').oninput = (e) => { lsSet('ubersdr_modemsq_' + v, e.target.value); sqShow(); modemSend(); };
+  $('.dw-auto').onclick = pskAutoTune;
+  fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
+    if (!ev || st.on !== 'modem') return;
+    if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
+    else if (ev.type === 'hell') hellPaint(ev.column);
+    else if (ev.type === 'status') { status(ev.text || ''); pskAutoResult(ev.text || ''); }
+    else if (ev.type === 'metrics') modemMetrics(ev);
+  } });
+  sqShow();
+  fsk.setVariant(v); modemSend(); fsk.setEnabled(true);
+  modemStatus();
+}
+function modemStatus() {
+  const v = modemVariant(), m = FLDIGI_MODEMS[v].modes.find((x) => x.key === modemKey(v));
+  status(`Listening for ${m ? m.label : v} around ${modemCenter(v)} Hz: click its trace on the waterfall, or use Auto-tune.`);
+}
+
+// ── Packet (AX.25) and APRS (PhantomSDR-Plus ax25.js), 300 Bd HF only: 1200 Bd needs FM on
+// VHF, which this receiver does not cover. Tones 1600/1800 Hz (centre 1700), USB.
+function packetWindow() {
+  const v = lsGet('ubersdr_rtty', 'packet') === 'aprs' ? 'aprs' : 'packet';
+  textWindow(v === 'aprs' ? 'APRS decoder' : 'Packet (AX.25) decoder', `${familySelect(v)}<span class="dw-met"></span>`);
+  $('.dw-var').onchange = (e) => familyChange(e.target.value);
+  fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
+    if (!ev || st.on !== 'packet') return;
+    if (ev.type === 'line') textOut((ev.text || '') + '\n');
+    else if (ev.type === 'status') status(ev.text || '');
+    else if (ev.type === 'metrics') { const m = $('.dw-met'); if (m && Number.isFinite(ev.framesOk)) m.textContent = `${ev.framesOk} frame(s)` + (Number.isFinite(ev.stations) ? ` · ${ev.stations} station(s)` : ''); }
+  } });
+  fsk.setVariant(v); fsk.setConfig({ encoding: 'ax25', baud: 300, center: 1700, showRaw: true }); fsk.setEnabled(true);
+  status('300 Bd HF packet, tones 1600/1800 Hz: click the signal on the waterfall to centre it. Only frames with a correct checksum are printed.');
 }
 
 // ── Start / stop / follow ───────────────────────────────────────────────────────
@@ -897,6 +1023,11 @@ function decFilter(k) {
   if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
   if (k === 'psk31') return ['usb', 0.9, 1.1];                           // 1000 Hz ± 100 Hz
   if (k === 'olivia') { const hw = (oliviaMode().b / 2 + 150) / 1000; return ['usb', 1 - hw, 1 + hw]; }
+  if (k === 'modem') {                        // PhantomSDR-Plus fskApplyBandpass: bw/2 + max(60, 15 %)
+    const v = modemVariant(), bw = modemBw(v), c = modemCenter(v), hw = bw / 2 + Math.max(60, 0.15 * bw);
+    return ['usb', Math.max(0.05, (c - hw) / 1000), (c + hw) / 1000];
+  }
+  if (k === 'packet') return ['usb', 1.3, 2.1];                          // 1700 Hz ± 400 Hz
   return ['usb', d.lo, d.hi];
 }
 function applyFilter(k) { const [sb, lo, hi] = decFilter(k); setFilter(sb, lo, hi); }
@@ -937,7 +1068,7 @@ function presetValue(k) {
   return bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz';
 }
 function presetTitle(k) {
-  if (k === 'rtty') return 'Filter preset (RTTY window): USB, centred on 1000 Hz; 0.85–1.15 kHz for ham RTTY 45.45 Bd / 170 Hz, 0.70–1.30 kHz for DWD weather 50 Bd / 450 Hz, 0.90–1.10 kHz for PSK31, the Olivia bandwidth + 150 Hz each side for Olivia (whichever is chosen in the RTTY window)';
+  if (k === 'rtty') return 'Filter preset (FLDIGI window): USB, around the mode\'s audio centre; the width follows the mode chosen in the FLDIGI window (RTTY 300 Hz, DWD 593 Hz, PSK31 200 Hz, Olivia and the fldigi modems their bandwidth plus a margin, Packet 800 Hz)';
   if (k === 'psk31') return 'Filter preset (PSK31): 0.90–1.10 kHz, 200 Hz, USB (the signal at 1000 Hz)';
   if (k === 'olivia') return 'Filter preset (Olivia / MFSK): USB, centred on 1000 Hz, the signal bandwidth + 150 Hz each side (the mode chosen in the window)';
   const d = DEC[k], bw = Math.round((d.hi - d.lo) * 1000);
@@ -987,6 +1118,8 @@ function start(k, opts) {
   else if (k === 'rtty') rttyWindow();
   else if (k === 'psk31') psk31Window();
   else if (k === 'olivia') oliviaWindow();
+  else if (k === 'modem') modemWindow();
+  else if (k === 'packet') packetWindow();
 }
 function stop(quiet) {
   if (!st.on) return;
@@ -995,7 +1128,7 @@ function stop(quiet) {
   for (const p of pending.values()) p.reject(new Error('stopped')); pending.clear();
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
   for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }
-  sstv = fax = fsk = null; js8.re = null;
+  sstv = fax = fsk = null; js8.re = null; hellCtx = null;
   barStop(); closeWindow(); lightButtons(); pickedDial = 0;
   // As PhantomSDR-Plus: back to the band's usual mode (LSB on 40 m, CW on 30 m…, from the
   // page's band table), with that mode's usual filter (the page's default, or the preset
@@ -1023,11 +1156,15 @@ function stop(quiet) {
 // usual filter (set by setfreqm) stay.
 const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2'], [/\bJS8(?:CALL)?\b/i, 'js8'],
   [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty'],
-  [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia'], [/\bMFSK ?-?(?:16|32|64)\b/i, 'olivia']];
+  [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia'], [/\bMFSK ?-?(?:16|32|64)?\b/i, 'modem', 'mfsk'],
+  [/\bDOMINO ?EX\b/i, 'modem', 'dominoex'], [/\bTHOR\b/i, 'modem', 'thor'], [/\bTHROB ?X?\b/i, 'modem', 'throb'],
+  [/\b(?:FELD ?)?HELL(?:SCHREIBER)?\b/i, 'modem', 'hell'], [/\bMT-?63\b/i, 'modem', 'mt63'],
+  [/\bPACKET\b/i, 'packet', 'packet'], [/\bAPRS\b/i, 'packet', 'aprs']];let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet)
 function labelMode(html) {
+  labelVariant = null;
   const text = String(html).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' ');
   let best = null, at = Infinity;
-  for (const [re, k] of LABEL_MODES) { const m = re.exec(text); if (m && m.index < at) { best = k; at = m.index; } }
+  for (const [re, k, v] of LABEL_MODES) { const m = re.exec(text); if (m && m.index < at) { best = k; at = m.index; labelVariant = v || null; } }
   return best;
 }
 document.addEventListener('click', (e) => {
@@ -1035,10 +1172,11 @@ document.addEventListener('click', (e) => {
   if (!lab) return;
   const k = labelMode(lab.innerHTML);
   if (!k) { if (st.on) stop(true); return; }
-  const mf = /\bMFSK ?-?(16|32|64)\b/i.exec(lab.textContent || '');    // MFSK16/32/64: that mode in the Olivia window
-  if (k === 'olivia' && mf) {
-    const i = OLIVIA_MODES.findIndex((o) => o.mfsk === 'mfsk' + mf[1]);
-    if (i >= 0) { lsSet('ubersdr_olivia', String(i)); if (st.on === 'olivia') { const ms = $('.dw-omode'); if (ms) { ms.value = String(i); ms.onchange(); } } }
+  if (labelVariant) {                           // a modem / packet label: that entry of the FLDIGI list
+    lsSet('ubersdr_rtty', labelVariant);
+    const mf = /\bMFSK ?-?(16|32|64)\b/i.exec(lab.textContent || '');
+    if (labelVariant === 'mfsk' && mf) lsSet('ubersdr_modem_mfsk', 'mfsk' + mf[1]);
+    if (st.on === k) { start(k); return; }
   }
   setTimeout(() => {                               // after setfreqm's tuning has settled
     try {
