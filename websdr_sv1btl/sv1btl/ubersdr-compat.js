@@ -1740,20 +1740,43 @@
   }
   var fitTimer = null;
   window.addEventListener('resize', function () { clearTimeout(fitTimer); fitTimer = setTimeout(fitPage, 150); });
-  // The waterfall's own wheel zoom takes the pointer position from offsetX, which the
-  // browser gives without the page zoom: give it the right position instead.
-  function wfWheel(ev) {
-    if (pageZoom === 1) return;
-    var t = ev.target, wa = window.waterfallapplet && window.waterfallapplet[0];
-    if (!wa || typeof wa.setzoom !== 'function' || t.tagName !== 'CANVAS' ||
-        !t.parentNode || t.parentNode.id !== 'wfcdiv0') return;
-    var r = t.getBoundingClientRect(), d = ev.wheelDelta || -ev.detail || -ev.deltaY;
-    if (!r.width || !d) return;
-    ev.stopImmediatePropagation(); ev.preventDefault();
-    wa.setzoom(d > 0 ? -2 : -1, Math.round((ev.clientX - r.left) / r.width * 1024));
+  // Mouse wheel over the waterfall or the spectrum: zoom only, never scroll the page
+  // (2026-10-10). The waterfall script listens for the old DOMMouseScroll/mousewheel
+  // events, which do not stop the page from scrolling, and takes the pointer position
+  // from offsetX, which is wrong when the page is fitted to the window. So the modern
+  // 'wheel' event is handled here: the page does not scroll, the zoom is centred on the
+  // pointer, and the old events that may follow are swallowed. Touchpads send many
+  // small steps: they are added up to one zoom step per WHEEL_STEP_PX.
+  var WHEEL_STEP_PX = 60, wheelAcc = 0;
+  function overWaterfall(t) {
+    var wd = document.getElementById('wfdiv0');
+    return !!(wd && t && t.nodeType === 1 && wd.contains(t));
   }
-  // (on the document: the waterfall script rebuilds #wfcdiv0 when it restarts)
-  ['DOMMouseScroll', 'mousewheel'].forEach(function (n) { document.addEventListener(n, wfWheel, true); });
+  document.addEventListener('wheel', function (ev) {
+    if (!overWaterfall(ev.target)) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    var wa = window.waterfallapplet && window.waterfallapplet[0];
+    var cv = document.querySelector('#wfcdiv0 canvas');
+    if (!wa || typeof wa.setzoom !== 'function' || !cv) return;
+    var dy = ev.deltaY || 0;
+    if (ev.deltaMode === 0) {                    // pixels (touchpad, smooth wheels): add up
+      wheelAcc += dy;
+      if (Math.abs(wheelAcc) < WHEEL_STEP_PX) return;
+      dy = wheelAcc; wheelAcc = 0;
+    } else wheelAcc = 0;
+    if (!dy) return;
+    var r = cv.getBoundingClientRect();
+    if (!r.width) return;
+    var x = Math.max(0, Math.min(1023, Math.round((ev.clientX - r.left) / r.width * 1024)));
+    wa.setzoom(dy < 0 ? -2 : -1, x);            // up: zoom in, down: zoom out
+  }, { capture: true, passive: false });
+  function oldWheel(ev) {                       // the legacy events of the same turn
+    if (!overWaterfall(ev.target)) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+  }
+  ['DOMMouseScroll', 'mousewheel', 'MozMousePixelScroll'].forEach(function (n) {
+    document.addEventListener(n, oldWheel, { capture: true, passive: false });
+  });
 
   // ── One width for waterfall, users strip and chat: the controls panel's ─────
   // The waterfall is 1024 pixels of data from the server; it is stretched to fit
