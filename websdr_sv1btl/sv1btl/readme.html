@@ -147,6 +147,8 @@ html { scroll-behavior: smooth; }
           <li><strong>Digit tuning</strong> on the frequency display: mouse wheel over a digit, left click up, right click down.</li>
           <li><strong>Band buttons</strong> that zoom to the band and follow the frequency; <strong>All</strong> shows the whole receiver range and stays lit while the waterfall is fully zoomed out.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
+          <li>The desktop page <strong>fits the browser window</strong>: it is scaled to the window's width, from 1024 px screens to 4K (add <code>?nofit</code> to the address to switch this off).</li>
+          <li>A <strong>dark theme</strong> for the whole page (the <strong>Dark theme</strong> switch next to Auto brightness; the original light look is the default, each visitor's choice is kept).</li>
           <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using PhantomSDR-Plus's CW decoder in the listener's browser.</li>
           <li><strong>Digital-mode decoders</strong> from PhantomSDR-Plus (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, and an FLDIGI window with RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63, Packet and APRS), with a Decoder button row under the Mode buttons.</li>
           <li><strong>Audio tools</strong> in the listener's browser: Weak-signal AGC, noise reduction, two autonotch filters, squelch, soft limiter, Hi-Boost, L/R output, WAV recording.</li>
@@ -330,6 +332,14 @@ sv1btl/               everything else, served as /sv1btl/…
           <li>The distance column needs the station locator in <code>station.js</code> (<code>locator</code>).</li>
           <li>The decoder files are in <code>sv1btl/psdr/</code> (PhantomSDR-Plus's own files) and <code>sv1btl/decoders.js</code> (the buttons and windows). The JS8 dictionary (1.9 MB) is only downloaded when JS8 is used.</li>
           <li>Desktop page only.</li>
+        </ul>
+        <h3>Page size, look and dark theme</h3>
+        <ul>
+          <li><strong>Fits the window.</strong> The desktop page is scaled to the width of the browser window (0.5× to 3×), so it fills a 1024 px laptop screen as well as a Full HD, 2K or 4K monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and the frequency digits stay exact. Add <code>?nofit</code> to the address for the old fixed size.</li>
+          <li><strong>Dark theme.</strong> The <strong>Dark theme</strong> switch next to Auto brightness turns dark: the page header, the WebSDR Information panel, the Waterfall / Keyboard Control / Background image boxes, the control panel (buttons, lists, switches, sliders), the RADE, CW and decoder windows, the signal strength plot, the users bar and the chat box. The radio display with the S-meter and the waterfall stay as they are. Off (the original light look) is the default; each visitor's choice is kept in their browser.</li>
+          <li><strong>Colours.</strong> Light theme: the original teal for selected buttons, switches, radio buttons and sliders. Dark theme: blue (<code>#3a6db5</code>) for all of them. Without the background image the page background is very dark blue (<code>#0a1a3a</code>).</li>
+          <li><strong>Sliders</strong> have a thin track and a small 3D knob in both themes.</li>
+          <li>Desktop page only; the mobile page keeps its own look.</li>
         </ul>
         <h3>What listeners' browsers contact</h3>
         <p>Your UberSDR for the page, audio and waterfall, and its main web server (<code>mainServer</code>) only while RADE is on. Also <code>get.geojs.io</code> (with <code>ipwho.is</code> as a fallback) once a day per visitor, to find the visitor's own country and city for the users list. <a href="#advanced">Section 13</a> shows how to switch that off.</p>

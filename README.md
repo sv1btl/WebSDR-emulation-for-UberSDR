@@ -20,6 +20,10 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   whole receiver range and stays lit while the waterfall is fully zoomed out;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
+- the desktop page **fits the browser window**: it is scaled to the window's width, from
+  1024 px screens to 4K (add `?nofit` to the address to switch this off);
+- a **dark theme** for the whole page (the **Dark theme** switch next to Auto
+  brightness; the original light look is the default, each visitor's choice is kept);
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
   PhantomSDR-Plus's CW decoder in the listener's browser;
 - **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, and an FLDIGI
@@ -376,6 +380,24 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
   downloaded when JS8 is used.
 - Desktop page only.
+
+### Page size, look and dark theme
+
+- **Fits the window.** The desktop page is scaled to the width of the browser window
+  (0.5× to 3×), so it fills a 1024 px laptop screen as well as a Full HD, 2K or 4K
+  monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and
+  the frequency digits stay exact. Add `?nofit` to the address for the old fixed size.
+- **Dark theme.** The **Dark theme** switch next to Auto brightness turns dark: the page
+  header, the WebSDR Information panel, the Waterfall / Keyboard Control / Background
+  image boxes, the control panel (buttons, lists, switches, sliders), the RADE, CW and
+  decoder windows, the signal strength plot, the users bar and the chat box. The radio
+  display with the S-meter and the waterfall stay as they are. Off (the original light
+  look) is the default; each visitor's choice is kept in their browser.
+- **Colours.** Light theme: the original teal for selected buttons, switches, radio
+  buttons and sliders. Dark theme: blue (`#3a6db5`) for all of them. Without the
+  background image the page background is very dark blue (`#0a1a3a`).
+- **Sliders** have a thin track and a small 3D knob in both themes.
+- Desktop page only; the mobile page keeps its own look.
 
 ### What listeners' browsers contact
 

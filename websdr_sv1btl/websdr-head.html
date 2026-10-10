@@ -19,7 +19,7 @@
 })();
 </script>
 <link rel="shortcut icon" type="image/x-icon" href="sv1btl/favicon.ico"/>
-<link rel="stylesheet/less" type="text/css" href="sv1btl/styles.less" />
+<link rel="stylesheet/less" type="text/css" href="sv1btl/styles.less?v=20261010e" />
 <script src="sv1btl/less.min.js"></script>
 
 <style>
@@ -100,20 +100,171 @@ body
 </style>
 
 
+<!-- Dark theme of the control panel (not the radio display / S-meter) and the chat box;
+     chosen with the Dark theme switch next to Auto brightness, kept in this browser (localStorage ubersdr_theme) -->
+<script>
+(function () {
+  try { if (localStorage.getItem('ubersdr_theme') === 'dark') document.documentElement.classList.add('ubersdr-dark'); } catch (e) {}
+  window.ubersdr_theme = function (t) {
+    document.documentElement.classList.toggle('ubersdr-dark', t === 'dark');
+    try { localStorage.setItem('ubersdr_theme', t === 'dark' ? 'dark' : 'light'); } catch (e) {}
+    var s = document.getElementById('themesel');
+    if (s) s.checked = t === 'dark';
+    if (typeof window.ubersdr_sgraph_reset === 'function') window.ubersdr_sgraph_reset();   // signal strength plot
+  };
+  function sync() {
+    var s = document.getElementById('themesel');
+    if (s) s.checked = document.documentElement.classList.contains('ubersdr-dark');
+  }
+  // again after load: the page's stored settings and the browser's form memory set checkboxes too
+  document.addEventListener('DOMContentLoaded', sync);
+  window.addEventListener('load', function () { sync(); setTimeout(sync, 1000); });
+  // sliders: the filled part (--pct) for browsers without a progress pseudo-element;
+  // also refreshed twice a second, as some sliders are moved by the page itself
+  function pct(el) {
+    var min = parseFloat(el.min) || 0, max = parseFloat(el.max), v = parseFloat(el.value);
+    if (!(max > min)) max = min + 100;
+    el.style.setProperty('--pct', Math.max(0, Math.min(100, (v - min) / (max - min) * 100)) + '%');
+  }
+  document.addEventListener('input', function (e) { if (e.target && e.target.type === 'range') pct(e.target); }, true);
+  setInterval(function () { var r = document.querySelectorAll('input[type=range]'); for (var i = 0; i < r.length; i++) pct(r[i]); }, 500);
+})();
+</script>
+<style>
+  html.ubersdr-dark #mainpanel { background: #25292d !important; border-color: #3b4046 !important; color: #d6dbe0;
+    box-shadow: 4px 4px 15px 0 #000; }
+  html.ubersdr-dark #mainpanel a { color: #7fc4ff; }
+  /* buttons */
+  html.ubersdr-dark #mainpanel :is(button, input[type=button], input[type=submit]):not(#radiodisplay *) {
+    background: #3a4047; color: #e4e8ec; border-color: #5a6068;
+    box-shadow: -1px -1px 3px rgba(255,255,255,.06), 2px 2px 5px rgba(0,0,0,.6); }
+  html.ubersdr-dark #mainpanel :is(button, input[type=button], input[type=submit]):not(#radiodisplay *):hover {
+    background: #4b525a; color: #fff; border-color: #6a7078 !important; }
+  html.ubersdr-dark #mainpanel :is(button, input[type=button], input[type=submit]):not(#radiodisplay *):active,
+  html.ubersdr-dark #mainpanel .btn-selected {
+    background: #3a6db5 !important; color: #fff !important; border-color: #5a8bd0 !important;
+    box-shadow: inset 2px 2px 5px rgba(0,0,0,.5) !important; }
+  html.ubersdr-dark #mainpanel button.btnRec:not(:hover) { color: #ff6b6b; }
+  html.ubersdr-dark #mainpanel .band_offed { color: rgba(255,255,255,.28); }
+  html.ubersdr-dark #moderow .btnMode.rade-sync { color: #6ff0a0; }
+  /* lists and text fields */
+  html.ubersdr-dark #mainpanel select:not(#radiodisplay *),
+  html.ubersdr-dark #mainpanel input[type=text]:not(#radiodisplay *),
+  html.ubersdr-dark #mainpanel input[type=number]:not(#radiodisplay *) {
+    background-color: #2e3338; color: #e4e8ec; border: 1px solid #5a6068; }
+  html.ubersdr-dark #mainpanel option { background: #2e3338; color: #e4e8ec; }
+  /* the two vertical lines either side of the middle column: black */
+  html.ubersdr-dark #mainpanel div[style*="#969595"] { border-left-color: #000 !important; border-right-color: #000 !important; }
+  /* the frame around the frequency display and S-meter: black */
+  html.ubersdr-dark #radiodisplay { border-color: #000 !important; }
+  /* sliders (Magic Eye, Brightness, Contrast, Volume, decoder squelch …): a thin track filled in the
+     original teal (dark theme: blue) and a small 3D knob. --pct (the filled part, for Chrome/Edge/Safari)
+     is kept up to date by the script below. */
+  input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; height: 16px; cursor: pointer;
+    --acc: #89dfd2; --trk: #c3c8cd; }
+  html.ubersdr-dark input[type=range] { --acc: #3a6db5; --trk: #4a5158; }
+  input[type=range]:focus { outline: none; }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--trk);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35); }
+  input[type=range]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--acc);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.25); }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--acc) 0 var(--pct, 50%), var(--trk) var(--pct, 50%) 100%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35); }
+  input[type=range]::-moz-range-thumb { box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%;
+    border: 1px solid #6f757b; background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e4e6e8 38%, #a4a9ae 100%);
+    box-shadow: 0 2px 3px rgba(0,0,0,.45), inset 0 -1px 1px rgba(0,0,0,.25); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; box-sizing: border-box; width: 12px; height: 12px;
+    margin-top: -4px; border-radius: 50%; border: 1px solid #6f757b;
+    background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e4e6e8 38%, #a4a9ae 100%);
+    box-shadow: 0 2px 3px rgba(0,0,0,.45), inset 0 -1px 1px rgba(0,0,0,.25); }
+  input[type=range]:active::-moz-range-thumb { background: radial-gradient(circle at 40% 35%, #f2f3f4 0%, #cfd2d5 45%, #8d9298 100%); }
+  input[type=range]:active::-webkit-slider-thumb { background: radial-gradient(circle at 40% 35%, #f2f3f4 0%, #cfd2d5 45%, #8d9298 100%); }
+  /* on/off switches and radio buttons: the dark theme's blue when on (light theme: the original teal) */
+  html.ubersdr-dark .toggleWrapper input.mobileToggle:checked + label:before { background: #3a6db5; }
+  html.ubersdr-dark input.radios:checked + label::after { background-color: #3a6db5; }
+  /* on/off switches */
+  html.ubersdr-dark #mainpanel .toggleWrapper input.mobileToggle + label { border-color: #4a5056; }
+  html.ubersdr-dark #mainpanel .toggleWrapper input.mobileToggle:not(:checked) + label:before { background: #3a4047; }
+  /* status lines, FreeDV Reporter and CW decoder windows */
+  html.ubersdr-dark #mainpanel .radestatus { color: #c3c9cf; }
+  html.ubersdr-dark #mainpanel .radestatus.sync { color: #6ff0a0; }
+  html.ubersdr-dark #mainpanel .radestatus.err { color: #ff7b7b; }
+  html.ubersdr-dark #mainpanel :is(.radereporter, .cwdec) { background: #2b3035; border-color: #454b52; color: #dde2e7; box-shadow: 1px 2px 5px rgba(0,0,0,.5); }
+  html.ubersdr-dark #mainpanel :is(.radereporter .rr-head, .cwdec .cw-head) { background: #363c43; }
+  html.ubersdr-dark #mainpanel :is(.radereporter .rr-count, .cwdec .cw-stat) { color: #aab1b8; }
+  html.ubersdr-dark #mainpanel .cwdec .cw-stat b { color: #fff; }
+  html.ubersdr-dark #mainpanel .cwdec .cw-status { border-top-color: #3d4349; color: #9aa1a8; }
+  html.ubersdr-dark #mainpanel .radereporter th { background: #31373d; color: #cfd5db; border-bottom-color: #454b52; }
+  html.ubersdr-dark #mainpanel .radereporter td { border-bottom-color: #3a4046; }
+  html.ubersdr-dark #mainpanel .radereporter tr.rr-tune:hover td { background: #2f3d52; }
+  html.ubersdr-dark #mainpanel .radereporter tr.rr-tx td { background: #4a2c2c; }
+  html.ubersdr-dark #mainpanel .radereporter :is(.rr-ago, .rr-status, .rr-rxo) { color: #9aa1a8; }
+  /* decoder windows (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI; sv1btl/decoders.js) */
+  html.ubersdr-dark #mainpanel .decwin { background: #2b3035; border-color: #454b52; color: #dde2e7; box-shadow: 1px 2px 5px rgba(0,0,0,.5); }
+  html.ubersdr-dark #mainpanel .decwin .dw-head { background: #363c43; }
+  html.ubersdr-dark #mainpanel .decwin .dw-head span { color: #cfd5db; }
+  html.ubersdr-dark #mainpanel .decwin .dw-head b { color: #fff; }
+  html.ubersdr-dark #mainpanel .decwin :is(.dw-list, .dw-text) { background: #22262a; color: #dde2e7; }
+  html.ubersdr-dark #mainpanel .decwin th { background: #31373d; color: #e4e8ec; border-bottom-color: #454b52; }
+  html.ubersdr-dark #mainpanel .decwin td { color: #dde2e7; border-bottom-color: #3a4046; }
+  html.ubersdr-dark #mainpanel .decwin td.n { color: #8cc4ff; }
+  html.ubersdr-dark #mainpanel .decwin td.n.warn { color: #ffb070; }
+  html.ubersdr-dark #mainpanel .decwin td.m { color: #fff; }
+  html.ubersdr-dark #mainpanel .decwin td.c { color: #7fe0a0; }
+  html.ubersdr-dark #mainpanel .decwin tr.sep td { border-top-color: #5a6068; }
+  html.ubersdr-dark #mainpanel .decwin tr:hover td { background: #2f3d52; }
+  html.ubersdr-dark #mainpanel .decwin a { color: #8fb8ff; }
+  html.ubersdr-dark #mainpanel .decwin .dw-bar { background: #31373d; border-bottom-color: #454b52; }
+  html.ubersdr-dark #mainpanel .decwin .dw-fill { background: #3a6db5; }
+  html.ubersdr-dark #mainpanel .decwin .dw-fill.wait { background: #555b62; }
+  html.ubersdr-dark #mainpanel .decwin .dw-bartxt { color: #fff; }
+  html.ubersdr-dark #mainpanel .decwin .dw-status { color: #9aa1a8; border-top-color: #3d4349; }
+  /* "This WebSDR is currently being used by …" bar */
+  html.ubersdr-dark #userspanel { background: #25292d !important; border-color: #3b4046 !important; color: #d6dbe0;
+    box-shadow: 4px 4px 15px 0 #000; }
+  html.ubersdr-dark #userspanel .toggleWrapper input.mobileToggle + label { border-color: #4a5056; }
+  html.ubersdr-dark #userspanel .toggleWrapper input.mobileToggle:not(:checked) + label:before { background: #3a4047; }
+  /* page header, its lower edge, the "WebSDR Information" tab and its drop-down */
+  html.ubersdr-dark :is(#pageheader, #headerlip, #equip_info) { background: rgba(37,41,45,.88) !important; }
+  html.ubersdr-dark #pageheader { color: #fff !important; }
+  html.ubersdr-dark #pageheader :not(a):not(input) { color: inherit; }
+  html.ubersdr-dark :is(#pageheader, #equip_info) a { color: #7fc4ff; }
+  html.ubersdr-dark #pageheader input[type=text] { background: #2e3338; color: #e4e8ec; border: 1px solid #5a6068; }
+  html.ubersdr-dark #equip_info { color: #d6dbe0 !important; }
+  html.ubersdr-dark #equip_info span[style*="195, 45, 0"] { color: #ff8a5c !important; }
+  html.ubersdr-dark #equip_button { background: #363c43 !important; color: #e4e8ec; }
+  html.ubersdr-dark #equip_button:hover { background: #434a52 !important; }
+  /* the three boxes above the waterfall: Waterfall, Keyboard Control, Background image */
+  html.ubersdr-dark .topbox { background: #25292d !important; border-color: #3b4046 !important; color: #d6dbe0; }
+  html.ubersdr-dark .topbox b { color: #e4e8ec; }
+  html.ubersdr-dark .topbox input.radios + label { color: #d6dbe0; }
+  html.ubersdr-dark .topbox input.radios + label::before { background-color: #3a4047; border-color: #6a7078; }
+  html.ubersdr-dark .topbox input.radios:checked + label::before { background-color: transparent; border-color: #3a6db5; }
+  html.ubersdr-dark .topbox .toggleWrapper input.mobileToggle + label { border-color: #4a5056; }
+  html.ubersdr-dark .topbox .toggleWrapper input.mobileToggle:not(:checked) + label:before { background: #3a4047; }
+  html.ubersdr-dark .topbox .keylist { background-color: #2b3035; border-color: #454b52; color: #dde2e7; }
+  /* chat box */
+  html.ubersdr-dark #chatboxnew { background-color: #1f2327 !important; color: #d6dbe0; }
+  html.ubersdr-dark #chatboxspan input[name=chat] { background-color: #2a2f34 !important; color: #e8ecf0 !important; border-color: #5a6068 !important; }
+  html.ubersdr-dark #chatboxspan input[name=chat]::placeholder { color: #8a9198; }
+  html.ubersdr-dark #chatboxspan input[type=button] { background: #3a4047; color: #e4e8ec; border: 1px solid #5a6068; border-radius: 4px; }
+  html.ubersdr-dark #chatboxspan input[type=button]:hover { background: #4b525a; color: #fff; }
+</style>
 <script src="tmp/bandinfo.js" type="text/javascript"></script>
 <!-- UberSDR: adapts the RW3PS page to UberSDR's Opus sound engine; must load before websdr-base.js -->
 <!-- Station settings (callsign, location, start frequency, …): edit sv1btl/station.js -->
 <script src="sv1btl/station.js" type="text/javascript"></script>
-<script src="sv1btl/ubersdr-compat.js?v=20261010a" type="text/javascript"></script>
+<script src="sv1btl/ubersdr-compat.js?v=20261010lt" type="text/javascript"></script>
 <script src="websdr-base.js" type="text/javascript"></script>
 <script>ubersdr_compat_after_base();</script>
 
 
 <style type="text/css">
   body {    margin-left: auto;
-    margin-right: auto; min-width: 1200px; color: black;background-color: #bedcd7;font-family: "Roboto Condensed",Helvetica,"Lucida Grande",Verdana,Arial; /*font-family:"News Gothic Condensed","Arial Narrow"*/ ;font-size: 1rem;
+    margin-right: auto; min-width: 1200px; color: black;background-color: #0a1a3a;font-family: "Roboto Condensed",Helvetica,"Lucida Grande",Verdana,Arial; /*font-family:"News Gothic Condensed","Arial Narrow"*/ ;font-size: 1rem;
 	/*background: url(sv1btl/bg6.jpg) no-repeat center center fixed; */
-    background-color: #bedcd7;
+    background-color: #0a1a3a;
     -webkit-background-size: cover;
     -moz-background-size: cover;
     -o-background-size: cover;}

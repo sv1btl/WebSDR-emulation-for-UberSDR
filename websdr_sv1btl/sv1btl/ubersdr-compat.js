@@ -1425,7 +1425,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261010i';
+    s.src = 'sv1btl/decoders.js?v=20261010k';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -1697,15 +1697,17 @@
     // getMouseXY, so dividing x by the stretch factor keeps every drag in step with the
     // pointer. Click-to-tune also subtracts the waterfall's on-screen left edge, which
     // has to be divided the same way.
+    // With the page fitted to the window (pageZoom, see fitPage) the pointer moves
+    // pageZoom screen pixels per page pixel, so that is divided out as well.
     var origGetMouseXY = window.getMouseXY;
     window.getMouseXY = function (e) {
       var p = origGetMouseXY(e);
-      return { x: p.x / wfScale, y: p.y };
+      return { x: p.x / (wfScale * pageZoom), y: p.y / pageZoom };
     };
     window.useMouseXY = function (e) {
       var pos = getMouseXY(e);
       var coords = scaleobj.offsetParent.getBoundingClientRect();
-      setfreq_lim((pos.x - coords.left / wfScale - 512) * khzperpixel + centerfreq - (hi + lo) / 2);
+      setfreq_lim((pos.x - coords.left / (wfScale * pageZoom) - 512) * khzperpixel + centerfreq - (hi + lo) / 2);
       if (initmodeflag == 1) modeperfreq(freq);
       return cancelEvent(e);
     };
@@ -1717,6 +1719,42 @@
     window.stretch_waterfalls = function () {};
   };
 
+  // ── The desktop page fitted to the window width (2026-10-10) ─────────────────
+  // The layout is about PAGE_MARGIN + the controls panel wide (≈1200 px). The whole
+  // page is scaled with CSS zoom so that width fills the browser window: smaller on a
+  // 1024-1280 px screen, larger on 1920 px, 2K and 4K screens (FIT_MIN..FIT_MAX).
+  // Mouse positions are divided by pageZoom where the page code works in page pixels
+  // (getMouseXY above, the spectrum crosshair, the frequency digits, the wheel zoom
+  // of the waterfall below). Off with ?nofit in the address.
+  var PAGE_MARGIN = 30, FIT_MIN = 0.5, FIT_MAX = 3;
+  var pageZoom = 1;
+  window.ubersdr_pagezoom = function () { return pageZoom; };
+  function fitPage() {
+    var panel = document.getElementById('mainpanel');
+    if (!panel || !panel.offsetWidth || /[?&]nofit\b/.test(location.search)) return;
+    var z = document.documentElement.clientWidth / (panel.offsetWidth + PAGE_MARGIN);
+    z = Math.max(FIT_MIN, Math.min(FIT_MAX, Math.floor(z * 100) / 100));
+    if (Math.abs(z - pageZoom) < 0.005) return;
+    pageZoom = z;
+    document.body.style.zoom = z === 1 ? '' : String(z);
+  }
+  var fitTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(fitTimer); fitTimer = setTimeout(fitPage, 150); });
+  // The waterfall's own wheel zoom takes the pointer position from offsetX, which the
+  // browser gives without the page zoom: give it the right position instead.
+  function wfWheel(ev) {
+    if (pageZoom === 1) return;
+    var t = ev.target, wa = window.waterfallapplet && window.waterfallapplet[0];
+    if (!wa || typeof wa.setzoom !== 'function' || t.tagName !== 'CANVAS' ||
+        !t.parentNode || t.parentNode.id !== 'wfcdiv0') return;
+    var r = t.getBoundingClientRect(), d = ev.wheelDelta || -ev.detail || -ev.deltaY;
+    if (!r.width || !d) return;
+    ev.stopImmediatePropagation(); ev.preventDefault();
+    wa.setzoom(d > 0 ? -2 : -1, Math.round((ev.clientX - r.left) / r.width * 1024));
+  }
+  // (on the document: the waterfall script rebuilds #wfcdiv0 when it restarts)
+  ['DOMMouseScroll', 'mousewheel'].forEach(function (n) { document.addEventListener(n, wfWheel, true); });
+
   // ── One width for waterfall, users strip and chat: the controls panel's ─────
   // The waterfall is 1024 pixels of data from the server; it is stretched to fit
   // with a CSS transform. The users strip is redrawn at the full width by douu()
@@ -1726,7 +1764,7 @@
   function matchWidths() {
     var panel = document.querySelector('.mb[style*="min-width: 1160px"]');
     if (!panel) return true;          // not the desktop page (m.html): nothing to match
-    var w = Math.round(panel.getBoundingClientRect().width);
+    var w = panel.offsetWidth;        // page pixels (not affected by fitting the page to the window)
     if (w <= 1024) return false;
     wfScale = w / 1024;
     window.ubersdr_width = w;
@@ -1747,6 +1785,7 @@
   var matchTries = 0;
   function matchWhenVisible() {
     if (!matchWidths() && ++matchTries < 100) setTimeout(matchWhenVisible, 200);
+    else fitPage();
   }
   window.addEventListener('load', matchWhenVisible);
 
@@ -2027,7 +2066,7 @@
       wfc._ubersdrHover = true;
       wfc.addEventListener('mousemove', function (ev) {
         var r = wfc.getBoundingClientRect();
-        spec.hoverX = (ev.clientX - r.left) / wfScale; spec.dirty = true;
+        spec.hoverX = (ev.clientX - r.left) / (wfScale * pageZoom); spec.dirty = true;
       });
       wfc.addEventListener('mouseleave', function () { spec.hoverX = null; spec.dirty = true; });
     }
@@ -2036,7 +2075,7 @@
       sc._ubersdrHover = true;
       sc.addEventListener('mousemove', function (ev) {
         var r = sc.getBoundingClientRect();
-        spec.hoverX = (ev.clientX - r.left) / wfScale; spec.dirty = true;
+        spec.hoverX = (ev.clientX - r.left) / (wfScale * pageZoom); spec.dirty = true;
       });
       sc.addEventListener('mouseleave', function () { spec.hoverX = null; spec.dirty = true; });
       sc.addEventListener('click', function (ev) {   // click on the spectrum tunes there
@@ -2124,17 +2163,18 @@
       if (dot < 0) dot = v.length;
       var cs = getComputedStyle(inp);
       mctx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-      var r = inp.getBoundingClientRect();
+      var r = inp.getBoundingClientRect(), z = pageZoom;
+      clientX = (clientX - r.left) / z;                               // page pixels from the field's left edge
       var padL = parseFloat(cs.paddingLeft) || 0, padR = parseFloat(cs.paddingRight) || 0;
       var bl = parseFloat(cs.borderLeftWidth) || 0, br = parseFloat(cs.borderRightWidth) || 0;
-      var inner = r.width - padL - padR - bl - br, tw = mctx.measureText(v).width;
-      var x0 = r.left + bl + padL + Math.max(0, (inner - tw) / 2);   // text-align: center
+      var inner = r.width / z - padL - padR - bl - br, tw = mctx.measureText(v).width;
+      var x0 = bl + padL + Math.max(0, (inner - tw) / 2);   // text-align: center
       for (var i = 0, x = x0; i < v.length; i++) {
         var w = mctx.measureText(v[i]).width;
         if (clientX >= x && clientX < x + w) {
           if (i === dot) return null;
           var place = i < dot ? Math.pow(10, dot - 1 - i) : Math.pow(10, dot - i);
-          return { step: place, left: x - r.left, width: w };
+          return { step: place, left: x, width: w };
         }
         x += w;
       }
@@ -2144,9 +2184,9 @@
     function show(d) {
       if (!d || typing()) { bar.style.display = 'none'; return; }
       var ir = inp.getBoundingClientRect(), br = box.getBoundingClientRect();
-      bar.style.left = (ir.left - br.left + d.left + 1) + 'px';
+      bar.style.left = ((ir.left - br.left) / pageZoom + d.left + 1) + 'px';
       bar.style.width = Math.max(4, d.width - 2) + 'px';
-      bar.style.top = (ir.bottom - br.top - 12) + 'px';
+      bar.style.top = ((ir.bottom - br.top) / pageZoom - 12) + 'px';
       bar.style.display = 'block';
     }
     function step(kHz) {

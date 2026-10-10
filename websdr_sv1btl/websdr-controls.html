@@ -9,7 +9,7 @@
    </div>
 </div>
 
-<div style="margin: 5px 5px 0px 5px;font-size: 11pt;background: #f5f5f5cc;border:solid 0px #fff;border-radius: 4px 4px 4px 4px;color: #4a005d;padding: 10px 5px 15px 15px;box-shadow: 4px 4px 15px 0px rgba(0,0,0);z-index: 2;position: relative;">
+<div id="pageheader" style="margin: 5px 5px 0px 5px;font-size: 11pt;background: #f5f5f5cc;border:solid 0px #fff;border-radius: 4px 4px 4px 4px;color: #4a005d;padding: 10px 5px 15px 15px;box-shadow: 4px 4px 15px 0px rgba(0,0,0);z-index: 2;position: relative;">
     <span style="
     font-size: 17pt;
     font-weight: bold;
@@ -67,7 +67,7 @@ document_username();
 </div>
 </div>
 
-<div style="
+<div id="headerlip" style="
     margin: 0px 10px 0px 10px;
     padding: 0px 5px 0px 15px;
     height: 18px;
@@ -147,7 +147,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     margin-right: auto;
     text-align: center;'>
 <form name="viewform" action="#" style='display: inline-block;'>
-<div class="mb" style='    display: inline-flex;'>
+<div class="mb topbox" style='    display: inline-flex;'>
   <b>Waterfall:</b>
   <fieldset id='viewformbuttons' style="margin-left: 30px;margin-right: -40px;margin-top: -5px;margin-bottom: -20px;">
 <input class="radios" type="radio" name="group" id="radio-1" value="all bands" checked="checked" onClick="setview(0);">
@@ -158,7 +158,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
 <label for="radio-3">off</label>
 </fieldset>
 </div>
-<div class="mb" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;">
+<div class="mb topbox" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;">
     <b>Keyboard Control:</b>
 	<div class="toggleWrapper" style="
     display: flex;
@@ -185,7 +185,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
 
 
 
-<div class="mb" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;vertical-align: bottom;
+<div class="mb topbox" style="padding-top: 5px;position: relative;z-index: 999; display:inline-flex;vertical-align: bottom;
     margin-bottom: 5px;">
     <b>Background image</b>
 	<div class="toggleWrapper" style="
@@ -261,7 +261,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
 	
 <!-- Left Window -->
 	
-<div class="mb" style=" min-width: 1160px;">
+<div class="mb" id="mainpanel" style=" min-width: 1160px;">
 <div class="d-table" style="">
 <div class="d-tr" style="display: inline;">
 </div></div>
@@ -521,7 +521,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     <div class="d-table" style="
 ">
     <div class="d-tr">
-    <div style="
+    <div id="radiodisplay" style="
     display: flex;
     background: black;
     border: 3px solid #9e9883;
@@ -917,7 +917,13 @@ Max    </span>
 <div class="toggleWrapper" style="display: contents;">
 <div style="display: inline-block; margin: 0px 7px 0px 0px; vertical-align: middle;">Auto brightness</div>
 <input type="checkbox" name="wfautocheckbox" class="mobileToggle" id="wfautocheckbox" onClick="ubersdr_wfauto(this.checked);"><label for="wfautocheckbox"></label>
-</div></div>
+</div>
+<!-- Theme of the control panel and the chat (light = the original); kept in this browser -->
+<div class="toggleWrapper" style="display: contents;" title="Dark colours for the page (off: the original light look)">
+<div style="display: inline-block; margin: 0px 7px 0px 22px; vertical-align: middle;">Dark theme</div>
+<input type="checkbox" name="themesel" class="mobileToggle" id="themesel" autocomplete="off" onClick="ubersdr_theme(this.checked ? 'dark' : 'light');"><label for="themesel"></label>
+</div>
+</div>
 
 <div style="font-size:0.85rem !important; margin-top:3px">
   <center style="
@@ -1094,7 +1100,7 @@ Max    </span>
 <div style="text-align: center;">
 <form name="form1" action="#">
 <br>
-<div class='mb'>
+<div class='mb' id="userspanel">
 <span  style="font-size:85%;margin: 0px 15px 0px 15px; display: inline-flex;">
 This WebSDR is currently being used by <span id=numusers style='margin: 0px 3px;'>?</span> user(s) simultaneously
 <div class="toggleWrapper" style="display: inline-flex;

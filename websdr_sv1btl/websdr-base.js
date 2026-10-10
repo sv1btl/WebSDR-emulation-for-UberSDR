@@ -1557,6 +1557,7 @@ function updatesmeter()
  
    if (s>=0) {
 	   block_width = document.getElementsByClassName('smetertable')[0].rows[0].cells[0].getBoundingClientRect().width
+	      / (window.ubersdr_pagezoom ? ubersdr_pagezoom() : 1);   // page pixels when the page is fitted to the window
 	   smeterobj.style.width= s*0.0191667*1.08+"px";
 	   blocks = Math.round(s*0.0191667*1.08/block_width);
 	   smeterobjnew.style.width= block_width*blocks +"px";
@@ -1614,6 +1615,8 @@ function updatesmeter()
 
 
    // rest of this function is for drawing the signal strength plot
+   // colours follow the page theme (Theme next to Auto brightness; dark: html.ubersdr-dark)
+   var sgc=sgraphColours();
 
    var v=document.getElementById('sgraphchoice').value;
    var v2=v;
@@ -1656,7 +1659,7 @@ function updatesmeter()
       else {
          var f=(sgraph.e1-sgraph.e0)/(sgraph.e1-e0);
          ct.drawImage(cv, 0,0, sgraph.width,cv.height, 0,0,sgraph.width,cv.height*f);
-         ct.fillStyle="white";
+         ct.fillStyle=sgc.bg;
          ct.fillRect(0,Math.floor(cv.height*f),sgraph.width,cv.height*(1-f)+1);
       }
       sgraph.e0=e0;
@@ -1672,7 +1675,7 @@ function updatesmeter()
          var f=(sgraph.e1-sgraph.e0)/(e1-sgraph.e0);
          if (f<0) f=0;
          ct.drawImage(cv, 0,0, sgraph.width,cv.height, 0,cv.height*(1-f),sgraph.width,cv.height*f);
-         ct.fillStyle="white";
+         ct.fillStyle=sgc.bg;
          ct.fillRect(0,0,sgraph.width,Math.ceil(cv.height*(1-f)));
       }
       sgraph.e1=e1;
@@ -1681,7 +1684,7 @@ function updatesmeter()
    if (redrawaxis) {
       ct.clearRect(sgraph.width,0,cv.width-sgraph.width,cv.height);
       var w=sgraph.e0;
-      ct.fillStyle="black";
+      ct.fillStyle=sgc.text;
       ct.font="10px Verdana";
       while ((w=10*Math.ceil(w/10))<=sgraph.e1) {
          var y=s2y(w);
@@ -1698,14 +1701,14 @@ function updatesmeter()
       if (v>=10) v=60;
       if (Math.floor(t/1000/v)!=Math.floor(sgraph.prevt/1000/v)) {
          // draw grey vertical line as time marker
-         ct.fillStyle="rgba(210,210,210,1)";
+         ct.fillStyle=sgc.grid;
          ct.fillRect(sgraph.width-1,0,1,cv.height);
          sgraph.prevt=t;
       } else {
          // draw white vertical line with grey dB scale markers
-         ct.fillStyle="white";
+         ct.fillStyle=sgc.bg;
          ct.fillRect(sgraph.width-1,0,1,cv.height);
-         ct.fillStyle="rgba(210,210,210,1)";
+         ct.fillStyle=sgc.grid;
          var w=sgraph.e0;
          while ((w=10*Math.ceil(w/10))<=sgraph.e1) {
             var y=s2y(w);
@@ -1716,7 +1719,7 @@ function updatesmeter()
    }
 
    // plot the actual data point
-   ct.fillStyle="#00008b";   // dark blue, 2 px tall (was "blue", 1 px): easier to see (2026-10-07)
+   ct.fillStyle=sgc.dot;   // dark blue (light theme), 2 px tall (was "blue", 1 px): easier to see (2026-10-07)
    ct.fillRect(sgraph.width-1,Math.round(s2y(s))-1,1,2);
 }
 
@@ -2933,7 +2936,7 @@ function  toggle_info (info_type, info_mode='LSB')
 function background_load()
 {
 	if (document.getElementsByTagName('body')[0].style.background.includes('bg6')) { 
-		document.body.style.background ='#bedcd7'
+		document.body.style.background ='#0a1a3a'   // very dark blue (was #bedcd7)
 	} 
 	else {
 		document.body.style.background = 'url(sv1btl/bg6.jpg) no-repeat center center fixed';
@@ -3017,4 +3020,19 @@ function document_bandbuttons() {
   var str = `<button type="button" class="btnBand" name="group0" id="btnB-${idx}" onclick="setband(${idx})">${band.name}</button>`;
   document.write(str);
   });
+}
+
+// Signal strength plot colours for the light (original) and dark page theme
+function sgraphColours()
+{
+   if (document.documentElement.classList.contains('ubersdr-dark'))
+      return { bg:'#1f2327', grid:'#3e454c', text:'#cfd5db', dot:'#7fc4ff' };
+   return { bg:'white', grid:'rgba(210,210,210,1)', text:'black', dot:'#00008b' };
+}
+// Theme switched: start the plot afresh in the new colours
+function ubersdr_sgraph_reset()
+{
+   if (!sgraph.cv) return;
+   sgraph.ct.clearRect(0,0,sgraph.cv.width,sgraph.cv.height);
+   sgraph.e0=80; sgraph.e1=-190;
 }
