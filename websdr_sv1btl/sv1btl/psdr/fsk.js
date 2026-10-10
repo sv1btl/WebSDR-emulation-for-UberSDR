@@ -12,9 +12,13 @@
  *
  *   role 'navtex' — legacy NAVTEX path: CCIR-476 + ZCZC/NNNN message framing
  *   role 'fsk'    — generic FSK with the maritime / weather / ham presets, plus
- *                   the 'psk31' and 'olivia' variants, which are not FSK at
- *                   all: they hand the audio to psk31.js / olivia.js and only
- *                   borrow this class's config, worker and event plumbing.
+ *                   the 'psk31', 'olivia', 'packet' and 'aprs' variants, which
+ *                   do not use the discriminator chain at all: they hand the
+ *                   audio to psk31.js / olivia.js / mfsk.js / ax25.js and only
+ *                   borrow
+ *                   this class's config, worker and event plumbing. The
+ *                   'olivia' variant also carries MFSK16/32/64 (encoding
+ *                   'mfsk'): same panel, a different decoder.
  *
  * Each instance owns its own state, so the roles can no longer interfere.  The
  * `_navtexCb` / `_fskCb` getters below reproduce the old behaviour exactly: the
@@ -23,12 +27,17 @@
  *
  * Emits, via the callback:
  *   role 'navtex': { type:'char'|'status'|'navstart'|'navend', … }
- *   role 'fsk'   : { type:'char'|'status'|'metrics', variant, … }
+ *   role 'fsk'   : { type:'char'|'line'|'status'|'metrics', variant, … }
+ *                  ('line' = one whole decoded packet, from 'packet' / 'aprs')
  */
 
 import { transformFlat } from './lib/fftRadix2.js';
 import { PSK31Demodulator } from './psk31.js';
 import { OliviaDecoder, OLIVIA_MODES, SYNC_THRESHOLD_DEFAULT } from './olivia.js';
+import { MfskDecoder, MFSK_MODES, MFSK_SQUELCH_DEFAULT, mfskBandwidth } from './mfsk.js';
+import { PacketDecoder } from './ax25.js';
+
+const _isPacketVariant = (v) => v === 'packet' || v === 'aprs';
 
 // The tones/bandwidth pairs the UI offers, as [tones, bandwidth] for lookup.
 const OLIVIA_PAIRS = OLIVIA_MODES.map((m) => [m.tones, m.bandwidth]);
@@ -95,6 +104,8 @@ export class KiwiFSKDecoder {
     this._fskRecentPCM = [];
     this._psk = null;
     this._olivia = null;
+    this._mfsk = null;
+    this._packet = null;
   }
 
   /** Raw PCM in, at the rate reported by the sampleRate function. */
@@ -118,6 +129,7 @@ export class KiwiFSKDecoder {
     // + varicode, and MFSK + Walsh FEC), so they bypass the discriminator chain.
     if (this._variant === 'psk31')  { this._pskFeed(pcm); return; }
     if (this._variant === 'olivia') { this._oliviaFeed(pcm); return; }
+    if (_isPacketVariant(this._variant)) { this._packetFeed(pcm); return; }
 
     this._nvFeedPCMCommon(pcm, this._variant || 'maritime', false);
   }
@@ -133,15 +145,69 @@ export class KiwiFSKDecoder {
     this._psk.feed(pcm);
   }
 
+  // ── Packet / APRS (see ax25.js) ───────────────────────────────────────────
+
+  _packetFeed(pcm) {
+    if (!this._packet) return;
+    // Wait for enough audio for the scan rather than dropping the request.
+    if (this._fskAutoCenterPending && this._fskRecentPCM.length >= 4096) {
+      this._fskAutoCenterPending = false;
+      this._packetAutoCenter();
+    }
+    this._packet.feed(pcm);
+  }
+
+  /**
+   * One-shot "Auto-tune Center" for 300 Bd HF packet: the strongest pair of
+   * lines 200 Hz apart. 1200 Bd is received in FM, where the tones are fixed
+   * at 1200 / 2200 Hz whatever the dial says, so there is nothing to tune.
+   */
+  _packetAutoCenter() {
+    const cfg = this._fskResolveConfig(this._variant);
+    if (cfg.baud !== 300) {
+      if (this._fskCb) this._fskCb({ type: 'status', variant: this._variant,
+        text: '1200 Bd tones are fixed — tune the dial to the channel' });
+      return;
+    }
+    const spec = this._fskSpectrum();
+    if (!spec) return;
+    const { mag, binHz, lo, hi, mean } = spec;
+    const gap = Math.round(200 / binHz);
+    // Each tone is a hump about a baud wide, so sum a few bins round each.
+    const w = Math.max(1, Math.round(60 / binHz));
+    const band = (k) => { let a = 0; for (let j = -w; j <= w; j++) a += mag[k + j] || 0; return a; };
+    let best = 0, bestK = -1;
+    for (let k = lo + w; k + gap + w <= hi; k++) {
+      const p = band(k) + band(k + gap);
+      if (p > best) { best = p; bestK = k; }
+    }
+    if (bestK < 0 || best < 4 * mean * 2 * (2 * w + 1)) {
+      if (this._fskCb) this._fskCb({ type: 'status', variant: this._variant,
+        text: 'Auto-tune: no signal found' });
+      return;
+    }
+    const centerHz = Math.round((bestK + gap / 2) * binHz);
+    const oldCenter = Math.round(cfg.center);
+    this._customConfig = { ...(this._customConfig || {}), center: centerHz };
+    this._fskReset();
+    if (this._fskCb) {
+      this._fskCb({ type: 'status', variant: this._variant,
+        text: `Auto-tune: center ${centerHz} Hz (was ${oldCenter} Hz)` });
+      this._fskCb({ type: 'metrics', variant: this._variant, centerHz,
+        markHz: centerHz - 100, spaceHz: centerHz + 100, timingLocked: false });
+    }
+  }
+
   // ── Olivia (see olivia.js) ────────────────────────────────────────────────
 
   _oliviaFeed(pcm) {
-    if (!this._olivia) return;
+    const dec = this._olivia || this._mfsk;
+    if (!dec) return;
     if (this._fskAutoCenterPending) {
       this._fskAutoCenterPending = false;
       this._oliviaAutoCenter();
     }
-    this._olivia.feed(pcm);
+    dec.feed(pcm);
   }
 
   /**
@@ -149,6 +215,8 @@ export class KiwiFSKDecoder {
    * wide block with tones rather than showing a peak, so this slides a window
    * of that width across the spectrum and takes the centre of the strongest
    * position. The decoder's own +/-8 bin sync search covers the remainder.
+   * MFSK16/32/64 use the same scan over their own tone block; their AFC
+   * pulls in the last quarter of a tone.
    */
   _oliviaAutoCenter() {
     const spec = this._fskSpectrum();
@@ -368,7 +436,7 @@ export class KiwiFSKDecoder {
   setVariant(variant = 'maritime') {
     const v = String(variant || 'maritime').toLowerCase();
     if (v !== 'weather' && v !== 'maritime' && v !== 'ham' &&
-        v !== 'psk31' && v !== 'olivia') {
+        v !== 'psk31' && v !== 'olivia' && !_isPacketVariant(v)) {
       console.warn('[FSK] unknown variant:', variant, '— using maritime');
       this._variant = 'maritime';
     } else {
@@ -392,6 +460,22 @@ export class KiwiFSKDecoder {
         _onlyDiffersBy(this._customConfig, cfg, 'syncThreshold')) {
       this._customConfig = { ...cfg };
       this._olivia.setSyncThreshold(cfg.syncThreshold);
+      return;
+    }
+    // Same for the MFSK squelch (the interleaver and timing loop take a few
+    // seconds to fill).
+    if (this._variant === 'olivia' && this._mfsk && this._customConfig &&
+        _onlyDiffersBy(this._customConfig, cfg, 'mfskSquelch')) {
+      this._customConfig = { ...cfg };
+      this._mfsk.setSquelch(cfg.mfskSquelch);
+      return;
+    }
+
+    // Packet's "show raw" only changes how frames are printed.
+    if (_isPacketVariant(this._variant) && this._packet && this._customConfig &&
+        _onlyDiffersBy(this._customConfig, cfg, 'showRaw')) {
+      this._customConfig = { ...cfg };
+      this._packet.setShowRaw(cfg.showRaw !== false);
       return;
     }
 
@@ -501,6 +585,15 @@ export class KiwiFSKDecoder {
           framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
         };
 
+      case 'packet':
+      case 'aprs':
+        // AFSK + HDLC; the FSK shift/framing fields are carried, not used.
+        return {
+          name: String(variant).toLowerCase(), center: 1700.0, shift: 1000, baud: 1200,
+          lowpass: 100.0, audioMinimum: 0, protocol: 'ax25', encoding: 'ax25',
+          framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0, showRaw: true,
+        };
+
       case 'weather':
         return {
           name: 'weather', center: 1000.0, shift: 450.0, baud: 50.0,
@@ -555,6 +648,23 @@ export class KiwiFSKDecoder {
     // Olivia); running them through the shift / framing / parity clamps below
     // would invent values they have no use for.
     const wantedEnc = String(cfg.encoding || out.encoding || '').toLowerCase();
+    if (wantedEnc === 'ax25') {
+      out.encoding = out.protocol = 'ax25';
+      out.baud = num(cfg.baud, out.baud) === 300 ? 300 : 1200;
+      out.shift = out.baud === 300 ? 200 : 1000;
+      out.center = out.baud === 300 ? Math.max(300, Math.min(2700, num(cfg.center, 1700))) : 1700;
+      out.showRaw = cfg.showRaw !== false;
+      return out;
+    }
+    if (wantedEnc === 'mfsk') {
+      // MFSK16/32/64 inside the Olivia panel: a sub-mode and a squelch.
+      out.encoding = out.protocol = 'mfsk';
+      out.center = Math.max(100, num(cfg.center, out.center));
+      out.mfskMode = MFSK_MODES.some((m) => m.key === cfg.mfskMode) ? cfg.mfskMode : MFSK_MODES[0].key;
+      out.bandwidth = mfskBandwidth(out.mfskMode);
+      out.mfskSquelch = num(cfg.mfskSquelch, MFSK_SQUELCH_DEFAULT);
+      return out;
+    }
     if (wantedEnc === 'varicode' || wantedEnc === 'olivia') {
       out.encoding = out.protocol = wantedEnc;
       out.center = Math.max(100, num(cfg.center, out.center));
@@ -646,7 +756,39 @@ export class KiwiFSKDecoder {
       this._psk = null;
     }
 
-    if (this._variant === 'olivia') {
+    if (_isPacketVariant(this._variant)) {
+      const v = this._variant;
+      this._packet = new PacketDecoder({
+        sampleRate: this._sampleRateFn,
+        baud:       preset.baud,
+        centerHz:   preset.center,
+        aprs:       v === 'aprs',
+        showRaw:    preset.showRaw,
+        onLine:   (text, pos) => { if (this._fskCb) this._fskCb({ type: 'line', variant: v, text, pos: pos || null }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: v, text }); },
+        onMetrics: (m) => { if (this._fskCb) this._fskCb({ type: 'metrics', variant: v, ...m }); },
+      });
+    } else {
+      this._packet = null;
+    }
+
+    if (this._variant === 'olivia' && preset.encoding === 'mfsk') {
+      this._mfsk = new MfskDecoder({
+        sampleRate: this._sampleRateFn,
+        centerHz:   preset.center,
+        mode:       preset.mfskMode,
+        squelch:    preset.mfskSquelch,
+        onChar:   (ch) => { if (this._fskCb) this._fskCb({ type: 'char', variant: 'olivia', char: ch }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'olivia', text }); },
+        onMetrics: (m) => {
+          if (this._fskCb) this._fskCb({ type: 'metrics', variant: 'olivia', ...m });
+        },
+      });
+    } else {
+      this._mfsk = null;
+    }
+
+    if (this._variant === 'olivia' && preset.encoding !== 'mfsk') {
       this._olivia = new OliviaDecoder({
         sampleRate: this._sampleRateFn,
         centerHz:   preset.center,

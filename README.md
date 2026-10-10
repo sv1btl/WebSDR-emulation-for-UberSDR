@@ -193,7 +193,7 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
 - `mode` is one of `am`, `fm`, `usb`, `lsb` or `cw`. Clicking the label tunes there in
   that mode.
 - A label whose text names a digital mode (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX,
-  RTTY, PSK31, Olivia) also starts that decoder, with its own sideband and filter (desktop page). Within
+  RTTY, PSK31, Olivia, MFSK16/32/64) also starts that decoder, with its own sideband and filter (desktop page). Within
   2 kHz of the mode's usual frequency it tunes to that frequency. "FT8<br>JT65" starts
   FT8. Clicking a label without a digital mode stops a running decoder.
 - Lines starting with `#` are comments.
@@ -351,9 +351,9 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 | SSTV | LSB below 10 MHz, USB above; 1.0–2.5 kHz | the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies |
 | FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency |
 | NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations |
-| RTTY | USB around 1000 Hz | the window's list: ham RTTY, DWD weather RTTY, PSK31 or Olivia (the RTTY button reopens the last one); text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
+| RTTY | USB around 1000 Hz | the window's list: ham RTTY, PSK31, Olivia / MFSK16·32·64 or DWD weather RTTY (the RTTY button reopens the last one); text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
 | PSK31 (RTTY window list) | USB 0.9–1.1 kHz, the signal at 1000 Hz | text; calling frequencies; **Auto-tune** finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK31 trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus |
-| Olivia (RTTY window list) | USB around 1000 Hz, the Olivia bandwidth + 150 Hz each side | text; mode 8/250, 16/500, 32/1000 or 16/1000 (must match the signal), **Squelch** slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter |
+| Olivia / MFSK16·32·64 (RTTY window list) | USB around 1000 Hz, the signal bandwidth + 150 Hz each side | text; mode Olivia 8/250, 16/500, 32/1000 or 16/1000, or MFSK16, MFSK32 or MFSK64 (fldigi's IZ8BLY modes; the title then reads "MFSK decoder"), which must match the signal; **Squelch** slider: Olivia FEC S/N 3–15 (default 4), MFSK FEC metric 0–60 (0 = off, default 22); MFSK text comes a couple of seconds behind the signal; calling frequencies (Olivia) (they set the mode too). A click on a trace puts it in the filter |
 
 - JS8 and WSPR show a bar under the window title: it fills over the
   current slot (teal while capturing, grey while waiting for the first slot) with the
