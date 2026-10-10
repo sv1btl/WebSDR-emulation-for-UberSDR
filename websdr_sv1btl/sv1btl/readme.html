@@ -112,7 +112,7 @@ html { scroll-behavior: smooth; }
       <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
       <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
     </div>
-    <div class="readout">WebSDR port<b>8901</b>package 2026-10-09</div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-10-10</div>
   </header>
 
   <div class="grid">
@@ -148,7 +148,7 @@ html { scroll-behavior: smooth; }
           <li><strong>Band buttons</strong> that zoom to the band and follow the frequency; <strong>All</strong> shows the whole receiver range and stays lit while the waterfall is fully zoomed out.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
           <li>A <strong>CW decoder</strong> window that opens under the Mode buttons while the mode is CW, using PhantomSDR-Plus's CW decoder in the listener's browser.</li>
-          <li><strong>Digital-mode decoders</strong> from PhantomSDR-Plus (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY), with a Decoder button row under the Mode buttons.</li>
+          <li><strong>Digital-mode decoders</strong> from PhantomSDR-Plus (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY, PSK31, Olivia), with a Decoder button row under the Mode buttons.</li>
           <li><strong>Audio tools</strong> in the listener's browser: Weak-signal AGC, noise reduction, two autonotch filters, squelch, soft limiter, Hi-Boost, L/R output, WAV recording.</li>
           <li><strong>Users list</strong> with each listener's country and city; clicking a listener tunes to their frequency and mode.</li>
           <li>Works with <strong>DJ0MY's CATSync</strong> (Windows): your own transceiver and the WebSDR follow each other's frequency and mode, both ways.</li>
@@ -236,7 +236,7 @@ bash install.sh /path/to/ubersdr # UberSDR somewhere else</code></pre></div>
 10136usb FT8
 729am ERT Athens
 14100cw NCDXF beacons</code></pre></div>
-        <p>The mode is <code>am</code>, <code>fm</code>, <code>usb</code>, <code>lsb</code> or <code>cw</code>; clicking the label tunes there in that mode. A label whose text names a digital mode (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY) also starts that decoder, with its own sideband and filter (desktop page); within 2 kHz of the mode's usual frequency it tunes to that frequency, "FT8&lt;br&gt;JT65" starts FT8, and clicking a label without a digital mode stops a running decoder. Lines starting with <code>#</code> are comments, and <code>&lt;br&gt;</code> in the text starts a second line. The file in the package is SV1BTL's list (time signals, European broadcasters, some Athens stations), so adapt it to your area. The page reads it again on each band or zoom change, so after editing just reload.</p>
+        <p>The mode is <code>am</code>, <code>fm</code>, <code>usb</code>, <code>lsb</code> or <code>cw</code>; clicking the label tunes there in that mode. A label whose text names a digital mode (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY, PSK31, Olivia) also starts that decoder, with its own sideband and filter (desktop page); within 2 kHz of the mode's usual frequency it tunes to that frequency, "FT8&lt;br&gt;JT65" starts FT8, and clicking a label without a digital mode stops a running decoder. Lines starting with <code>#</code> are comments, and <code>&lt;br&gt;</code> in the text starts a second line. The file in the package is SV1BTL's list (time signals, European broadcasters, some Athens stations), so adapt it to your area. The page reads it again on each band or zoom change, so after editing just reload.</p>
         <p>The labels appear only from a quarter of the way in on the zoom range (25–100 %); further out they would crowd the scale. To change that, edit <code>e.zoom * 4 &lt; e.maxzoom</code> in <code>sv1btl/ubersdr-compat.js</code> (<code>* 2</code> = from half zoom, or delete that line to show them at every zoom).</p>
       </section>
 
@@ -304,7 +304,7 @@ sv1btl/               everything else, served as /sv1btl/…
           <li>Desktop page only.</li>
         </ul>
         <h3>Digital-mode decoders</h3>
-        <p>A <strong>Decoder</strong> row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in the listener's browser: <strong>FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY</strong>. Its window opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on 30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or the preset the listener chose for it). Tuning into another band while a decoder runs keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.</p>
+        <p>A <strong>Decoder</strong> row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in the listener's browser: <strong>FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, RTTY</strong>; PSK31 and Olivia are chosen in the RTTY window's list. Its window opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on 30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or the preset the listener chose for it). Tuning into another band while a decoder runs keeps the decoder's own mode and filter. Only one runs at a time. Like the CW decoder they take the received audio before squelch, NR and the notch filters, and nothing extra is asked of UberSDR.</p>
         <p>While a decoder runs, the <strong>Mode Filters' presets</strong> on the left are replaced by <strong>Decoder Filters' presets</strong>: one button per decoder with its filter width (FT8, FT4, FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz, RTTY 300 Hz, or 593 Hz for DWD weather). A button sets that decoder's sideband and filter; the one in use is lit. The Mode presets come back when the decoder stops.</p>
         <div class="table"><table>
           <thead><tr><th>Decoder</th><th>What the button does</th><th>Window</th></tr></thead>
@@ -315,7 +315,9 @@ sv1btl/               everything else, served as /sv1btl/…
             <tr><td>SSTV</td><td>LSB below 10 MHz, USB above; 1.0–2.5 kHz</td><td>the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies</td></tr>
             <tr><td>FAX</td><td>USB 1.1–2.7 kHz</td><td>the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency</td></tr>
             <tr><td>NAVTEX</td><td>USB 0.25–0.75 kHz</td><td>the messages (ZCZC … NNNN); list of NAVTEX stations</td></tr>
-            <tr><td>RTTY</td><td>USB around 1000 Hz</td><td>text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists</td></tr>
+            <tr><td>RTTY</td><td>USB around 1000 Hz</td><td>the window's list: ham RTTY, DWD weather RTTY, PSK31 or Olivia (the RTTY button reopens the last one); text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists; <strong>Squelch</strong> slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing</td></tr>
+            <tr><td>PSK31 (RTTY window list)</td><td>USB 0.9–1.1 kHz, the signal at 1000 Hz</td><td>text; calling frequencies; <strong>Auto-tune</strong> finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK31 trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus</td></tr>
+            <tr><td>Olivia (RTTY window list)</td><td>USB around 1000 Hz, the Olivia bandwidth + 150 Hz each side</td><td>text; mode 8/250, 16/500, 32/1000 or 16/1000 (must match the signal), <strong>Squelch</strong> slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter</td></tr>
           </tbody>
         </table></div>
         <ul>

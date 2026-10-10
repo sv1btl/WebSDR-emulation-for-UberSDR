@@ -161,6 +161,15 @@ const RTTY_FREQS = {          // signal centre, kHz (PhantomSDR-Plus FSK_KNOWN_F
   weather: [['DWD DDK2 4583', 4583], ['DWD DDH7 7646', 7646], ['DWD DDK9 10100.8', 10100.8],
             ['DWD DDH9 11039', 11039], ['DWD DDH8 14467.3', 14467.3]]
 };
+// PSK31 and Olivia: signal frequencies, kHz (PhantomSDR-Plus FSK_KNOWN_FREQUENCIES)
+const PSK31_FREQS = [['80m 3580.15', 3580.15], ['40m 7040.15', 7040.15], ['30m 10142.15', 10142.15], ['20m 14070.15', 14070.15],
+                     ['17m 18100.15', 18100.15], ['15m 21080.15', 21080.15], ['12m 24920.15', 24920.15], ['10m 28120.15', 28120.15]];
+const OLIVIA_FREQS = [['80m 3583.00 (8/250)', 3583], ['40m 7040.00 (8/250)', 7040], ['40m 7072.50 (8/250)', 7072.5],
+                      ['30m 10143.00 (8/250)', 10143], ['20m 14072.50 (8/250)', 14072.5], ['20m 14108.50 (32/1000)', 14108.5],
+                      ['17m 18099.00 (8/250)', 18099], ['15m 21072.50 (8/250)', 21072.5], ['12m 24922.50 (8/250)', 24922.5],
+                      ['10m 28122.50 (8/250)', 28122.5]];
+// The four Olivia set-ups that cover nearly all traffic (PhantomSDR-Plus OLIVIA_MODE_OPTIONS)
+const OLIVIA_MODES = [[8, 250], [16, 500], [32, 1000], [16, 1000]];
 const SSTV_FREQS = [['80m 3735 LSB', 3735], ['40m 7171 LSB', 7171], ['20m 14230 USB', 14230], ['20m 14233 USB', 14233],
                     ['15m 21340 USB', 21340], ['10m 28680 USB', 28680]];
 const JS8_NAMES = ['Normal', 'Fast', 'Turbo', 'Slow', 'Ultra'];
@@ -175,7 +184,10 @@ const DEC = {
   sstv:   { label: 'SSTV',   title: 'SSTV pictures',         kind: 'sstv',                lo: 1.0, hi: 2.5 },
   fax:    { label: 'FAX',    title: 'HF weather fax',        kind: 'fax',                 lo: 1.1, hi: 2.7 },
   navtex: { label: 'NAVTEX', title: 'NAVTEX / SITOR-B',      kind: 'navtex',              lo: 0.25, hi: 0.75 },
-  rtty:   { label: 'RTTY',   title: 'RTTY (ham 45.45 Bd / DWD weather 50 Bd)', kind: 'rtty' }
+  rtty:   { label: 'RTTY',   title: 'RTTY (ham 45.45 Bd / DWD weather 50 Bd), PSK31 or Olivia: chosen in the window', kind: 'rtty' },
+  // No buttons of their own: chosen in the RTTY window's list (family 'rtty')
+  psk31:  { label: 'PSK31',  title: 'PSK31 (BPSK, 31.25 Bd)', kind: 'psk31', centred: true, family: 'rtty' },
+  olivia: { label: 'OLIVIA', title: 'Olivia (MFSK)',          kind: 'olivia', centred: true, family: 'rtty' }
 };
 
 const W = window;
@@ -195,7 +207,9 @@ function dialKHz() { return Number(W.freq) || 0; }
 // a decoder runs the dial is what counts (WSPR 14095.6, NAVTEX 518, the RTTY lists), so
 // the narrow decoder filters are not CW-like then.
 const pageIscw = W.iscw;
-W.iscw = function () { return st.on ? false : pageIscw(); };
+// PSK31 and Olivia are the exception: their lists give signal frequencies, and a click on a
+// trace should put it in the middle of the narrow filter, which is what CW-like does.
+W.iscw = function () { return st.on && !DEC[st.on].centred ? false : pageIscw(); };
 // The display follows when that changes (decoder on/off with a narrow filter)
 function showDial() { try { W.setfreq(W.freq); } catch (e) {} }
 // Puts the dial on f. With a filter narrower than 1.4 kHz and no decoder running the page
@@ -270,6 +284,8 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
 .decwin .dw-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#7cc7bd;transition:width .2s linear}
 .decwin .dw-fill.wait{background:#b4b4b4}
 .decwin .dw-bartxt{position:relative;display:block;text-align:center;font:bold 11px/15px Arial,sans-serif;color:#000}
+.decwin .dw-sqbox input{width:70px;height:12px;vertical-align:middle;margin:0}
+.decwin .dw-sqbox b{display:inline-block;min-width:34px}
 .decwin .dw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd;min-height:13px}
 `;
   document.head.appendChild(s);
@@ -281,13 +297,13 @@ function buildRow() {
   if (!moderow || !anchor || st.row) return false;
   const row = document.createElement('div');
   row.id = 'decrow';
-  row.innerHTML = '<b>Decoder: &nbsp;</b>' + Object.keys(DEC).map((k) =>
+  row.innerHTML = '<b>Decoder: &nbsp;</b>' + Object.keys(DEC).filter((k) => !DEC[k].family).map((k) =>
     `<button type="button" class="btnMode decbtn" id="dec-${k}" data-dec="${k}" title="${esc(DEC[k].title)} — press again to stop">${DEC[k].label}</button>`).join('');
   moderow.insertBefore(row, anchor);
   row.addEventListener('click', (e) => {
     const b = e.target.closest('.decbtn'); if (!b) return;
     const k = b.dataset.dec;
-    if (st.on === k) stop(); else start(k);
+    if (famKey(st.on) === k) stop(); else start(k === 'rtty' ? rttyKey() : k);
   });
   st.row = row;
   return true;
@@ -295,7 +311,24 @@ function buildRow() {
 function lightButtons() {
   lightPresets();
   if (!st.row) return;
-  st.row.querySelectorAll('.decbtn').forEach((b) => b.classList.toggle('btn-selected', b.dataset.dec === st.on));
+  st.row.querySelectorAll('.decbtn').forEach((b) => b.classList.toggle('btn-selected', b.dataset.dec === famKey(st.on)));
+}
+// The RTTY window's list: ham / DWD weather RTTY (decoder 'rtty'), PSK31, Olivia (decoders of
+// their own, family 'rtty'). The choice is remembered (ubersdr_rtty) for the RTTY button.
+function famKey(k) { return (k && DEC[k] && DEC[k].family) || k; }
+function rttyKey() { const v = lsGet('ubersdr_rtty', 'ham'); return v === 'psk31' || v === 'olivia' ? v : 'rtty'; }
+const FAMILY_OPTS = [['ham', 'Ham RTTY 45.45 Bd / 170 Hz'], ['psk31', 'PSK31 (BPSK)'], ['olivia', 'Olivia (MFSK)'],
+                     ['weather', 'DWD weather RTTY 50 Bd / 450 Hz']];
+function familySelect(cur) {
+  return `<select class="dw-var dec-sel" title="RTTY, PSK31 or Olivia">${FAMILY_OPTS.map(([v, n]) =>
+    `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+}
+// Another member of the family chosen in the list: that decoder takes over (true)
+function familyChange(v) {
+  lsSet('ubersdr_rtty', v);
+  const k = rttyKey();
+  if (k === st.on) return false;
+  start(k); return true;
 }
 function openWindow(html) {
   closeWindow();
@@ -701,10 +734,31 @@ function navtexWindow() {
 const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 } };
 function rttyVariant() { return lsGet('ubersdr_rtty', 'ham') === 'weather' ? 'weather' : 'ham'; }
 function rttyFreqOptions(v) { return `<option value="">Frequency…</option>` + RTTY_FREQS[v].map(([n, f]) => `<option value="${f}">${n}</option>`).join(''); }
+// RTTY squelch as PhantomSDR-Plus: dB SNR (3 kHz reference), FSK_SQ_OFF and below = off;
+// ham −5 dB, DWD weather −8 dB to start. Sent with the variant's settings, the way
+// PhantomSDR-Plus's panel sends them (fsk.js gates the printing, not the demodulator).
+const FSK_SQ_OFF = -20, RTTY_SQ = { ham: -5, weather: -8 };
+function rttySquelch() {
+  const v = parseFloat(lsGet('ubersdr_rttysq_' + rttyVariant(), ''));
+  return Number.isFinite(v) ? v : RTTY_SQ[rttyVariant()];
+}
+function rttySquelchShow() {
+  const sq = rttySquelch(), r = $('.dw-sq'), t = $('.dw-sqv');
+  if (r) r.value = String(sq);
+  if (t) t.textContent = sq <= FSK_SQ_OFF ? 'off' : sq + ' dB';
+}
+function rttySend() {
+  if (!fsk) return;
+  const v = rttyVariant(), r = RTTY[v];
+  fsk.setConfig({ center: r.center, shift: r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
+                  inverted: v === 'weather', squelch: rttySquelch() });
+}
 function rttyWindow() {
   const v = rttyVariant();
-  textWindow('RTTY decoder', `<select class="dw-var dec-sel"><option value="ham">Ham 45.45 Bd / 170 Hz</option><option value="weather">DWD weather 50 Bd / 450 Hz</option></select>
-    <select class="dw-tune dec-sel">${rttyFreqOptions(v)}</select><span class="dw-met"></span>`);
+  textWindow('RTTY decoder', `${familySelect(v)}
+    <select class="dw-tune dec-sel">${rttyFreqOptions(v)}</select>
+    <label class="dw-sqbox" title="Squelch (SNR): print only while the signal is at least this far above the noise. Noise reads −12 to −15 dB; RTTY stays readable down to about −4 dB. Far left turns it off.">Squelch
+      <input type="range" class="dw-sq" min="${FSK_SQ_OFF}" max="10" step="1"> <b class="dw-sqv"></b></label><span class="dw-met"></span>`);
   const vs = $('.dw-var'); vs.value = v;
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
     if (!ev || st.on !== 'rtty') return;
@@ -712,21 +766,112 @@ function rttyWindow() {
     else if (ev.type === 'status') status(ev.text || '');
     else if (ev.type === 'metrics') { const m = $('.dw-met'); if (m) m.textContent = Number.isFinite(ev.snrDb) ? `SNR ${ev.snrDb.toFixed(0)} dB` : ''; }
   } });
-  fsk.setVariant(v); fsk.setConfig(null); fsk.setEnabled(true);
+  fsk.setVariant(v); rttySquelchShow(); rttySend(); fsk.setEnabled(true);
   vs.onchange = () => {
-    lsSet('ubersdr_rtty', vs.value); fsk.setVariant(vs.value); fsk.setConfig(null);
+    if (familyChange(vs.value)) return;
+    fsk.setVariant(vs.value); rttySquelchShow(); rttySend();
     $('.dw-tune').innerHTML = rttyFreqOptions(vs.value); picked(0); applyFilter('rtty');
   };
+  $('.dw-sq').oninput = () => { lsSet('ubersdr_rttysq_' + rttyVariant(), $('.dw-sq').value); rttySquelchShow(); rttySend(); };
   $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter('rtty'); picked(d); } };
   status(`Listening (tones centred on ${RTTY[v].center} Hz)…`);
+}
+
+// PSK31 and Olivia (PhantomSDR-Plus fsk.js 'psk31' / 'olivia'): the signal is decoded at
+// 1000 Hz of audio. A click on a trace puts it there (narrow filter, see iscw above); the
+// lists tune to the calling frequencies.
+function oliviaMode() {
+  const i = Math.min(OLIVIA_MODES.length - 1, Math.max(0, parseInt(lsGet('ubersdr_olivia', '0'), 10) || 0));
+  return OLIVIA_MODES[i];
+}
+function digiMetrics(ev) {
+  const m = $('.dw-met'); if (!m) return;
+  const parts = [];
+  if (Number.isFinite(ev.snrDb)) parts.push(`SNR ${ev.snrDb.toFixed(0)} dB`);
+  if (st.on === 'psk31' && Number.isFinite(ev.imdDb) && ev.imdDb) parts.push(`IMD ${ev.imdDb.toFixed(0)} dB`);
+  if (Number.isFinite(ev.centerHz) && ev.centerHz) parts.push(`${Math.round(ev.centerHz)} Hz`);
+  m.textContent = parts.join(' · ');
+}
+function digiWindow(k, title, list, extra) {
+  textWindow(title, `${familySelect(k)}<select class="dw-tune dec-sel"><option value="">Frequency…</option>${list.map(([n, f]) => `<option value="${f}">${n}</option>`).join('')}</select>${extra}<span class="dw-met"></span>`);
+  fsk = new FSKWorkerProxy({ role: 'fsk', variant: k, sampleRate: SR, callback: (ev) => {
+    if (!ev || st.on !== k) return;
+    if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
+    else if (ev.type === 'status') { status(ev.text || ''); if (k === 'psk31') pskAutoResult(ev.text || ''); }
+    else if (ev.type === 'metrics') digiMetrics(ev);
+  } });
+  $('.dw-var').onchange = (e) => familyChange(e.target.value);
+  $('.dw-tune').onchange = (e) => {
+    const f = +e.target.value; if (!f) return;
+    if (k === 'olivia') {                          // the list names the set-up: use it
+      const m = /\((\d+)\/(\d+)\)/.exec(e.target.selectedOptions[0].text), i = m ? OLIVIA_MODES.findIndex(([t, b]) => t === +m[1] && b === +m[2]) : -1;
+      if (i >= 0) { $('.dw-omode').value = String(i); $('.dw-omode').onchange(); }
+    }
+    tuneKHz(f - 1); applyFilter(k); picked(f - 1);
+  };
+}
+function psk31Window() {
+  digiWindow('psk31', 'PSK31 decoder', PSK31_FREQS, `<button type="button" class="dw-auto" title="Find the strongest PSK31 carrier in the filter and lock on it">Auto-tune</button>`);
+  fsk.setVariant('psk31'); fsk.setConfig({ center: 1000, encoding: 'varicode' }); fsk.setEnabled(true);
+  $('.dw-auto').onclick = pskAutoTune;
+  status('Click a PSK31 trace on the waterfall, or pick a frequency; the decoder locks within ±25 Hz.');
+}
+// Auto-tune: fsk.js looks for the strongest carrier between 300 and 2700 Hz, so the filter
+// opens to that for a moment; the dial then moves so the carrier sits at 1000 Hz, in the
+// narrow filter again, and the decoder's centre goes back to 1000 Hz.
+let pskAuto = null;
+function pskAutoTune() {
+  if (!fsk || st.on !== 'psk31' || pskAuto) return;
+  status('Auto-tune: looking for the strongest carrier (0.3–2.7 kHz)…');
+  setFilter('usb', 0.3, 2.7);
+  pskAuto = { timer: setTimeout(() => {           // ~1.5 s of wide audio first (the scan uses the last 0.7 s)
+    if (!pskAuto || !fsk) return;
+    fsk.setAutoCenter(true);
+    pskAuto.timer = setTimeout(() => pskAutoDone(null), 4000);
+  }, 1500) };
+}
+function pskAutoResult(text) {
+  if (!pskAuto) return;
+  const m = /Auto-tune: center (\d+) Hz/.exec(text);
+  if (m) pskAutoDone(+m[1]); else if (/no signal/i.test(text)) pskAutoDone(null);
+}
+function pskAutoDone(hz) {
+  if (!pskAuto) return;
+  clearTimeout(pskAuto.timer); pskAuto = null;
+  if (st.on !== 'psk31' || !fsk) return;
+  if (hz) {
+    tuneKHz(dialKHz() + (hz - 1000) / 1000);
+    fsk.setConfig({ center: 1000, encoding: 'varicode' });
+  }
+  applyFilter('psk31');
+  status(hz ? `Auto-tune: carrier found ${hz - 1000 >= 0 ? '+' : ''}${hz - 1000} Hz away, now at 1000 Hz` : 'Auto-tune: no PSK31 carrier found');
+}
+function oliviaWindow() {
+  const sq = parseFloat(lsGet('ubersdr_oliviasq', '4')) || 4;
+  digiWindow('olivia', 'Olivia decoder', OLIVIA_FREQS,
+    `<label title="Tones / bandwidth: must match the transmission">Mode <select class="dw-omode dec-sel">${OLIVIA_MODES.map(([t, b], i) => `<option value="${i}">${t}/${b}</option>`).join('')}</select></label>` +
+    `<label class="dw-sqbox" title="Squelch (FEC S/N): print only blocks that reach this. Below 3.5 noise starts printing; a good signal reads 8–9.">Squelch <input type="range" class="dw-osq" min="3" max="15" step="0.5" value="${sq}"> <b class="dw-sqv">${sq.toFixed(1)}</b></label>`);
+  const ms = $('.dw-omode'), qs = $('.dw-osq');
+  ms.value = lsGet('ubersdr_olivia', '0');
+  const send = () => {
+    const [tones, bandwidth] = oliviaMode();
+    fsk.setConfig({ center: 1000, encoding: 'olivia', tones, bandwidth, syncThreshold: parseFloat(qs.value) || 4 });
+    status(`Looking for Olivia ${tones}/${bandwidth} (no preamble: allow a few seconds for sync)…`);
+  };
+  ms.onchange = () => { lsSet('ubersdr_olivia', ms.value); send(); applyFilter('olivia'); lightPresets(); };
+  qs.oninput = () => { lsSet('ubersdr_oliviasq', qs.value); $('.dw-sqv').textContent = (+qs.value).toFixed(1); send(); };
+  fsk.setVariant('olivia'); send(); fsk.setEnabled(true);
 }
 
 // ── Start / stop / follow ───────────────────────────────────────────────────────
 // A decoder's sideband and filter: [sb, lo, hi], kHz of audio
 function decFilter(k) {
   const d = DEC[k];
+  if (k === 'rtty' && rttyKey() !== 'rtty') return decFilter(rttyKey());
   if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = r.shift / 2 + 1.43 * r.baud; return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000]; }
   if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
+  if (k === 'psk31') return ['usb', 0.9, 1.1];                           // 1000 Hz ± 100 Hz
+  if (k === 'olivia') { const hw = (oliviaMode()[1] / 2 + 150) / 1000; return ['usb', 1 - hw, 1 + hw]; }
   return ['usb', d.lo, d.hi];
 }
 function applyFilter(k) { const [sb, lo, hi] = decFilter(k); setFilter(sb, lo, hi); }
@@ -754,7 +899,7 @@ function lightPresets() {
   const box = document.getElementById('decpresets');
   if (!box) return;
   showPresets();
-  const lit = [st.on, presetPicked].find((k) => k && filterInUse(k)) || null;
+  const lit = [famKey(st.on), presetPicked].find((k) => k && filterInUse(k)) || null;
   box.querySelectorAll('.decpre').forEach((b) => {
     b.classList.toggle('btn-selected', b.dataset.dec === lit);
     const v = b.querySelector('.dp-v'), t = presetValue(b.dataset.dec);    // RTTY: follows its variant
@@ -767,7 +912,9 @@ function presetValue(k) {
   return bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz';
 }
 function presetTitle(k) {
-  if (k === 'rtty') return 'Filter preset (RTTY): tones centred on 1000 Hz, USB; 0.85–1.15 kHz for ham 45.45 Bd / 170 Hz, 0.70–1.30 kHz for DWD weather 50 Bd / 450 Hz (the variant chosen in the RTTY window)';
+  if (k === 'rtty') return 'Filter preset (RTTY window): USB, centred on 1000 Hz; 0.85–1.15 kHz for ham RTTY 45.45 Bd / 170 Hz, 0.70–1.30 kHz for DWD weather 50 Bd / 450 Hz, 0.90–1.10 kHz for PSK31, the Olivia bandwidth + 150 Hz each side for Olivia (whichever is chosen in the RTTY window)';
+  if (k === 'psk31') return 'Filter preset (PSK31): 0.90–1.10 kHz, 200 Hz, USB (the signal at 1000 Hz)';
+  if (k === 'olivia') return 'Filter preset (Olivia): USB, centred on 1000 Hz, the Olivia bandwidth + 150 Hz each side (the mode chosen in the Olivia window)';
   const d = DEC[k], bw = Math.round((d.hi - d.lo) * 1000);
   const sb = k === 'sstv' ? 'LSB below 10 MHz, USB above' : 'USB';
   return `Filter preset (${d.title}): ${d.lo.toFixed(2)}–${d.hi.toFixed(2)} kHz, ${bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz'}, ${sb}`;
@@ -775,7 +922,7 @@ function presetTitle(k) {
 function buildPresets() {
   const box = document.getElementById('decpresets');
   if (!box || box.dataset.built) return;
-  const keys = Object.keys(DEC);
+  const keys = Object.keys(DEC).filter((k) => !DEC[k].family);
   let html = '<table align=center><tbody>';
   for (let i = 0; i < keys.length; i += 3) {
     html += '<tr>' + keys.slice(i, i + 3).map((k) =>
@@ -796,6 +943,8 @@ function start(k, opts) {
   stop(true);
   if (W.ubersdr_rade_active && W.ubersdr_rade_active() && W.ubersdr_rade_stop) W.ubersdr_rade_stop();
   const d = DEC[k];
+  if (k === 'psk31' || k === 'olivia') lsSet('ubersdr_rtty', k);
+  else if (k === 'rtty' && rttyKey() !== 'rtty') lsSet('ubersdr_rtty', 'ham');
   st.on = k; capReset(); lightButtons();
   lastBand = ''; pickedDial = 0;
   // Off the mode's usual frequencies: go to the nearest one (same as PhantomSDR-Plus's band plan)
@@ -811,10 +960,13 @@ function start(k, opts) {
   else if (k === 'fax') faxWindow();
   else if (k === 'navtex') navtexWindow();
   else if (k === 'rtty') rttyWindow();
+  else if (k === 'psk31') psk31Window();
+  else if (k === 'olivia') oliviaWindow();
 }
 function stop(quiet) {
   if (!st.on) return;
   st.on = null; capReset(); showDial();
+  if (pskAuto) { clearTimeout(pskAuto.timer); pskAuto = null; }
   for (const p of pending.values()) p.reject(new Error('stopped')); pending.clear();
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
   for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }
@@ -845,7 +997,8 @@ function stop(quiet) {
 // A label without a digital mode stops a running decoder; the label's own mode and its
 // usual filter (set by setfreqm) stay.
 const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2'], [/\bJS8(?:CALL)?\b/i, 'js8'],
-  [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty']];
+  [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty'],
+  [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia']];
 function labelMode(html) {
   const text = String(html).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' ');
   let best = null, at = Infinity;
