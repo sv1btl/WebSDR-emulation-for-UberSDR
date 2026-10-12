@@ -235,33 +235,59 @@
   // the first used to be changed, so squelch left the right channel playing).
   // Weak-signal AGC (2026-09-30; on by default, off with its switch). UberSDR's own AGC keeps the band noise at about -35 dBFS and lets signals come
   // out in proportion to their strength (a strong SSB station ~ -20 dBFS), so a weak
-  // station stays quiet. This raises a weak signal towards WAGC_TARGET_DB:
-  //   - the level follows the audio at once when it rises, holds WAGC_HANG_S, then
-  //     falls at WAGC_RELEASE_DBS, so the gain does not pump between words or sentences;
-  //   - up to WAGC_MAX_DB while a signal stands WAGC_SNR_HI dB over the noise (held 2 s),
-  //     at most WAGC_NOISE_MAX_DB on an empty channel (band hiss stays about where it was);
+  // station stays quiet. This raises a weak signal towards WAGC_TARGET_DB.
+  // Since 2026-10-12 it follows PhantomSDR-Plus's server "Auto" AGC
+  // (src/utils/audioprocessing.cpp, AGC(0.1, 100, 30, 100) + configureForSSB/AM):
+  //   - the level is the PEAK of the last 100 ms (PhantomSDR's 100 ms window), not RMS;
+  //   - attack ~3 ms: the gain drops at once when the peak rises (the limiter catches
+  //     the packet that carries it, PhantomSDR's look-ahead does that job there);
+  //   - hang only after a sudden jump (wanted gain < 0.15 x present gain, -16.5 dB):
+  //     0.4 s in SSB/CW, 1 s in AM;
+  //   - release: the gain climbs back exponentially (in linear gain, so a dip after a
+  //     crash recovers mostly within ~1 s), time constant 0.75 s SSB/CW, 1 s AM
+  //     (30 ms x 5 stretch / 0.20, resp. / 0.15);
+  //   - at most +20 dB (PhantomSDR's max_gain 1000 x 0.01).
+  // Kept from before (UberSDR's server AGC runs underneath, so this stage only adds):
+  //   - up to WAGC_MAX_DB while a signal stands WAGC_SNR_HI dB over the noise (held
+  //     4 s, then falls 5 dB/s), at most WAGC_NOISE_MAX_DB on an empty channel (band
+  //     hiss stays about where it was);
   //   - it only adds gain: strong signals are left alone (the limiter guards the peaks).
-  var WAGC_TARGET_DB = -20, WAGC_MAX_DB = 15, WAGC_NOISE_MAX_DB = 3;
-  var WAGC_HANG_S = 2, WAGC_RELEASE_DBS = 4, WAGC_SNR_LO = 3, WAGC_SNR_HI = 9;   // hang 2 s: SSB pauses do not raise the hiss
-  // While a signal is still there (a weaker station took over, not a pause) the gain
-  // comes back much faster: it used to take ~6 s after a strong station (2026-10-07)
-  var WAGC_HANG_SIG_S = 0.6, WAGC_RELEASE_SIG_DBS = 12;
-  function weakAgcGain(st, rms, snr, dt) {
-    var now = Date.now(), lv = 20 * Math.log(rms + 1e-12) / Math.LN10;
-    if (st.agcF !== window.freq) { st.agcF = window.freq; st.envDb = undefined; st.sigDb = undefined; }   // retuned: start afresh
-    if (st.envDb === undefined || lv >= st.envDb) { st.envDb = lv; st.envT = now; }
-    else {
-      var sig = snr >= WAGC_SNR_LO;
-      if (now - st.envT > (sig ? WAGC_HANG_SIG_S : WAGC_HANG_S) * 1000)
-        st.envDb = Math.max(lv, st.envDb - (sig ? WAGC_RELEASE_SIG_DBS : WAGC_RELEASE_DBS) * dt);
+  var WAGC_TARGET_DB = -9;   // peak dBFS; about the old -20 dBFS RMS on speech
+  var WAGC_MAX_DB = 20, WAGC_NOISE_MAX_DB = 3, WAGC_SNR_LO = 2, WAGC_SNR_HI = 6;
+  var WAGC_PEAK_WIN_S = 0.1, WAGC_HANG_THRESH = 0.15;
+  var WAGC_PROFILE = { ssb: { hang: 0.4, rel: 0.75 }, am: { hang: 1.0, rel: 1.0 } };
+  var WAGC_SIG_HOLD_S = 4, WAGC_SIG_FALL_DBS = 5, WAGC_SIG_RISE_DBS = 20;
+  function weakAgcGain(st, peak, snr, dt) {
+    var now = Date.now();
+    if (st.agcF !== window.freq) {   // retuned: start afresh
+      st.agcF = window.freq; st.sigDb = undefined; st.pk = []; st.agcG = undefined; st.hangUntil = 0;
     }
-    if (st.sigDb === undefined || snr >= st.sigDb) { st.sigDb = snr; st.sigT = now; }
-    else if (now - st.sigT > 2000) st.sigDb = Math.max(snr, st.sigDb - 15 * dt);   // falls before the gain can climb
+    // peak of the last 100 ms
+    st.pk.push({ t: now, v: peak });
+    while (st.pk.length > 1 && now - st.pk[0].t > WAGC_PEAK_WIN_S * 1000) st.pk.shift();
+    var pk = 0;
+    for (var i = 0; i < st.pk.length; i++) if (st.pk[i].v > pk) pk = st.pk[i].v;
+    // how much boost a signal this far over the noise may get
+    // rises at most WAGC_SIG_RISE_DBS: a short crash must not open the full boost for
+    // the next 4 s (the band hiss came up after one); a real station gets there in ~0.3 s
+    if (st.sigDb === undefined) { st.sigDb = Math.min(snr, WAGC_SNR_LO); st.sigT = now; }
+    else if (snr >= st.sigDb) { st.sigDb = Math.min(snr, st.sigDb + WAGC_SIG_RISE_DBS * dt); st.sigT = now; }
+    else if (now - st.sigT > WAGC_SIG_HOLD_S * 1000) st.sigDb = Math.max(snr, st.sigDb - WAGC_SIG_FALL_DBS * dt);
     var k = Math.max(0, Math.min(1, (st.sigDb - WAGC_SNR_LO) / (WAGC_SNR_HI - WAGC_SNR_LO)));
     var maxDb = WAGC_NOISE_MAX_DB + (WAGC_MAX_DB - WAGC_NOISE_MAX_DB) * k;
-    var gDb = Math.max(0, Math.min(maxDb, WAGC_TARGET_DB - st.envDb));
-    st.boostDb = gDb;
-    return Math.pow(10, gDb / 20);
+    var pkDb = 20 * Math.log(pk + 1e-12) / Math.LN10;
+    var want = Math.pow(10, Math.max(0, Math.min(maxDb, WAGC_TARGET_DB - pkDb)) / 20);
+    var prof = /^(AM|SAM)/i.test(String(window.mode || '')) ? WAGC_PROFILE.am : WAGC_PROFILE.ssb;
+    var g = st.agcG === undefined ? want : st.agcG;
+    if (want < g) {                                   // attack: at once
+      if (want < g * WAGC_HANG_THRESH) st.hangUntil = now + prof.hang * 1000;
+      g = want;
+    } else if (now >= st.hangUntil) {                 // release, after any hang
+      g += (want - g) * (1 - Math.exp(-dt / prof.rel));
+    }
+    st.agcG = g;
+    st.boostDb = 20 * Math.log(g) / Math.LN10;
+    return g;
   }
 
   function levelProcess(sa, chans) {
@@ -280,11 +306,13 @@
     var snr = st.bbS - noiseDb;
     window.ubersdr_level = { bb: bb, noiseDb: noiseDb, snr: snr, rmsDb: 20 * Math.log(st.rms + 1e-12) / Math.LN10 };
 
+    var peak = 0;
+    for (i = 0; i < n; i++) { var a = x[i] < 0 ? -x[i] : x[i]; if (a > peak) peak = a; }
     // Weak-signal AGC
     var g = 1;
     if (state.agcBoost && bb > -998 && nd > -998) {
-      g = weakAgcGain(st, rms, snr, n / (sa._decoderSR || 12000));
-    } else st.boostDb = 0;
+      g = weakAgcGain(st, peak, snr, n / (sa._decoderSR || 12000));
+    } else { st.boostDb = 0; st.agcG = undefined; }
     // Squelch
     var sq = 1;
     if (state.squelch && bb > -998 && nd > -998) {
@@ -297,8 +325,6 @@
     // 1) Gain reduction: if this packet's peak would exceed LIM_CEIL, reduce at once;
     //    recover at LIM_RELEASE_DBS. 2) Soft clip: anything still above LIM_KNEE (fast
     //    peaks inside a packet) is bent smoothly towards full scale instead of cut off.
-    var peak = 0;
-    for (i = 0; i < n; i++) { var a = x[i] < 0 ? -x[i] : x[i]; if (a > peak) peak = a; }
     var want = peak * g * sq > LIM_CEIL ? LIM_CEIL / (peak * g * sq) : 1;
     var rel = Math.pow(10, LIM_RELEASE_DBS * (n / (sa._decoderSR || 12000)) / 20);
     st.lim = want < st.lim ? want : Math.min(want, st.lim * rel);
@@ -308,6 +334,7 @@
     // limiter attack: when the limiter turns the gain down, do it at once (a ramp from the
     // previous, higher gain let the start of loud packets overshoot); ramp only upwards
     if (st.lim < st.limPrev && g1 < g0) g0 = g1;
+    if (g < st.g && g1 < g0) g0 = g1;                     // AGC attack: at once too (~3 ms in PhantomSDR-Plus)
     for (var ch = 0; ch < chans.length; ch++) {
       var y = chans[ch], m = y.length;
       for (i = 0; i < m; i++) {
@@ -1820,6 +1847,9 @@
   // waterfall lines and sets b so that the noise floor sits on dark blue; signals keep
   // their natural range above it (set by the Contrast slider), so a quiet band stays
   // quiet instead of having its noise stretched up to red.
+  // 2026-10-12: the low (noise) end of the PhantomSDR table in #svgGradientMap is
+  // darkened (blue/green x 0.25 at the bottom, back to 1 at entry 48), so the
+  // background is near black instead of navy; the colours above are unchanged.
   // (On 2026-09-29 the waterfall briefly used the spectrum's colours with a colour table
   // rebuilt while listening; that was reverted to this, at the user's request.)
 
@@ -1830,13 +1860,17 @@
   //     is not stretched into bright speckle,
   //   - strong signals (WF_SIG_PCT pixel) come close to WF_SIG_T (yellow → orange,
   //     short of the saturated red end).
-  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.22;
+  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.17;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands)
   var WF_SIG_PCT = 0.997, WF_SIG_T = 0.70;
-  var WF_C_MIN = 0.8, WF_C_MAX = 3;
+  var WF_SIG_W = 1.25;   // weight of the signal goal (was 1): signals come out brighter (2026-10-12)
+  var WF_C_MIN = 0.8, WF_C_MAX = 3.5;   // was 3: more room to stretch signals away from the noise (2026-10-12)
   // Wide views (all 0–30 MHz, more than WF_WIDE_KHZ across): each pixel covers many kHz,
   // so most pixels hold signals and the 85 % pixel is a signal, not noise grain. There the
   // grain limit is left out (it dimmed the whole picture) and the floor sits a bit higher.
-  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.15;
+  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.10;   // was 0.15 (2026-10-12: noise darker on busy views)
+  // ... but a softer speckle limit is kept there (weight 3, was none): without it busy
+  // stretches came out medium blue
+  var WF_GRAIN_MAX_WIDE = 0.28;
   function wfWide() { var e = window.bi && bi[window.band]; return !!(e && e.effsamplerate > WF_WIDE_KHZ); }
   var WF_AUTO_INTERVAL = 2000;                  // ms between measurements
 
@@ -1916,9 +1950,9 @@
   // (a quiet band has only a few waterfall levels, so many settings score alike).
   function wfCost(L, C) {
     var wide = wfWide();
-    return 4 * Math.abs(L.noise - (wide ? WF_NOISE_T_WIDE : WF_NOISE_T)) +
-           (wide ? 0 : 6 * Math.max(0, L.grain - WF_GRAIN_MAX)) +
-           Math.abs(L.sig - WF_SIG_T) +
+    return 6 * Math.abs(L.noise - (wide ? WF_NOISE_T_WIDE : WF_NOISE_T)) +   // weight 6, was 4 (2026-10-12, darker background)
+           (wide ? 3 * Math.max(0, L.grain - WF_GRAIN_MAX_WIDE) : 6 * Math.max(0, L.grain - WF_GRAIN_MAX)) +
+           WF_SIG_W * Math.abs(L.sig - WF_SIG_T) +
            0.05 * Math.abs(Math.log(C));
   }
   var WF_HYST = 0.04;   // a new setting must beat the current one by this much

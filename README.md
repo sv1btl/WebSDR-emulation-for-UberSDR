@@ -396,7 +396,7 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 - **Colours.** Light theme: the original teal for selected buttons, switches, radio
   buttons and sliders. Dark theme: blue (`#3a6db5`) for all of them. Without the
   background image the page background is very dark blue (`#0a1a3a`).
-- **Sliders** have a thin track and a small 3D knob in both themes.
+- **Sliders and on/off switches** have the same small 3D knob, in both themes (in the dark theme with a deeper shadow and a light edge so it stands out); slider tracks and switch grooves look slightly sunken.
 - Desktop page only; the mobile page keeps its own look.
 
 ### What listeners' browsers contact
@@ -501,12 +501,12 @@ editing, raise the `?v=` number (see section 6).
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `WAGC_TARGET_DB`, `WAGC_MAX_DB`, `WAGC_NOISE_MAX_DB` | −20, 15, 3 | Weak-signal AGC: target level (dBFS), most boost with a signal, most boost on an empty channel |
-| `WAGC_HANG_S`, `WAGC_RELEASE_DBS` | 2, 4 | Weak-signal AGC hang time and release speed |
+| `WAGC_TARGET_DB`, `WAGC_MAX_DB`, `WAGC_NOISE_MAX_DB` | −9, 20, 3 | Weak-signal AGC: target peak level (dBFS), most boost with a signal, most boost on an empty channel |
+| `WAGC_PROFILE` | SSB 0.4 / 0.75, AM 1 / 1 | Weak-signal AGC hang (s, only after a sudden jump) and release time constant (s), as the PhantomSDR-Plus Auto AGC; attack is immediate, level = peak of the last 100 ms |
 | `NR_MULT`, `NR_FLOOR` | per level | noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong |
 | `SQL_OPEN_DB`, `SQL_CLOSE_DB`, `SQL_HANG_S` | 8, 4, 0.6 | squelch: opens this many dB above the noise |
 | `LIM_CEIL`, `LIM_KNEE` | 0.7, 0.8 | soft limiter |
-| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.10, 0.70, 0.22 | auto brightness: where the noise floor and strong signals sit in the colour scale |
+| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.10, 0.70, 0.17 | auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.10, speckle limit 0.28; with `WF_SIG_W` 1.25 = how hard it pushes signals brighter, `WF_C_MAX` 3.5 = most contrast; the low end of the colour table is darkened so the background is near black) |
 | `WFTYPE_DEFAULT` | `'2'` | first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall |
 | `GEO_SERVICES` | geojs.io, ipwho.is | location lookup; set it to `[]` to switch the location in the users list off |
 | `SPEC_RANGE_DB` | 70 | spectrum height in dB |

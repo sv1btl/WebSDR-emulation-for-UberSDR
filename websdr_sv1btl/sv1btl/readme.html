@@ -112,7 +112,7 @@ html { scroll-behavior: smooth; }
       <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
       <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
     </div>
-    <div class="readout">WebSDR port<b>8901</b>package 2026-10-10</div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-10-13</div>
   </header>
 
   <div class="grid">
@@ -338,7 +338,7 @@ sv1btl/               everything else, served as /sv1btl/…
           <li><strong>Fits the window.</strong> The desktop page is scaled to the width of the browser window (0.5× to 3×), so it fills a 1024 px laptop screen as well as a Full HD, 2K or 4K monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and the frequency digits stay exact. Add <code>?nofit</code> to the address for the old fixed size.</li>
           <li><strong>Dark theme.</strong> The <strong>Dark theme</strong> switch next to Auto brightness turns dark: the page header, the WebSDR Information panel, the Waterfall / Keyboard Control / Background image boxes, the control panel (buttons, lists, switches, sliders), the RADE, CW and decoder windows, the signal strength plot, the users bar and the chat box. The radio display with the S-meter and the waterfall stay as they are. Off (the original light look) is the default; each visitor's choice is kept in their browser.</li>
           <li><strong>Colours.</strong> Light theme: the original teal for selected buttons, switches, radio buttons and sliders. Dark theme: blue (<code>#3a6db5</code>) for all of them. Without the background image the page background is very dark blue (<code>#0a1a3a</code>).</li>
-          <li><strong>Sliders</strong> have a thin track and a small 3D knob in both themes.</li>
+          <li><strong>Sliders and on/off switches</strong> have the same small 3D knob, in both themes (in the dark theme with a deeper shadow and a light edge so it stands out); slider tracks and switch grooves look slightly sunken.</li>
           <li>Desktop page only; the mobile page keeps its own look.</li>
         </ul>
         <h3>What listeners' browsers contact</h3>
@@ -415,12 +415,12 @@ bash install.sh</code></pre></div>
         <div class="table"><table>
           <thead><tr><th>Constant</th><th>Default</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>WAGC_TARGET_DB</code>, <code>WAGC_MAX_DB</code>, <code>WAGC_NOISE_MAX_DB</code></td><td>−20, 15, 3</td><td>Weak-signal AGC: target level (dBFS), most boost with a signal, most boost on an empty channel</td></tr>
-            <tr><td><code>WAGC_HANG_S</code>, <code>WAGC_RELEASE_DBS</code></td><td>2, 4</td><td>Weak-signal AGC hang time (s) and release (dB/s)</td></tr>
+            <tr><td><code>WAGC_TARGET_DB</code>, <code>WAGC_MAX_DB</code>, <code>WAGC_NOISE_MAX_DB</code></td><td>−9, 20, 3</td><td>Weak-signal AGC: target peak level (dBFS), most boost with a signal, most boost on an empty channel</td></tr>
+            <tr><td><code>WAGC_PROFILE</code></td><td>SSB 0.4 / 0.75, AM 1 / 1</td><td>Weak-signal AGC hang (s, only after a sudden jump) and release time constant (s), as the PhantomSDR-Plus Auto AGC; attack is immediate, level = peak of the last 100 ms</td></tr>
             <tr><td><code>NR_MULT</code>, <code>NR_FLOOR</code></td><td>per level</td><td>noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong</td></tr>
             <tr><td><code>SQL_OPEN_DB</code>, <code>SQL_CLOSE_DB</code>, <code>SQL_HANG_S</code></td><td>8, 4, 0.6</td><td>squelch opens this many dB above the noise</td></tr>
             <tr><td><code>LIM_CEIL</code>, <code>LIM_KNEE</code></td><td>0.7, 0.8</td><td>soft limiter</td></tr>
-            <tr><td><code>WF_NOISE_T</code>, <code>WF_SIG_T</code>, <code>WF_GRAIN_MAX</code></td><td>0.10, 0.70, 0.22</td><td>auto brightness: where the noise floor and strong signals sit in the colour scale</td></tr>
+            <tr><td><code>WF_NOISE_T</code>, <code>WF_SIG_T</code>, <code>WF_GRAIN_MAX</code></td><td>0.10, 0.70, 0.17</td><td>auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.10, speckle limit 0.28; with <code>WF_SIG_W</code> 1.25 = how hard it pushes signals brighter, <code>WF_C_MAX</code> 3.5 = most contrast; the low end of the colour table is darkened so the background is near black)</td></tr>
             <tr><td><code>WFTYPE_DEFAULT</code></td><td><code>'2'</code></td><td>first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall</td></tr>
             <tr><td><code>GEO_SERVICES</code></td><td>geojs.io, ipwho.is</td><td>location lookup; <code>[]</code> switches the location in the users list off</td></tr>
             <tr><td><code>SPEC_RANGE_DB</code></td><td>70</td><td>spectrum height in dB</td></tr>
