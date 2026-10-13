@@ -1452,7 +1452,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261010k';
+    s.src = 'sv1btl/decoders.js?v=20261013dig';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -2526,6 +2526,16 @@
     snrSt.snr = snrSt.snr === null ? snr : snrSt.snr + 0.3 * (snr - snrSt.snr);
     window.ubersdr_snr = snrSt.snr;
   }
+  // Digital-mode frame at the right of the indicator row under the S-meter (#digi_info):
+  // the running decoder (decoders.js ubersdr_dec_label) or RADE, in cyan; empty otherwise.
+  function digiLabel() {
+    var el = document.getElementById('digi_info');
+    if (!el) return;
+    var t = (window.ubersdr_dec_label && window.ubersdr_dec_label()) ||
+            (window.ubersdr_rade_active && window.ubersdr_rade_active() ? 'RADE' : '');
+    if (el.textContent !== t) el.textContent = t;
+  }
+  setInterval(function () { try { digiLabel(); } catch (x) {} }, 400);
   function snrLoop() { requestAnimationFrame(snrLoop); try { snrUpdate(); } catch (x) {} }
   window.addEventListener('load', function () { requestAnimationFrame(snrLoop); });
 

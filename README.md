@@ -388,7 +388,10 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 - The readouts sit in a row over the S-meter, in PhantomSDR-Plus's order, each in its own
   fixed cell and colour: **dBm** cyan, **dBµV** green, **SNR** yellow, **NF** red; the
   numbers themselves are a very light grey. The MUTED, SQL, ANF1, ANF2, NR and AGC lights
-  are in a row under the S-meter scale.
+  are in a row under the S-meter scale (lit: MUTED red, SQL orange, the others green), with
+  a framed box at its right end that shows the digital mode in use in yellow (FT8, JS8, WSPR,
+  SSTV, FAX, NAVTEX, the FLDIGI mode such as RTTY or PSK31, or RADE) and stays empty
+  otherwise.
 - **SNR** is measured on the waterfall, the way PhantomSDR-Plus does it: the noise is the
   quietest 3 kHz stretch of the visible span (the median of each stretch, the passband
   left out), rescanned every second; the signal is the strongest point in the passband;
@@ -424,7 +427,7 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   background image the page background is very dark blue (`#0a1a3a`). Links are blue
   (`#0645ad`) in the light theme and keep their light blue in the dark theme; in both they
   turn red under the mouse (the cyan links at the bottom of the page keep their colour).
-- **Sliders and on/off switches** have the same small 3D knob, in both themes (in the dark theme with a deeper shadow and a light edge so it stands out); slider tracks and switch grooves look slightly sunken.
+- **Sliders and on/off switches** have the same small 3D knob, in both themes (in the dark theme with a deeper shadow and a light edge so it stands out); slider tracks and switch grooves look slightly sunken. In the dark theme the "Switch to" buttons for other WebSDRs are raised grey buttons too, like the other dark buttons.
 - Desktop page only; the mobile page keeps its own look.
 
 ### What listeners' browsers contact

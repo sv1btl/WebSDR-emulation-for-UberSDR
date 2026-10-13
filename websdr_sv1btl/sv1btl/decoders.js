@@ -1095,6 +1095,16 @@ function buildPresets() {
   lightPresets();
 }
 W.ubersdr_decpresets_light = lightPresets;
+// Name of the running decoder for the frame under the S-meter (compat digiLabel); FLDIGI
+// shows the mode picked in its list. '' when none runs.
+const FLDIGI_SHORT = { ham: 'RTTY', weather: 'RTTY', psk31: 'PSK31', olivia: 'OLIVIA', mfsk: 'MFSK',
+  dominoex: 'DOMINOEX', thor: 'THOR', throb: 'THROB', hell: 'HELL', mt63: 'MT63', packet: 'PACKET', aprs: 'APRS' };
+W.ubersdr_dec_label = () => {
+  if (!st.on) return '';
+  const d = DEC[st.on];
+  if (st.on === 'rtty' || (d && d.family === 'rtty')) return FLDIGI_SHORT[lsGet('ubersdr_rtty', 'ham')] || 'FLDIGI';
+  return d ? d.label : '';
+};
 function start(k, opts) {
   stop(true);
   if (W.ubersdr_rade_active && W.ubersdr_rade_active() && W.ubersdr_rade_stop) W.ubersdr_rade_stop();

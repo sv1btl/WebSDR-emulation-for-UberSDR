@@ -147,6 +147,14 @@ body
   html.ubersdr-dark #mainpanel button.btnRec:not(:hover) { color: #ff6b6b; }
   html.ubersdr-dark #mainpanel .band_offed { color: rgba(255,255,255,.28); }
   html.ubersdr-dark #moderow .btnMode.rade-sync { color: #6ff0a0; }
+  /* "Switch to" links to other WebSDRs (a.btnNorm): raised 3D buttons like the light theme's */
+  html.ubersdr-dark a.btnNorm, html.ubersdr-dark #mainpanel a.btnNorm {
+    background: #3a4047; color: #e4e8ec; border: 1px solid #5a6068; line-height: 20px;
+    box-shadow: -1px -1px 3px rgba(255,255,255,.08), 2px 2px 5px rgba(0,0,0,.7); }
+  html.ubersdr-dark a.btnNorm:hover, html.ubersdr-dark #mainpanel a.btnNorm:hover {
+    background: #4b525a; color: #fff; border-color: #6a7078; }
+  html.ubersdr-dark a.btnNorm:active, html.ubersdr-dark #mainpanel a.btnNorm:active {
+    background: #3a6db5; color: #fff; border-color: #5a8bd0; box-shadow: inset 2px 2px 5px rgba(0,0,0,.5); }
   /* lists and text fields */
   html.ubersdr-dark #mainpanel select:not(#radiodisplay *),
   html.ubersdr-dark #mainpanel input[type=text]:not(#radiodisplay *),
@@ -275,7 +283,7 @@ body
 <!-- UberSDR: adapts the RW3PS page to UberSDR's Opus sound engine; must load before websdr-base.js -->
 <!-- Station settings (callsign, location, start frequency, …): edit sv1btl/station.js -->
 <script src="sv1btl/station.js" type="text/javascript"></script>
-<script src="sv1btl/ubersdr-compat.js?v=20261013snr" type="text/javascript"></script>
+<script src="sv1btl/ubersdr-compat.js?v=20261013dig" type="text/javascript"></script>
 <script src="websdr-base.js" type="text/javascript"></script>
 <script>ubersdr_compat_after_base();</script>
 
@@ -1080,6 +1088,9 @@ table.smetertable td {border: 1px solid #000;background-color:rgba(226, 226, 226
     text-shadow: 0px 0px 5px;
     display: inline-block;
   }
+  /* indicator colours under the S-meter when on: MUTED red, SQL orange (the rest green) */
+  #mute_info.is_on { color: red; }
+  #sql_info.is_on { color: orange; }
   .is_off {
   color: red;
     text-shadow: 0px 0px 5px;
