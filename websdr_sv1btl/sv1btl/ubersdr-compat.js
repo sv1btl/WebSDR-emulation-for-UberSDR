@@ -1872,7 +1872,8 @@
   // stretches came out medium blue
   var WF_GRAIN_MAX_WIDE = 0.28;
   function wfWide() { var e = window.bi && bi[window.band]; return !!(e && e.effsamplerate > WF_WIDE_KHZ); }
-  var WF_AUTO_INTERVAL = 2000;                  // ms between measurements
+  var WF_AUTO_INTERVAL = 2000;                  // ms between measurements once settled
+  var WF_TICK = 250;                            // ms: how often new waterfall lines are looked for
 
   var wfB = 1, wfC = 1, wfAutoTimer = null;
 
@@ -1910,14 +1911,14 @@
   // bottom, so the bottom rows are the last few seconds; rows above may still show the
   // picture from before a zoom or retune.
   var WF_ROWS = 40;
-  function wfHistogram() {
+  function wfHistogram(maxRows) {
     var hist = {}, total = 0;
     var canvases = document.querySelectorAll('#wfcdiv0 canvas');   // desktop and mobile page alike
     for (var k = 0; k < canvases.length; k++) {
       var cv = canvases[k];
       if (!cv.width || !cv.height) continue;
       var d;
-      var rows = Math.min(WF_ROWS, cv.height);
+      var rows = Math.min(maxRows || WF_ROWS, cv.height);
       try { d = cv.getContext('2d').getImageData(0, cv.height - rows, cv.width, rows).data; } catch (e) { continue; }
       for (var i = 0; i < d.length; i += 4 * 2) {          // every 2nd pixel is plenty
         var key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
@@ -1960,10 +1961,12 @@
   // Best brightness 10–500 % and contrast 80–300 % (a zoomed-in waterfall arrives from
   // UberSDR much darker than the full-band view): coarse grid, then a finer one around it
   var WF_B_MIN = 0.1, WF_B_MAX = 5;   // min was 0.3; lowered with WF_NOISE_T (2026-09-29)
-  function wfBestFit(h) {
+  // fixC: search brightness only, at this contrast (the fast start after its first fit)
+  function wfBestFit(h, fixC) {
     var best = null;
     function tryBC(B, C) {
-      if (B < WF_B_MIN || B > WF_B_MAX || C < WF_C_MIN || C > WF_C_MAX) return;
+      if (B < WF_B_MIN || B > WF_B_MAX) return;
+      if (fixC) C = fixC; else if (C < WF_C_MIN || C > WF_C_MAX) return;
       var L = wfLevels(h.list, h.total, B, C), cost = wfCost(L, C);
       if (!best || cost < best.cost) best = { B: B, C: C, cost: cost, noise: L.noise, grain: L.grain, sig: L.sig };
     }
@@ -1975,32 +1978,82 @@
   }
 
   // After a zoom, pan or mode change the bottom rows still hold the old picture until
-  // WF_ROWS new lines have arrived: about 10 lines/s at "fast", slower in proportion to
-  // waterslowness (1 fast, 2 medium, 4 slow).
-  var wfViewKey = '', wfHoldUntil = 0;
+  // new lines replace it. The new lines are counted (the bottom row changes with each
+  // one: about 1 line/s here) and only those are measured, so Auto never fits to the old
+  // picture. (Until 2026-10-13 it waited a fixed 4.5 s, then measured 40 rows, mostly
+  // old ones, and stepped every 2 s: 11 s before the first setting after a page load,
+  // and still moving 50 s after a zoom.)
+  // Fast start (2026-10-13), after a view change, page load or switching Auto on:
+  //   - the first WF_SKIP_LINES lines after a view change are left out (the switch-over
+  //     line and a half-drawn one), and for ~6 s after a zoom the noise comes one level
+  //     step lower before it settles, so the fast fits look only at the newest
+  //     WF_FAST_ROWS lines;
+  //   - the first fit comes as soon as WF_FAST_MIN_LINES clean lines are in and is
+  //     applied at once; then a fit with every new line, eased in halfway, until
+  //     WF_FAST_LINES clean lines are in;
+  //   - then the calm regime: every WF_AUTO_INTERVAL, up to WF_ROWS lines, hysteresis.
+  var WF_SKIP_LINES = 2, WF_FAST_MIN_LINES = 2, WF_FAST_ROWS = 8, WF_FAST_LINES = 12;
+  var wfViewKey = '', wfNewLines = 0, wfLinesSinceFit = 0, wfFastFits = 0, wfBottomSig = null, wfLastStep = 0;
+  function wfCleanLines() { return Math.max(0, wfNewLines - WF_SKIP_LINES); }
   function wfViewChanged() {
     var e = window.bi && window.bi[window.band];
     var key = e ? e.effcenterfreq + '/' + e.effsamplerate + '/' + window.watermode : '';
     if (key === wfViewKey) return false;
     wfViewKey = key;
-    wfHoldUntil = Date.now() + (WF_ROWS / 10) * 1000 * (window.waterslowness || 1) + 500;
     return true;
   }
+  function wfRestart(fresh) {                   // fresh: count lines from now on
+    wfNewLines = fresh ? 0 : WF_SKIP_LINES + WF_FAST_ROWS; wfLinesSinceFit = fresh ? 0 : 1; wfFastFits = 0;
+  }
+  // A few pixels of the bottom row, to see a new line arrive
+  function wfBottomRow() {
+    var canvases = document.querySelectorAll('#wfcdiv0 canvas');
+    for (var k = 0; k < canvases.length; k++) {
+      var cv = canvases[k], d, sig = '';
+      if (!cv.width || !cv.height) continue;
+      try { d = cv.getContext('2d').getImageData(0, cv.height - 1, cv.width, 1).data; } catch (e) { return null; }
+      for (var x = 0; x < cv.width; x += 16) sig += d[4 * x] + ',' + d[4 * x + 1] + ',' + d[4 * x + 2] + ';';
+      return sig;
+    }
+    return null;
+  }
 
-  function wfAutoStep() {
+  function wfTick() {
     if (window.view === 3) return;                              // waterfall off
-    if (wfViewChanged() || Date.now() < wfHoldUntil) return;
-    var h = wfHistogram();
-    if (h.total < 5000 || h.list.length < 4) return;           // waterfall still filling
-    var fit = wfBestFit(h);
-    // Small corrections are eased in so the picture does not flicker, tiny ones are
-    // ignored; after a retune or zoom, when the current setting is clearly off, jump
-    // straight to the new one.
+    if (wfViewChanged()) wfRestart(true);
+    var sig = wfBottomRow();
+    if (sig !== null && sig !== wfBottomSig) {
+      if (wfBottomSig !== null) { wfNewLines++; wfLinesSinceFit++; }
+      wfBottomSig = sig;
+    }
+    var fast = wfFastFits === 0 || wfCleanLines() < WF_FAST_LINES;
+    if (fast) { if (wfCleanLines() < WF_FAST_MIN_LINES || !wfLinesSinceFit) return; }
+    else if (Date.now() - wfLastStep < WF_AUTO_INTERVAL) return;
+    wfAutoStep(fast);
+  }
+
+  function wfAutoStep(fast) {
+    wfLastStep = Date.now();
+    var h = wfHistogram(Math.min(fast ? WF_FAST_ROWS : WF_ROWS, wfCleanLines()));   // only lines of this view
+    if (h.total < 1000 || h.list.length < 4) return;           // waterfall still filling
+    // fast start: after its first fit only the brightness follows the newest lines; the
+    // contrast hangs on the strongest few signals, which jump from line to line, and is
+    // left to the calm regime
+    var fit = wfBestFit(h, fast && wfFastFits > 0 ? wfC : 0);
     var now = wfLevels(h.list, h.total, wfB, wfC), nowCost = wfCost(now, wfC);
-    window.ubersdr_wfauto_last = { fit: fit, now: now, nowCost: nowCost, colours: h.list.length, pixels: h.total };
-    if (fit.cost > nowCost - WF_HYST) return;                  // current setting is good enough
-    var off = Math.max(Math.abs(now.noise - fit.noise), Math.abs(now.sig - fit.sig) / 3);
-    var k = off > 0.08 ? 1 : 0.4;
+    window.ubersdr_wfauto_last = { fit: fit, now: now, nowCost: nowCost, colours: h.list.length, pixels: h.total,
+                                   fast: fast, lines: wfNewLines };
+    var k;
+    if (fast) {
+      k = wfFastFits === 0 ? 1 : 0.5;
+      wfFastFits++; wfLinesSinceFit = 0;
+    } else {
+      // Small corrections are eased in so the picture does not flicker, tiny ones are
+      // ignored; when the current setting is clearly off, jump straight to the new one.
+      if (fit.cost > nowCost - WF_HYST) return;                // current setting is good enough
+      var off = Math.max(Math.abs(now.noise - fit.noise), Math.abs(now.sig - fit.sig) / 3);
+      k = off > 0.08 ? 1 : 0.4;
+    }
     wfB = Math.exp((1 - k) * Math.log(wfB) + k * Math.log(fit.B));
     wfC = Math.exp((1 - k) * Math.log(wfC) + k * Math.log(fit.C));
     wfApply();
@@ -2014,9 +2067,9 @@
     if (cb) cb.checked = on;
     if (wfAutoTimer) { clearInterval(wfAutoTimer); wfAutoTimer = null; }
     if (on) {
-      wfViewChanged(); wfHoldUntil = 0;           // measure straight away when switched on
-      wfAutoStep();
-      wfAutoTimer = setInterval(wfAutoStep, WF_AUTO_INTERVAL);
+      wfViewChanged(); wfRestart(false);          // the picture on screen is this view: fit at once
+      wfTick();
+      wfAutoTimer = setInterval(wfTick, WF_TICK);
     }
     if (remember) try { localStorage.setItem('ubersdr_wfauto', on ? '1' : '0'); } catch (e) {}
   }
