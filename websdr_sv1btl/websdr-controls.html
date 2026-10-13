@@ -521,7 +521,8 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     <div class="d-table" style="
 ">
     <div class="d-tr">
-    <div id="radiodisplay" style="
+    <div id="radiodisplay" onclick="sv1btl_freqpopup_open(event);" title="Click to enter a frequency (kHz)" style="
+    cursor: pointer;
     display: flex;
     background: black;
     border: 3px solid #9e9883;
@@ -1133,6 +1134,80 @@ Statistics:
 </div>
 <br>
 
+
+<!-- Frequency keypad: opened by clicking anywhere in the black frequency / S-meter frame (#radiodisplay),
+     except on a digit of the frequency (that click steps the digit, see ubersdr-compat.js);
+     digits, one decimal point, backspace, clear; Enter tunes (kHz). The physical keyboard works too. -->
+<style>
+  #freqpad .fpk { font-size:20px; height:44px; border:0; border-radius:6px; background:#3e454c; color:#e4e8ec; cursor:pointer; }
+  #freqpad .fpk:active { background:#3a6db5; color:white; }
+</style>
+<div id="freqpad" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.45);" onclick="if (event.target===this) sv1btl_freqpopup_close();">
+  <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:#1f2327; border:1px solid #3a6db5; border-radius:10px; padding:12px; box-shadow:0 4px 18px rgba(0,0,0,0.6); font-family:sans-serif; -webkit-user-select:none; user-select:none;">
+    <div style="color:#cfd5db; font-size:12px; margin-bottom:6px; text-align:center;">Frequency (kHz)</div>
+    <div id="freqpaddisplay" style="width:204px; height:40px; line-height:40px; font-size:30px; font-family:digital-font, monospace; text-align:right; background:black; color:#98ffee; border:1px solid #3e454c; border-radius:6px; padding:0 8px; margin-bottom:8px; overflow:hidden; white-space:nowrap;"></div>
+    <div style="display:grid; grid-template-columns:repeat(3, 70px); gap:6px;">
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('7')">7</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('8')">8</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('9')">9</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('4')">4</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('5')">5</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('6')">6</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('1')">1</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('2')">2</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('3')">3</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('.')">.</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('0')">0</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('Backspace')" title="Backspace">&#9003;</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('Clear')" style="font-size:14px;">Clear</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpopup_close()" style="font-size:14px;">Cancel</button>
+      <button type="button" class="fpk" onclick="sv1btl_freqpad_key('Enter')" style="font-size:14px; background:#3a6db5; color:white;">Enter</button>
+    </div>
+  </div>
+</div>
+<script>
+var sv1btl_freqpad_value = '';
+function sv1btl_freqpad_show() {
+   document.getElementById('freqpaddisplay').textContent = sv1btl_freqpad_value === '' ? '\u00a0' : sv1btl_freqpad_value;
+}
+function sv1btl_freqpopup_open(ev) {
+   var inp = document.freqform.frequency;
+   // a click on a digit steps it (its mousedown keeps the field unfocused); beside the digits the field gets focus
+   if (ev && ev.target === inp && document.activeElement !== inp) return;
+   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // e.g. the frequency field: keys go to the keypad
+   sv1btl_freqpad_value = '';
+   sv1btl_freqpad_show();
+   document.getElementById('freqpad').style.display = 'block';
+}
+function sv1btl_freqpopup_close() {
+   document.getElementById('freqpad').style.display = 'none';
+}
+function sv1btl_freqpad_key(k) {
+   var v = sv1btl_freqpad_value;
+   if (k >= '0' && k <= '9' && k.length == 1) { if (v.replace('.', '').length < 9) v += k; }
+   else if (k == '.' || k == ',') { if (v.indexOf('.') < 0) v += (v === '' ? '0.' : '.'); }
+   else if (k == 'Backspace') v = v.slice(0, -1);
+   else if (k == 'Clear' || k == 'Delete') v = '';
+   else if (k == 'Enter') {
+      if (!(parseFloat(v) > 0)) return;
+      sv1btl_freqpopup_close();
+      window.ubersdr_typed_freq = true;          // typed by a person: the band-plan mode applies (as in setfreqif_fut)
+      try { setfreqif(v); } finally { window.ubersdr_typed_freq = false; }
+      return;
+   }
+   sv1btl_freqpad_value = v;
+   sv1btl_freqpad_show();
+}
+// while the keypad is open, the physical keyboard types into it (and the page's keyboard shortcuts are off)
+window.addEventListener('keydown', function (e) {
+   if (document.getElementById('freqpad').style.display != 'block') return;
+   var k = e.key;
+   if (k == 'Escape') sv1btl_freqpopup_close();
+   else if (k == 'NumpadEnter') sv1btl_freqpad_key('Enter');
+   else sv1btl_freqpad_key(k);
+   e.preventDefault(); e.stopImmediatePropagation();
+}, true);
+</script>
 <div id="soundappletdiv"></div>
 
 

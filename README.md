@@ -16,6 +16,9 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz;
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
+- a **frequency keypad**: click anywhere else in the black frequency / S-meter frame (desktop
+  page) for a number pad with a decimal point; type the frequency in kHz and press Enter
+  (see "Frequency keypad" in section 6);
 - **band buttons** that zoom to the band and follow the frequency; **All** shows the
   whole receiver range and stays lit while the waterfall is fully zoomed out;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
@@ -409,6 +412,33 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   reading over a few seconds), so it can differ from NF.
 - The SNR measurement is in `sv1btl/ubersdr-compat.js` (`snrUpdate`); the readouts are
   filled in by `websdr-base.js`. Desktop page only.
+
+### Frequency keypad
+
+A click anywhere in the black frame with the frequency display, the magic eye and the
+S-meter opens a number pad over the page, so a frequency can be entered with the mouse or a
+finger as well as the keyboard.
+
+- The pad has the keys **0–9**, a decimal point **.**, **⌫** (delete the last digit),
+  **Clear**, **Cancel** and **Enter**. The number is shown in the display at its top.
+- Type the frequency in **kHz**, as in the frequency field: `7074`, `14074.5`, `198`. Only
+  digits and one decimal point are accepted (up to 9 digits); a number starting with the
+  point gets a `0` in front.
+- **Enter** tunes there and closes the pad; the mode follows the band plan, as when the
+  frequency is typed in the frequency field (LSB on 40 m, USB on 20 m…). An empty entry or
+  0 is ignored. **Cancel**, a click outside the pad or **Esc** closes it without tuning.
+- The computer keyboard works while the pad is open: digits (also the numeric keypad), `.`
+  or `,`, Backspace, Delete (clear), Enter and Esc. The page's one-key shortcuts (M for
+  mute, arrows for tuning…) are off until it closes. On a phone or tablet the pad does not
+  bring up the on-screen keyboard.
+- **Digit tuning stays as it was:** the mouse wheel over a digit, a left click on a digit
+  (up) and a right click (down) step that digit and do not open the pad. A click beside
+  the digits opens the pad (it used to put a typing cursor in the frequency field). The
+  `G` key still empties the frequency field for typing.
+- The pad is at the end of `websdr-controls.html` (`#freqpad`, functions
+  `sv1btl_freqpopup_open` and `sv1btl_freqpad_key`); the frame that opens it is
+  `#radiodisplay`. It is dark in both themes, with the dark theme's blue on Enter.
+  Desktop page only.
 
 ### Page size, look and dark theme
 

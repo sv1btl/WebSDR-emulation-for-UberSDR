@@ -146,6 +146,7 @@ html { scroll-behavior: smooth; }
           <li><strong>Click-to-tune</strong> on the waterfall and spectrum, rounded to 0.5 kHz.</li>
           <li><strong>Signal readouts</strong> on the radio display, as in PhantomSDR-Plus: <strong>dBm</strong>, <strong>dB&micro;V</strong>, <strong>SNR</strong> and <strong>NF</strong> (noise floor) in a row over the S-meter.</li>
           <li><strong>Digit tuning</strong> on the frequency display: mouse wheel over a digit, left click up, right click down.</li>
+          <li><strong>Frequency keypad</strong>: click anywhere else in the black frequency / S-meter frame (desktop page) for a number pad with a decimal point; type the frequency in kHz and press <strong>Enter</strong> (<a href="#keypad">details</a>).</li>
           <li><strong>Band buttons</strong> that zoom to the band and follow the frequency; <strong>All</strong> shows the whole receiver range and stays lit while the waterfall is fully zoomed out.</li>
           <li><strong>RADE V1</strong> (FreeDV digital voice) with the <strong>RADEL</strong> and <strong>RADEU</strong> mode buttons, decoded by UberSDR's own FreeDV extension.</li>
           <li>The desktop page <strong>fits the browser window</strong>: it is scaled to the window's width, from 1024 px screens to 4K (add <code>?nofit</code> to the address to switch this off).</li>
@@ -344,6 +345,16 @@ sv1btl/               everything else, served as /sv1btl/…
           <li>A readout shows <code>--</code> while there is nothing to show (no signal reading yet; NF also until the first SNR measurement). Unlike PhantomSDR-Plus, there is no extra +5 dB display offset: the figures follow this receiver's S-meter calibration.</li>
           <li>The grey noise marker on the S-meter bar still works the original way (the lowest reading over a few seconds), so it can differ from NF.</li>
           <li>The SNR measurement is in <code>sv1btl/ubersdr-compat.js</code> (<code>snrUpdate</code>); the readouts are filled in by <code>websdr-base.js</code>. Desktop page only.</li>
+        </ul>
+        <h3 id="keypad">Frequency keypad</h3>
+        <p>A click anywhere in the black frame with the frequency display, the magic eye and the S-meter opens a number pad over the page, so a frequency can be entered with the mouse or a finger as well as the keyboard.</p>
+        <ul>
+          <li>The pad has the keys <strong>0–9</strong>, a decimal point <strong>.</strong>, <strong>&#9003;</strong> (delete the last digit), <strong>Clear</strong>, <strong>Cancel</strong> and <strong>Enter</strong>. The number is shown in the display at its top.</li>
+          <li>Type the frequency in <strong>kHz</strong>, as in the frequency field: <code>7074</code>, <code>14074.5</code>, <code>198</code>. Only digits and one decimal point are accepted (up to 9 digits); a number starting with the point gets a <code>0</code> in front.</li>
+          <li><strong>Enter</strong> tunes there and closes the pad; the mode follows the band plan, as when the frequency is typed in the frequency field (LSB on 40 m, USB on 20 m…). An empty entry or 0 is ignored. <strong>Cancel</strong>, a click outside the pad or <strong>Esc</strong> closes it without tuning.</li>
+          <li>The computer keyboard works while the pad is open: digits (also the numeric keypad), <code>.</code> or <code>,</code>, Backspace, Delete (clear), Enter and Esc. The page's one-key shortcuts (M for mute, arrows for tuning…) are off until it closes. On a phone or tablet the pad does not bring up the on-screen keyboard.</li>
+          <li><strong>Digit tuning stays as it was:</strong> the mouse wheel over a digit, a left click on a digit (up) and a right click (down) step that digit and do not open the pad. A click beside the digits opens the pad (it used to put a typing cursor in the frequency field). The <code>G</code> key still empties the frequency field for typing.</li>
+          <li>The pad is at the end of <code>websdr-controls.html</code> (<code>#freqpad</code>, functions <code>sv1btl_freqpopup_open</code> and <code>sv1btl_freqpad_key</code>); the frame that opens it is <code>#radiodisplay</code>. It is dark in both themes, with the dark theme's blue on Enter. Desktop page only.</li>
         </ul>
         <h3>Page size, look and dark theme</h3>
         <ul>
