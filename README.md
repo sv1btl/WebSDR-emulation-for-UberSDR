@@ -389,7 +389,7 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   fixed cell and colour: **dBm** cyan, **dBµV** green, **SNR** yellow, **NF** red; the
   numbers themselves are a very light grey. The MUTED, SQL, ANF1, ANF2, NR and AGC lights
   are in a row under the S-meter scale (lit: MUTED red, SQL orange, the others green), with
-  a framed box at its right end that shows the digital mode in use in yellow (FT8, JS8, WSPR,
+  a fixed place at its right end that shows the digital mode in use in bold yellow (FT8, JS8, WSPR,
   SSTV, FAX, NAVTEX, the FLDIGI mode such as RTTY or PSK31, or RADE) and stays empty
   otherwise.
 - **SNR** is measured on the waterfall, the way PhantomSDR-Plus does it: the noise is the
