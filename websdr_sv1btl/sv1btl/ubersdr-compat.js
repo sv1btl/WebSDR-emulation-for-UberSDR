@@ -1853,21 +1853,21 @@
   // (On 2026-09-29 the waterfall briefly used the spectrum's colours with a colour table
   // rebuilt while listening; that was reverted to this, at the user's request.)
 
-  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.10;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29)
+  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.14;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29, 0.10 until 2026-10-13: lighter, then 0.12)
   // Auto contrast (2026-09-29): brightness and contrast are fitted together so that
   //   - the noise floor (median pixel) sits on WF_NOISE_T,
   //   - the noise grain (WF_GRAIN_PCT pixel) stays below WF_GRAIN_MAX, so a quiet band
   //     is not stretched into bright speckle,
   //   - strong signals (WF_SIG_PCT pixel) come close to WF_SIG_T (yellow → orange,
   //     short of the saturated red end).
-  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.17;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands)
+  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.19;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands), 0.17 until 2026-10-13, then 0.18
   var WF_SIG_PCT = 0.997, WF_SIG_T = 0.70;
   var WF_SIG_W = 1.25;   // weight of the signal goal (was 1): signals come out brighter (2026-10-12)
   var WF_C_MIN = 0.8, WF_C_MAX = 3.5;   // was 3: more room to stretch signals away from the noise (2026-10-12)
   // Wide views (all 0–30 MHz, more than WF_WIDE_KHZ across): each pixel covers many kHz,
   // so most pixels hold signals and the 85 % pixel is a signal, not noise grain. There the
   // grain limit is left out (it dimmed the whole picture) and the floor sits a bit higher.
-  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.10;   // was 0.15 (2026-10-12: noise darker on busy views)
+  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.14;   // was 0.15 (2026-10-12: noise darker on busy views), 0.10 until 2026-10-13, then 0.12
   // ... but a softer speckle limit is kept there (weight 3, was none): without it busy
   // stretches came out medium blue
   var WF_GRAIN_MAX_WIDE = 0.28;
