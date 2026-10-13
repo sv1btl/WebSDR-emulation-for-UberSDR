@@ -275,7 +275,7 @@ body
 <!-- UberSDR: adapts the RW3PS page to UberSDR's Opus sound engine; must load before websdr-base.js -->
 <!-- Station settings (callsign, location, start frequency, …): edit sv1btl/station.js -->
 <script src="sv1btl/station.js" type="text/javascript"></script>
-<script src="sv1btl/ubersdr-compat.js?v=20261013wflight2" type="text/javascript"></script>
+<script src="sv1btl/ubersdr-compat.js?v=20261013snr" type="text/javascript"></script>
 <script src="websdr-base.js" type="text/javascript"></script>
 <script>ubersdr_compat_after_base();</script>
 
@@ -487,6 +487,12 @@ body
     outline-offset: -2px;
     color: red;
   }
+  /* Links (2026-10-13): blue in the light theme (not the header's yellow links on dark red,
+     nor the cyan links at the bottom), the dark theme keeps its own colours; red on hover
+     in both themes. Button-like links (.btnNorm) keep their button look. */
+  html:not(.ubersdr-dark) a:not(.btnNorm):not(h1 a),
+  html:not(.ubersdr-dark) #mainpanel .decwin a { color: #0645ad; }
+  a:not(.btnNorm):hover, a:not(.btnNorm):focus { color: red !important; }
   h1{
     margin: -8px -8px 8px -8px;
     padding: 15px 8px 20px;

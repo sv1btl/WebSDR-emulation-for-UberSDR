@@ -22,7 +22,9 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   decoded by UberSDR's own FreeDV extension;
 - the desktop page **fits the browser window**: it is scaled to the window's width, from
   1024 px screens to 4K (add `?nofit` to the address to switch this off);
-- a **dark theme** for the whole page (the **Dark theme** switch next to Auto
+- **signal readouts** on the radio display, as in PhantomSDR-Plus: **dBm**, **dBµV**,
+  **SNR** and **NF** (noise floor) in a row over the S-meter;
+- a **dark theme** for the whole page (the **Light GUI / Dark GUI** switch next to Auto
   brightness; the original light look is the default, each visitor's choice is kept);
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
   PhantomSDR-Plus's CW decoder in the listener's browser;
@@ -381,13 +383,37 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   downloaded when JS8 is used.
 - Desktop page only.
 
+### SNR, dBm, dBµV and NF readouts
+
+- The readouts sit in a row over the S-meter, in PhantomSDR-Plus's order, each in its own
+  fixed cell and colour: **dBm** cyan, **dBµV** green, **SNR** yellow, **NF** red; the
+  numbers themselves are a very light grey. The MUTED, SQL, ANF1, ANF2, NR and AGC lights
+  are in a row under the S-meter scale.
+- **SNR** is measured on the waterfall, the way PhantomSDR-Plus does it: the noise is the
+  quietest 3 kHz stretch of the visible span (the median of each stretch, the passband
+  left out), rescanned every second; the signal is the strongest point in the passband;
+  SNR is the difference in dB, never below 0, smoothed a little. A steady carrier (AM) no
+  longer reads 0 dB, and pauses in speech are not needed. After a band change or zoom it
+  takes a second or two to settle.
+- **dBm** is the current S-meter reading, with the per-band S-meter offsets of
+  `websdr-base.js` applied.
+- **dBµV** is dBm + 107 (into 50 Ω).
+- **NF** is the noise floor in dBm: dBm minus SNR, so it always agrees with the SNR figure.
+- A readout shows `--` while there is nothing to show (no signal reading yet; NF also
+  until the first SNR measurement). Unlike PhantomSDR-Plus, there is no extra +5 dB
+  display offset: the figures follow this receiver's S-meter calibration.
+- The grey noise marker on the S-meter bar still works the original way (the lowest
+  reading over a few seconds), so it can differ from NF.
+- The SNR measurement is in `sv1btl/ubersdr-compat.js` (`snrUpdate`); the readouts are
+  filled in by `websdr-base.js`. Desktop page only.
+
 ### Page size, look and dark theme
 
 - **Fits the window.** The desktop page is scaled to the width of the browser window
   (0.5× to 3×), so it fills a 1024 px laptop screen as well as a Full HD, 2K or 4K
   monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and
   the frequency digits stay exact. Add `?nofit` to the address for the old fixed size.
-- **Dark theme.** The **Dark theme** switch next to Auto brightness turns dark: the page
+- **Dark theme.** The **Light GUI / Dark GUI** switch next to Auto brightness turns dark: the page
   header, the WebSDR Information panel, the Waterfall / Keyboard Control / Background
   image boxes, the control panel (buttons, lists, switches, sliders), the RADE, CW and
   decoder windows, the signal strength plot, the users bar and the chat box. The radio
@@ -395,7 +421,9 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   look) is the default; each visitor's choice is kept in their browser.
 - **Colours.** Light theme: the original teal for selected buttons, switches, radio
   buttons and sliders. Dark theme: blue (`#3a6db5`) for all of them. Without the
-  background image the page background is very dark blue (`#0a1a3a`).
+  background image the page background is very dark blue (`#0a1a3a`). Links are blue
+  (`#0645ad`) in the light theme and keep their light blue in the dark theme; in both they
+  turn red under the mouse (the cyan links at the bottom of the page keep their colour).
 - **Sliders and on/off switches** have the same small 3D knob, in both themes (in the dark theme with a deeper shadow and a light edge so it stands out); slider tracks and switch grooves look slightly sunken.
 - Desktop page only; the mobile page keeps its own look.
 

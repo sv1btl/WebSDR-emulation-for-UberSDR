@@ -630,61 +630,14 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     "></div>
 </div>
 	
- <div style="width: 270px;height: 76px;border-radius: 10px;">
- <div class="radio_info_container" style="
-    cursor: default;
-    /* display: none; */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    position: relative;
-    ">
-	
-    <span style="
-    color: #fee059;
-    margin-left: -233px;
-    position: relative;
-    display: inline;
-    text-align: right;
-    width: 15px;
-">SNR</span><div style="
-    color: #fee059;
-    position: relative;
-    display: inline;
-    text-align: right;
-    width: 15px;
-    margin-left: 7px;
-    position: absolute;
-    display: inline;
-    text-align: right;
-    width: 13px;
-    margin-left: 3px;
-" id="snr_info"></div><div style="
-    color: #fee059;
-    position: absolute;
-    margin-left: 18px;
-    display: inline;
-">dB</div>
-<div class="radio_info" id="mute_info" style="
-    left: 66px;
-">MUTED        </div>
-    <div class="radio_info" id="sql_info" style="
-    left: 106px;
-">SQL</div>
-    
-    <div class="radio_info" id="anf1_info" style="
-    left: 132px;
-">ANF1</div><span class="radio_info" id="anf2_info" style="
-    left: 163px;
-">ANF2</span>
-    
-    <div class="radio_info" id="nr_info" style="
-    left: 195px;
-">NR</div>
-<div class="radio_info" id="agc_info" style="
-    left: 216px;
-">AGC OFF</div>
-</div>
+ <div style="width: 270px;height: 90px;border-radius: 10px;">  <!-- was 76px; +14px for the dBm / dBµV / NF row -->
+<!-- dBm | dBµV | SNR | NF readouts on top, in PhantomSDR-Plus's order (filled in websdr-base.js) -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); width: 270px; margin-top: 8px; min-height: 13px; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: left; cursor: default; user-select: none;">  <!-- four equal, invisible cells, left-aligned: labels stay put while the numbers change -->
+          <span style="color: #98ffee;" title="Signal level in the passband">dBm <span id="dbm_info" style="color: #ededed;">--</span></span>
+          <span style="color: #15ff12;" title="Signal level in dB&micro;V (dBm + 107, 50 &Omega;)">dB&micro;V <span id="dbuv_info" style="color: #ededed;">--</span></span>
+          <span style="color: #fee059;" title="Signal to noise ratio, measured on the waterfall">SNR <span id="snr_info" style="color: #ededed;">--</span> dB</span>
+          <span style="color: #ff5a4d;" title="Noise floor = signal - SNR">NF <span id="nf_info" style="color: #ededed;">--</span> dBm</span>
+        </div>
 
 
 
@@ -744,7 +697,39 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
           <div class="mask pattern-3 flex-center"></div>
         </div>
 		
-        <img src="sv1btl/smeter.png" style="margin-top: 0px; width:270px" tppabs="smeter1down.png" alt="[scale]"> 
+        <img src="sv1btl/smeter.png" style="margin-top: 0px; width:270px" tppabs="smeter1down.png" alt="[scale]">
+        <!-- MUTED / SQL / ANF / NR / AGC indicators under the S-meter scale -->
+ <div class="radio_info_container" style="
+    margin-top: 0px;
+    min-height: 13px;
+    cursor: default;
+    /* display: none; */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: relative;
+    ">
+	
+<div class="radio_info" id="mute_info" style="
+    left: 11px;
+">MUTED        </div>
+    <div class="radio_info" id="sql_info" style="
+    left: 51px;
+">SQL</div>
+    
+    <div class="radio_info" id="anf1_info" style="
+    left: 77px;
+">ANF1</div><span class="radio_info" id="anf2_info" style="
+    left: 108px;
+">ANF2</span>
+    
+    <div class="radio_info" id="nr_info" style="
+    left: 140px;
+">NR</div>
+<div class="radio_info" id="agc_info" style="
+    left: 161px;
+">AGC OFF</div>
+</div>
         <br>
       </div>
 
@@ -920,8 +905,9 @@ Max    </span>
 </div>
 <!-- Theme of the control panel and the chat (light = the original); kept in this browser -->
 <div class="toggleWrapper" style="display: contents;" title="Dark colours for the page (off: the original light look)">
-<div style="display: inline-block; margin: 0px 7px 0px 22px; vertical-align: middle;">Dark theme</div>
+<div style="display: inline-block; margin: 0px 7px 0px 22px; vertical-align: middle;">Light GUI</div>
 <input type="checkbox" name="themesel" class="mobileToggle" id="themesel" autocomplete="off" onClick="ubersdr_theme(this.checked ? 'dark' : 'light');"><label for="themesel"></label>
+<div style="display: inline-block; margin: 0px 0px 0px 7px; vertical-align: middle;">Dark GUI</div>
 </div>
 </div>
 

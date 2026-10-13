@@ -2460,6 +2460,75 @@
   }
   window.addEventListener('load', function () { requestAnimationFrame(specLoop); });
 
+  // ── SNR the PhantomSDR-Plus way (its waterfall.js _updateSnr) ───────────────
+  // Measured on the newest waterfall line, not from the S-meter's peak and minimum:
+  //   noise  = quietest ~3 kHz patch of the visible span (the minimum of the
+  //            per-window medians, the passband and a guard band left out),
+  //            rescanned every second and eased 50 % towards each new scan;
+  //   signal = strongest bin in the tuned passband (freq + lo … freq + hi);
+  //   SNR    = max(0, signal − noise) in dB, eased 30 % towards each new line.
+  // Levels are 100/255 dB apart (see lvlToDb). websdr-base.js shows window.ubersdr_snr
+  // in the SNR box; it is null until there is a measurement.
+  var SNR_NF_SCAN_MS = 1000, SNR_WIN_HZ = 3000;
+  var snrSt = { row: null, view: '', noise: null, snr: null, nextScan: 0 };
+  window.ubersdr_snr = null;
+  function snrUpdate() {
+    var cv = document.querySelector('#wfcdiv0 canvas'), e = window.bi && bi[window.band];
+    if (!cv || !cv.width || !cv.height || !e || !(e.effsamplerate > 0)) return;
+    var d;
+    try { d = cv.getContext('2d').getImageData(0, cv.height - 1, cv.width, 1).data; } catch (x) { return; }
+    var n = cv.width, i, same = snrSt.row && snrSt.row.length === d.length;
+    if (same) for (i = 0; i < d.length; i += 16) if (d[i] !== snrSt.row[i] || d[i + 2] !== snrSt.row[i + 2]) { same = false; break; }
+    if (same) return;
+    snrSt.row = new Uint8ClampedArray(d);
+    var lvl = new Array(n);
+    for (i = 0; i < n; i++) lvl[i] = palIndex[(d[4 * i] << 16) | (d[4 * i + 1] << 8) | d[4 * i + 2]];   // undefined: blended pixel
+    var view = e.effcenterfreq + '/' + e.effsamplerate;
+    if (view !== snrSt.view) { snrSt.view = view; snrSt.noise = null; snrSt.snr = null; }   // new span: start over
+
+    // tuned passband → pixels
+    function px(fk) { return Math.round((fk - e.effcenterfreq) / e.effsamplerate * n + n / 2); }
+    var a = px(freq + lo), b = px(freq + hi), i0 = -1, i1 = -1, hasPb = false;
+    if (b < a) { var t = a; a = b; b = t; }
+    if (b >= 0 && a <= n - 1) { i0 = Math.max(0, a); i1 = Math.min(n - 1, b); hasPb = true; }
+
+    // noise floor: quietest ~3 kHz window, every SNR_NF_SCAN_MS
+    var now = Date.now();
+    if (snrSt.noise === null || now >= snrSt.nextScan) {
+      snrSt.nextScan = now + SNR_NF_SCAN_MS;
+      var hzPerPx = e.effsamplerate * 1000 / n;
+      var win = Math.max(4, Math.round(SNR_WIN_HZ / hzPerPx));
+      var guard = hasPb ? Math.max(win, (i1 - i0) + win) : 0;
+      var quiet = Infinity, buf = [], w, v;
+      for (w = 0; w + win <= n; w += win) {
+        if (hasPb && w <= i1 + guard && (w + win - 1) >= i0 - guard) continue;
+        buf.length = 0;
+        for (i = w; i < w + win; i++) { v = lvl[i]; if (v !== undefined) buf.push(v); }
+        if (buf.length < 3) continue;
+        buf.sort(function (x, y) { return x - y; });
+        if (buf[buf.length >> 1] < quiet) quiet = buf[buf.length >> 1];
+      }
+      if (!isFinite(quiet)) {                       // nothing left outside the passband: 20th percentile
+        buf.length = 0;
+        for (i = 0; i < n; i++) if (lvl[i] !== undefined) buf.push(lvl[i]);
+        if (buf.length >= 4) { buf.sort(function (x, y) { return x - y; }); quiet = buf[Math.floor(buf.length * 0.2)]; }
+      }
+      if (isFinite(quiet)) snrSt.noise = snrSt.noise === null ? quiet : snrSt.noise + 0.5 * (quiet - snrSt.noise);
+    }
+    if (snrSt.noise === null) return;
+
+    // signal: strongest bin in the passband (whole line if the passband is off screen)
+    var peak = -Infinity;
+    if (hasPb) for (i = i0; i <= i1; i++) if (lvl[i] > peak) peak = lvl[i];
+    if (!isFinite(peak)) for (i = 0; i < n; i++) if (lvl[i] > peak) peak = lvl[i];
+    if (!isFinite(peak)) return;
+    var snr = Math.max(0, (peak - snrSt.noise) * 100 / 255);
+    snrSt.snr = snrSt.snr === null ? snr : snrSt.snr + 0.3 * (snr - snrSt.snr);
+    window.ubersdr_snr = snrSt.snr;
+  }
+  function snrLoop() { requestAnimationFrame(snrLoop); try { snrUpdate(); } catch (x) {} }
+  window.addEventListener('load', function () { requestAnimationFrame(snrLoop); });
+
   // Type = spectrum (0) or spectrum + waterfall (2): keep the waterfall script in
   // waterfall mode (it is the data source) and show this spectrum over it or above it;
   // waterfall (1) hides it again. (2 was "weak sigs" and 3 "strong sigs", both removed.)

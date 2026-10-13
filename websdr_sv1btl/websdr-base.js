@@ -1599,8 +1599,20 @@ function updatesmeter()
 		} 
 		else smeterminobj.style.width="0px";
 		}
-	snrValue=Math.round((smeterpeak-smetermin)/100)
+	// SNR measured on the waterfall the PhantomSDR-Plus way (sv1btl/ubersdr-compat.js, snrUpdate);
+	// the old S-meter peak minus minimum only until the first measurement
+	snrValue = (typeof window.ubersdr_snr === 'number') ? Math.round(window.ubersdr_snr) : Math.round((smeterpeak-smetermin)/100)
 	snrobj.textContent = snrValue
+	// dBm, dBµV and NF readouts (PhantomSDR-Plus: dBµV = dBm + 107, NF = dBm - SNR)
+	var lvlobj = document.getElementById('dbm_info');
+	if (lvlobj) {
+		var dbm = (s > 0) ? Math.round(s/100 - 127) : null;
+		var sgn = function (v) { return v === null ? '--' : (v > 0 ? '+' + v : '' + v); };
+		lvlobj.textContent = sgn(dbm);
+		document.getElementById('dbuv_info').textContent = sgn(dbm === null ? null : dbm + 107);
+		document.getElementById('nf_info').textContent =
+			sgn(dbm === null || typeof window.ubersdr_snr !== 'number' ? null : Math.round(s/100 - 127 - window.ubersdr_snr));
+	}
 	// MagicEye
     if (s/61-77.3<0) {eyeval=0;
         } else {eyeval=s/61-77.3}
