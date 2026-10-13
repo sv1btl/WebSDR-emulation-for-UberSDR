@@ -1783,7 +1783,7 @@
     if (!overWaterfall(ev.target)) return;
     ev.preventDefault(); ev.stopImmediatePropagation();
     var wa = window.waterfallapplet && window.waterfallapplet[0];
-    var cv = document.querySelector('#wfcdiv0 canvas');
+    var cv = wfCanvases()[0];
     if (!wa || typeof wa.setzoom !== 'function' || !cv) return;
     var dy = ev.deltaY || 0;
     if (ev.deltaMode === 0) {                    // pixels (touchpad, smooth wheels): add up
@@ -1810,6 +1810,12 @@
   // with a CSS transform. The users strip is redrawn at the full width by douu()
   // in websdr-base.js (window.ubersdr_width), so its labels are not stretched.
   var wfScale = 1;
+
+  // The waterfall's canvas box: UberSDR's websdr-waterfall.js numbers it with a counter
+  // that keeps going up, so it is #wfcdiv0 after a page load but #wfcdiv1, #wfcdiv2, …
+  // once the waterfall has been switched off and on again (2026-10-13).
+  function wfcDiv() { return document.querySelector('[id^="wfcdiv"]'); }
+  function wfCanvases() { var d = wfcDiv(); return d ? d.querySelectorAll('canvas') : []; }
 
   function matchWidths() {
     var panel = document.querySelector('.mb[style*="min-width: 1160px"]');
@@ -1913,7 +1919,7 @@
   var WF_ROWS = 40;
   function wfHistogram(maxRows) {
     var hist = {}, total = 0;
-    var canvases = document.querySelectorAll('#wfcdiv0 canvas');   // desktop and mobile page alike
+    var canvases = wfCanvases();   // desktop and mobile page alike
     for (var k = 0; k < canvases.length; k++) {
       var cv = canvases[k];
       if (!cv.width || !cv.height) continue;
@@ -2007,7 +2013,7 @@
   }
   // A few pixels of the bottom row, to see a new line arrive
   function wfBottomRow() {
-    var canvases = document.querySelectorAll('#wfcdiv0 canvas');
+    var canvases = wfCanvases();
     for (var k = 0; k < canvases.length; k++) {
       var cv = canvases[k], d, sig = '';
       if (!cv.width || !cv.height) continue;
@@ -2074,6 +2080,21 @@
     if (remember) try { localStorage.setItem('ubersdr_wfauto', on ? '1' : '0'); } catch (e) {}
   }
   window.ubersdr_wfauto = function (on) { wfSetAuto(!!on, true); };
+
+  // Waterfall switched off and on again: the new canvas box has no colour filter yet
+  // (brightness, contrast and the colour table), and Auto starts over on its new lines
+  // (from 'load' on: before that #waterfalls still holds the placeholder #wfcdiv8)
+  var wfcSeen = null;
+  window.addEventListener('load', function () {
+    wfcSeen = wfcDiv();
+    setInterval(function () {
+      var d = wfcDiv();
+      if (!d || d === wfcSeen) return;
+      wfcSeen = d;
+      wfApply();
+      wfBottomSig = null; wfRestart(true);
+    }, WF_TICK);
+  });
 
   // The RW3PS slider handlers each replaced the whole filter, so moving one slider
   // undid the other; these apply both. Auto sets both sliders, so moving either one
@@ -2160,10 +2181,10 @@
   }
 
   function specCanvas() {
-    var wfdiv = document.getElementById('wfdiv0'), wfc = document.getElementById('wfcdiv0');
+    var wfdiv = document.getElementById('wfdiv0'), wfc = wfcDiv();
     if (!wfdiv || !wfc) return null;
     if (!spec.canvas || spec.canvas.parentNode !== wfdiv) {
-      // outside #wfcdiv0, so the waterfall's colour filter does not recolour it; the
+      // outside #wfcdivN, so the waterfall's colour filter does not recolour it; the
       // mouse passes through to the waterfall (tuning, dragging, wheel zoom)
       var c = document.createElement('canvas');
       c.id = 'ubersdr-spectrum';
@@ -2201,7 +2222,7 @@
   }
 
   // Frequency under the mouse: x across element el, which must span exactly the view
-  // (the spectrum canvas or the waterfall canvas — not #wfcdiv0, which is wider than the
+  // (the spectrum canvas or the waterfall canvas — not #wfcdivN, which is wider than the
   // picture and the frequency scale)
   function freqAtClientX(el, clientX) {
     var e = window.bi && bi[window.band];
@@ -2233,7 +2254,7 @@
     if (!document.getElementById('wfmode')) return;           // not the desktop page
     var down = null;
     document.addEventListener('mousedown', function (ev) {
-      var wfc = document.getElementById('wfcdiv0'), cv = wfc && wfc.querySelector('canvas');
+      var wfc = wfcDiv(), cv = wfc && wfc.querySelector('canvas');
       if (ev.button !== 0 || !cv || !wfc.contains(ev.target)) { down = null; return; }
       // the frequency is taken now, before the waterfall script starts moving the view
       down = { x: ev.clientX, y: ev.clientY, f: freqAtClientX(cv, ev.clientX) };
@@ -2370,14 +2391,14 @@
     vlSpan(false);
     if (!spec.canvas) return;
     spec.canvas.style.display = 'none';
-    var wfc = document.getElementById('wfcdiv0');
+    var wfc = wfcDiv();
     if (wfc && spec.canvas._layout === 'split') wfc.style.transform = '';
     spec.canvas._layout = null;
   }
 
   // Newest waterfall line → levels; true when it is a new line
   function specReadLine() {
-    var cv = document.querySelector('#wfcdiv0 canvas');
+    var cv = wfCanvases()[0];
     if (!cv || !cv.height) return false;
     var d;
     try { d = cv.getContext('2d').getImageData(0, cv.height - 1, cv.width, 1).data; } catch (e) { return false; }
@@ -2473,7 +2494,7 @@
   var snrSt = { row: null, view: '', noise: null, snr: null, nextScan: 0 };
   window.ubersdr_snr = null;
   function snrUpdate() {
-    var cv = document.querySelector('#wfcdiv0 canvas'), e = window.bi && bi[window.band];
+    var cv = wfCanvases()[0], e = window.bi && bi[window.band];
     if (!cv || !cv.width || !cv.height || !e || !(e.effsamplerate > 0)) return;
     var d;
     try { d = cv.getContext('2d').getImageData(0, cv.height - 1, cv.width, 1).data; } catch (x) { return; }
