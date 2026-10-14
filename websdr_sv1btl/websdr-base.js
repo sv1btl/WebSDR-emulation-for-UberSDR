@@ -1641,6 +1641,7 @@ function updatesmeter()
          sgraph.cv=null;
          sgraph.e0=80;
          sgraph.e1=-190;
+         sgraph.prevs=undefined;
       }
       return;
    }
@@ -1705,10 +1706,26 @@ function updatesmeter()
       }
    }
 
+   // speeds (2026-10-14): fast = 2 px per update, slow = 1 px per update (the old fast);
+   // updates every 100 ms; time markers stay 20 px apart (fast 1 s, slow 2 s)
+   var step=(v==1)?2:1;
+   var period=(v<=2)?1:v;
+   var shift=0;
    sgraph.cnt++;
-   if (sgraph.cnt>=v) {
+   if (sgraph.cnt>=period) {
       sgraph.cnt=0;
-      ct.drawImage(cv, 1,0,sgraph.width-1,cv.height, 0,0,sgraph.width-1,cv.height);  // move the plot one pixel to the left
+      shift=step;
+      ct.drawImage(cv, step,0,sgraph.width-step,cv.height, 0,0,sgraph.width-step,cv.height);  // move the plot step pixels to the left
+      // new columns: white (bg) with grey dB scale markers
+      ct.fillStyle=sgc.bg;
+      ct.fillRect(sgraph.width-step,0,step,cv.height);
+      ct.fillStyle=sgc.grid;
+      var w=sgraph.e0;
+      while ((w=10*Math.ceil(w/10))<=sgraph.e1) {
+         var y=s2y(w);
+         ct.fillRect(sgraph.width-step,y,step,1);
+         w+=1;
+      }
       var t=new Date().getTime();
       if (v>=10) v=60;
       if (Math.floor(t/1000/v)!=Math.floor(sgraph.prevt/1000/v)) {
@@ -1716,23 +1733,22 @@ function updatesmeter()
          ct.fillStyle=sgc.grid;
          ct.fillRect(sgraph.width-1,0,1,cv.height);
          sgraph.prevt=t;
-      } else {
-         // draw white vertical line with grey dB scale markers
-         ct.fillStyle=sgc.bg;
-         ct.fillRect(sgraph.width-1,0,1,cv.height);
-         ct.fillStyle=sgc.grid;
-         var w=sgraph.e0;
-         while ((w=10*Math.ceil(w/10))<=sgraph.e1) {
-            var y=s2y(w);
-            ct.fillRect(sgraph.width-1,y,1,1);
-            w+=1;
-         }
       }
    }
 
    // plot the actual data point
    ct.fillStyle=sgc.dot;   // dark blue (light theme), 2 px tall (was "blue", 1 px): easier to see (2026-10-07)
-   ct.fillRect(sgraph.width-1,Math.round(s2y(s))-1,1,2);
+   // connect to the previous point with vertical spans in the new column(s) (2026-10-14);
+   // previous value kept in dB so it maps correctly after a rescale
+   var y1=Math.round(s2y(s));
+   var y0=(sgraph.prevs===undefined) ? y1 : Math.round(s2y(sgraph.prevs));
+   if (shift==2) {
+      var ym=Math.round((y0+y1)/2);
+      ct.fillRect(sgraph.width-2,Math.min(y0,ym)-1,1,Math.abs(ym-y0)+2);
+      ct.fillRect(sgraph.width-1,Math.min(ym,y1)-1,1,Math.abs(y1-ym)+2);
+   } else
+      ct.fillRect(sgraph.width-1,Math.min(y0,y1)-1,1,Math.abs(y1-y0)+2);
+   sgraph.prevs=s;
 }
 
 function getnoise()
@@ -3047,4 +3063,5 @@ function ubersdr_sgraph_reset()
    if (!sgraph.cv) return;
    sgraph.ct.clearRect(0,0,sgraph.cv.width,sgraph.cv.height);
    sgraph.e0=80; sgraph.e1=-190;
+   sgraph.prevs=undefined;
 }
