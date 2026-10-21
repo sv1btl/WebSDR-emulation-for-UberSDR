@@ -12,7 +12,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 
 - a **waterfall** with colours and automatic brightness and contrast;
 - a **spectrum** in the PhantomSDR style, either over the waterfall or above it
-  ("spectrum + waterfall", the default for first-time visitors);
+  ("spectrum + waterfall", the default for first-time visitors); there the dashed line
+  that follows the mouse runs down through the waterfall as well, as in PhantomSDR-Plus;
 - **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz;
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
@@ -20,7 +21,10 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   page) for a number pad with a decimal point; type the frequency in kHz and press Enter
   (see "Frequency keypad" in section 6);
 - **band buttons** that zoom to the band and follow the frequency; **All** shows the
-  whole receiver range and stays lit while the waterfall is fully zoomed out;
+  whole receiver range and stays lit while the waterfall is fully zoomed out. As in
+  PhantomSDR-Plus, each band button **remembers** the last frequency tuned in that band,
+  here with its mode and filter too (kept in the visitor's browser); a second press on the
+  band already lit goes back to the band's default;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
 - the desktop page **fits the browser window**: it is scaled to the window's width, from
@@ -35,6 +39,11 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   window with RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63,
   Packet and APRS) from
   PhantomSDR-Plus, with a Decoder button row under the Mode buttons;
+- **Receive Diversity** (desktop and mobile pages), as in PhantomSDR-Plus: a second receiver somewhere
+  else (an UberSDR, a KiwiSDR, a PhantomSDR-Plus or a classic WebSDR) follows your tuning,
+  and the speaker
+  plays whichever of the two hears the station better (see "Receive Diversity" in
+  section 6);
 - **audio tools** that run in the listener's browser: Weak-signal AGC, noise reduction,
   two autonotch filters, squelch, a soft limiter, Hi-Boost, L/R output and WAV recording;
 - the **listener's country and city** in the users list, and clicking a listener tunes
@@ -132,6 +141,8 @@ updates do not touch them, and uninstalling brings back UberSDR's own page.
      backup as `docker-compose.yml.bak.<date>`;
    - reads `websdr_waterfall_calibration` from UberSDR's `config.yaml` and writes it into
      `station.js`;
+   - offers to set up the WebSDR relay for Receive Diversity, asking for its port (Enter
+     for 8902; see "Receive Diversity" in section 6);
    - asks before recreating the container. This happens only once, the first time. It
      stops the audio of anyone listening for about 15 seconds, so you can answer **N**
      and run it later with `cd ~/ubersdr && docker compose up -d ubersdr`;
@@ -161,6 +172,7 @@ and the comma at the end of each line.
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
 | `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
+| `diversityRelayPort` | `8902` | port of the WebSDR relay for Receive Diversity, on this page's host (the installer fills it in); forward it on your router |
 | `mwStepKHz` | `9` | medium-wave channel step of the >>> / <<< buttons in AM: 9 kHz in Europe, Africa and Asia, `10` in the Americas |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
 | `otherWebSDRs` | `[ 'Twente', 'http://…' ],` | the "Switch to another WebSDR" buttons, up to 6 per row, as many rows as needed |
@@ -440,6 +452,101 @@ finger as well as the keyboard.
   `#radiodisplay`. It is dark in both themes, with the dark theme's blue on Enter.
   Desktop page only.
 
+### Receive Diversity
+
+Combine this receiver with a **second receiver somewhere else** and listen to whichever of
+the two has the better signal at the moment, as PhantomSDR-Plus does. When one site is in
+a fade, the other usually is not, so you keep copy through it; two sites also have
+different local noise. It is **selection**, with a 30 ms crossfade at each switch, not a
+sum of the two signals: two distant receivers hear the station over different paths, with
+unrelated phase. So it buys continuity, not a stronger signal.
+
+- The **Receive Diversity** panel is in the middle column, just above the "Switch to
+  another WebSDR" links, collapsed. Click it to open it, choose what the second receiver
+  is, type its address and press **Start**: an **UberSDR** by its normal web address
+  (`sdr.example.org`, not port 8073), a **KiwiSDR** as `host:8073`, a **PhantomSDR+** as
+  `host:8900`, a **WebSDR** as `host:8901` (through this station's relay, see below).
+  Nothing has to be set up on the other receiver.
+- Tune as usual: the second receiver **follows** the frequency, mode and filter by itself.
+- You listen **1–3 seconds behind real time**, because the earlier stream is delayed to
+  match the later one. Lining the two streams up takes about 15–30 seconds of signal;
+  meanwhile they are paired by arrival and the better one is already chosen (*Ready
+  (unaligned)*). Both receivers must hear the station: on a band with only noise at both
+  ends they never line up, and should not.
+- The word beside the title: *off*, *Please wait…* (amber: connecting or still aligning),
+  *Ready* (green), or the error (red). The dot shows which site you hear: green this
+  receiver, cyan the second one. The table shows the link, the measured delay
+  (*aligned*), the correlation, the remote audio arriving, both SNR figures and the
+  number of switches.
+- **Remote SNR trim** (−15 … +15 dB) is added to the second receiver's SNR before the two
+  are compared: + favours it, − this one. +15 and −15 force one site, to hear it alone.
+  Start at 0; a KiwiSDR may want a few dB +. If it flips back and forth constantly, move
+  the trim a little.
+- **☰** keeps every receiver used, per type, in the visitor's browser: give one a name,
+  edit it, drag it up or down (or use ▲▼) to change the order, remove it, open its own page (🌍), and export or import all
+  the lists as a file.
+- The CW and digital decoders keep using **this** receiver (a switch in the middle of a
+  slot would spoil a decode); diversity feeds the speaker only. RADE also uses this
+  receiver.
+- A session uses one listener slot on the other receiver for as long as it runs; please
+  be considerate with volunteers' receivers.
+- The panel is `sv1btl/diversity-ui.js`; the combiner and the receiver connections are
+  PhantomSDR-Plus's own files in `sv1btl/psdr/` (`diversity.js`, `uberSource.js`,
+  `kiwiSource.js`, `remoteSource.js`, `webSdrSource.js`, `webSdrCodec.js`,
+  `diversityList.js`), with PhantomSDR-Plus's audio module
+  (`psdr/modules/phantomsdrdsp_bg.*`) for FLAC from a PhantomSDR+.
+- On the **mobile page** it is a section of its own, **Receive Diversity:**, just under the
+  RADE status line (above Memories): tap it to open it. Type, address, Start/Stop, the
+  trim, the status table and the saved receivers (tap one to use it, 🌍 its own page, ✕
+  remove, export and import) work as on the desktop; naming and reordering are on the
+  desktop page. The saved list is kept per browser, so a phone starts empty: export it on
+  the desktop and import the file on the phone.
+
+#### The WebSDR relay (for example port 8902)
+
+A classic WebSDR (PA3FWM's software) accepts its audio only from its own page, and a
+browser cannot pretend otherwise. So the connection goes through a small relay program on
+this server, PhantomSDR-Plus's `websdr_relay.py`, in `websdr_sv1btl/relay/`, run as a
+Docker container on a port of its own. Listeners' browsers connect to it directly, on that
+port of the same address as the page.
+
+**`install.sh` offers to set it up** (answer **y**). It asks for:
+
+- your **callsign** (an e-mail address too, if you like) and your page's **public
+  address** (offered from UberSDR's own settings). Both are sent to each WebSDR as the
+  relay's User-Agent, so its operator knows who is connecting;
+- the **port** for the relay: press Enter for **8902**, or type another free one
+  (1024–65535, not the WebSDR port). The installer writes it into
+  `relay/websdr_relay.json` and into `station.js` (`diversityRelayPort`), so the page
+  finds the relay there.
+
+It then builds and starts the container (it starts again by itself after a reboot) and
+checks that it answers. On an upgrade the relay's settings are kept and the container is
+restarted with the new files.
+
+> **The relay's port (e.g. 8902) must be forwarded (opened) on your router** to the
+> UberSDR machine, TCP, just like 8901. Without it, WebSDR diversity works only inside
+> your own network. UberSDR, KiwiSDR and PhantomSDR+ partners do not need it. Check it
+> with `http://<your-address>:8902/status` from outside your network (a phone on mobile
+> data).
+
+**By hand** instead (port 8902 in this example): set `"site"`, `"operator"` and `"port"` in
+`websdr_sv1btl/relay/websdr_relay.json`, then
+
+```
+docker build -t websdr-relay ~/ubersdr/websdr_sv1btl/relay
+docker run -d --name websdr_relay --restart unless-stopped -p 8902:8902 \
+  -v ~/ubersdr/websdr_sv1btl/relay:/app:ro websdr-relay
+```
+
+For another port, use it in both `-p` numbers and in `diversityRelayPort` in `station.js`.
+After editing the settings: `docker restart websdr_relay`.
+
+The relay allows 10 sessions to any one WebSDR and 60 in all, passes on only tuning
+commands, and refuses private addresses. The other WebSDR's user list shows the session as
+"<callsign> diversity". WebSDR operators added the Origin check on purpose: keep the
+limits and stop if an operator asks. `uninstall.sh` offers to remove the relay container.
+
 ### Page size, look and dark theme
 
 - **Fits the window.** The desktop page is scaled to the width of the browser window
@@ -464,6 +571,8 @@ finger as well as the keyboard.
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
 - Your UberSDR's main web server (`mainServer`), only while RADE is on.
+- The second receiver chosen in Receive Diversity, only while that runs (for a WebSDR,
+  this station's relay on port 8902 instead).
 - `get.geojs.io`, or `ipwho.is` as a fallback, once a day per visitor. This finds the
   visitor's own country and city for the users list. Nothing is sent to it except the
   normal web request. To switch it off, see section 12.
@@ -517,7 +626,8 @@ bash uninstall.sh                  # or: bash uninstall.sh /path/to/ubersdr
 ```
 
 This removes the 6 mount lines (the old file is kept as `docker-compose.yml.bak.<date>`)
-and, after asking, recreates the container. UberSDR's own WebSDR page is back.
+and, after asking, recreates the container. UberSDR's own WebSDR page is back. It also
+offers to remove the WebSDR relay container, if there is one.
 `~/ubersdr/websdr_sv1btl/` stays; delete it by hand if you want.
 
 ## 10. Manual installation (without install.sh)
@@ -596,6 +706,9 @@ editing, raise the `?v=` number (see section 6).
   (`ft8_lib.wasm`, from Karlis Goba's ft8_lib, MIT) and the JS8 engine and dictionary
   (`js8.wasm`, built on ft8_lib with tables from JS8Call, and `js8_dict.bin`, from
   JS8Call, GPL v3) keep their own terms.
+- **Receive Diversity**: the combiner, the receiver connections and the audio module in
+  `sv1btl/psdr/` and the WebSDR relay (`relay/websdr_relay.py`) come from PhantomSDR-Plus
+  and, with `sv1btl/diversity-ui.js`, are under the **GNU GPL v3**.
 - Adaptation to UberSDR, the audio tools, spectrum, tuning features, installer and this
   guide: **SV1BTL** (2026).
 

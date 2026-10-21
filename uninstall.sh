@@ -5,8 +5,9 @@
 #   bash uninstall.sh /path/to/ubersdr
 #
 # Removes the 6 websdr_sv1btl mount lines from docker-compose.yml (backup kept) and,
-# after asking, recreates the container. The websdr_sv1btl folder itself is left in
-# place (delete it by hand if you no longer want it).
+# after asking, recreates the container. It also offers to remove the WebSDR relay
+# container (Receive Diversity), if there is one. The websdr_sv1btl folder itself is left
+# in place (delete it by hand if you no longer want it).
 set -u
 USER_HOME="$HOME"
 if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then USER_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"; fi
@@ -18,6 +19,19 @@ for c in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
 done
 TS="$(date +%Y%m%d_%H%M%S)"
 [ -f "$COMPOSE" ] || { echo "ERROR: no docker-compose.yml (or compose.yml) in $UBERSDR_DIR"; exit 1; }
+
+# The WebSDR relay for Receive Diversity (a container of its own, made by install.sh)
+RELAY_NAME="${RELAY_NAME:-websdr_relay}"
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$RELAY_NAME"; then
+    read -r -p "Remove the WebSDR relay container ($RELAY_NAME) too? [y/N] " a
+    if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+        docker rm -f "$RELAY_NAME" >/dev/null && echo "Removed the relay container $RELAY_NAME (you can close its port on the router now)."
+        # the image too, unless another container still uses it
+        if [ -z "$(docker ps -aq --filter ancestor=websdr-relay 2>/dev/null)" ]; then
+            docker rmi websdr-relay >/dev/null 2>&1 && echo "Removed the websdr-relay image."
+        fi
+    fi
+fi
 
 R="$(python3 - "$COMPOSE" "$TS" <<'EOF'
 import re, shutil, sys

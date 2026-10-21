@@ -9,8 +9,11 @@
 #      (upgrade: keeps your sv1btl/station.js and sv1btl/stationinfo.txt)
 #   2. adds 6 mount lines to the "ubersdr" service in docker-compose.yml
 #   3. copies the waterfall calibration from UberSDR's config into station.js
-#   4. applies it (asks first: recreating the container cuts listeners' audio ~15 s)
-#   5. runs the check script
+#   4. offers to set up the WebSDR relay for Receive Diversity (asks first, and for its
+#      port, e.g. 8902: a Docker container, which then has to be forwarded on the router
+#      like the WebSDR port)
+#   5. applies it (asks first: recreating the container cuts listeners' audio ~15 s)
+#   6. runs the check script
 set -u
 
 PKG_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -93,6 +96,14 @@ if [ -d "$TARGET" ]; then
         cat "$SRC/sv1btl/$f" > "$TARGET/sv1btl/$f" || die "cannot write $TARGET/sv1btl/$f"
     done
     echo "   kept your sv1btl/station.js and sv1btl/stationinfo.txt"
+    if [ -d "$SRC/relay" ]; then                       # the WebSDR relay: your settings are kept
+        mkdir -p "$TARGET/relay"
+        for f in "$SRC/relay"/*; do
+            b="$(basename "$f")"
+            [ "$b" = websdr_relay.json ] && [ -f "$TARGET/relay/$b" ] && continue
+            cat "$f" > "$TARGET/relay/$b" || die "cannot write $TARGET/relay/$b"
+        done
+    fi
 else
     say "Copying the layout to $TARGET"
     mkdir -p "$TARGET" && cp -a "$SRC"/. "$TARGET"/ || die "copy failed"
@@ -263,7 +274,84 @@ case "$ADDED" in
     *)         die "could not edit $(basename "$COMPOSE"): $ADDED" ;;
 esac
 
-# ── 4. Apply ─────────────────────────────────────────────────────────────────
+# ── 4. WebSDR relay for Receive Diversity (optional) ─────────────────────────
+# A classic WebSDR accepts audio only from its own page, so a WebSDR as the second
+# receiver goes through websdr_relay.py (PhantomSDR-Plus) in a small container of its
+# own. Listeners' browsers connect to it directly: its port must be forwarded on the
+# router, like the WebSDR port. UberSDR, KiwiSDR and PhantomSDR+ partners do not need it.
+RELAY_DIR="$TARGET/relay"
+RELAY_NAME="${RELAY_NAME:-websdr_relay}"
+if [ -f "$RELAY_DIR/websdr_relay.py" ] && [ -f "$RELAY_DIR/Dockerfile" ]; then
+    RPORT="$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1])).get("port", 8902)))' "$RELAY_DIR/websdr_relay.json" 2>/dev/null || echo 8902)"
+    if docker ps -a --format '{{.Names}}' | grep -qx "$RELAY_NAME"; then
+        say "WebSDR relay: container $RELAY_NAME exists; restarting it with the new files"
+        docker restart "$RELAY_NAME" >/dev/null && echo "   restarted (port $RPORT)" || echo "   WARNING: docker restart $RELAY_NAME failed"
+    else
+        say "Receive Diversity can use classic WebSDR stations as the second receiver through a"
+        echo "   small relay on this machine (a Docker container on a port of its own, e.g. 8902). That"
+        echo "   TCP port must then be forwarded on your router to this machine, just like $PORT. Without the relay the"
+        echo "   other receiver types (UberSDR, KiwiSDR, PhantomSDR+) still work."
+        read -r -p "   Set up the WebSDR relay now? [y/N] " a
+        if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+            # The relay names your station to each WebSDR it connects to (its User-Agent)
+            CALL="$(sed -n "s/^\s*callsign:\s*'\([^']*\)'.*/\1/p" "$TARGET/sv1btl/station.js" 2>/dev/null | head -1)"
+            [ "$CALL" = "N0CALL" ] && CALL=""
+            WHOST="$(echo "$CFG" | sed -n "s/^\s*websdr_hostname:\s*[\"']*\([^\"' #]*\).*/\1/p" | head -1)"
+            SITE=""; [ -n "$WHOST" ] && SITE="http://$WHOST:$PORT"
+            read -r -p "   Your callsign (and e-mail if you like), sent to the WebSDRs [${CALL:-none}]: " v; [ -n "$v" ] && CALL="$v"
+            read -r -p "   Your page's public address [${SITE:-none}]: " v; [ -n "$v" ] && SITE="$v"
+            while :; do
+                read -r -p "   Port for the relay (forward it on your router) [$RPORT]: " v
+                [ -z "$v" ] && break
+                if [[ "$v" =~ ^[0-9]+$ ]] && [ "$v" -ge 1024 ] && [ "$v" -le 65535 ] && [ "$v" != "$PORT" ]; then RPORT="$v"; break; fi
+                echo "   (a number from 1024 to 65535, not the WebSDR port $PORT)"
+            done
+            python3 - "$RELAY_DIR/websdr_relay.json" "$CALL" "$SITE" "$RPORT" <<'EOF4'
+import json, sys
+p, call, site, port = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+cfg = json.load(open(p))
+cfg['port'] = port
+if call and cfg.get('operator', 'N0CALL') in ('', 'N0CALL'): cfg['operator'] = call
+if site and cfg.get('site', '') in ('', 'http://your.address.example:8901'): cfg['site'] = site
+open(p, 'w').write(json.dumps(cfg, indent=2) + '\n')
+EOF4
+            # the page finds the relay on its own host at this port (station.js diversityRelayPort)
+            python3 - "$TARGET/sv1btl/station.js" "$RPORT" <<'EOF5'
+import re, sys
+p, port = sys.argv[1], sys.argv[2]
+s = open(p, encoding='utf-8').read()
+n = re.sub(r'(diversityRelayPort:\s*)\d+', lambda m: m.group(1) + port, s, count=1)
+if n != s:
+    open(p, 'w', encoding='utf-8').write(n)     # same file (inode): live at once
+EOF5
+            if [ "$(id -u)" = 0 ]; then chown --reference="$COMPOSE" "$RELAY_DIR/websdr_relay.json" 2>/dev/null; fi
+            if command -v ss >/dev/null && ss -ltn | grep -qE "[:.]$RPORT\s"; then
+                echo "   WARNING: something already listens on port $RPORT; the relay was not started."
+                echo "   Run this installer again and give another port."
+            else
+                echo "   building the relay image (first time: downloads python:3.12-slim, about a minute)…"
+                if docker build -q -t websdr-relay "$RELAY_DIR" >/dev/null &&
+                   docker run -d --name "$RELAY_NAME" --restart unless-stopped -p "$RPORT:$RPORT" \
+                       -v "$RELAY_DIR:/app:ro" websdr-relay >/dev/null; then
+                    sleep 3
+                    if curl -s -m 5 "http://localhost:$RPORT/status" | grep -q relay; then
+                        echo "   relay running on port $RPORT (container $RELAY_NAME, starts again after a reboot)"
+                    else
+                        echo "   WARNING: the relay does not answer on port $RPORT; see: docker logs $RELAY_NAME"
+                    fi
+                    echo "   NOW forward TCP port $RPORT on your router to this machine (like $PORT), then check"
+                    echo "   http://<your-address>:$RPORT/status from outside your network (a phone on mobile data)."
+                else
+                    echo "   WARNING: building or starting the relay failed; the commands are in the guide"
+                fi
+            fi
+        else
+            echo "   Later: run this installer again, or follow \"The WebSDR relay\" in the guide."
+        fi
+    fi
+fi
+
+# ── 5. Apply ─────────────────────────────────────────────────────────────────
 NEED_UP=0
 if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     n=$(docker inspect "$CONTAINER" --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' | grep -c "/websdr_sv1btl/")
@@ -291,7 +379,7 @@ else
     say "Mounts already active: the new files are live now (no restart needed)"
 fi
 
-# ── 5. Check ─────────────────────────────────────────────────────────────────
+# ── 6. Check ─────────────────────────────────────────────────────────────────
 say "Checking"
 UBERSDR_DIR="$UBERSDR_DIR" CONTAINER="$CONTAINER" bash "$TARGET/check-after-update.sh"   # it finds the published port itself
 echo

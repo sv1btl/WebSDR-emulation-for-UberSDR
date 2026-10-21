@@ -567,6 +567,17 @@
       }
       if (cwd.on && decoded.channelData.length) cwFeed(decoded.channelData[0], this._decoderSR);   // raw audio, as PhantomSDR-Plus
       if (window.ubersdr_dec_tap && decoded.channelData.length) window.ubersdr_dec_tap(decoded.channelData[0], this._decoderSR);   // sv1btl/decoders.js
+      // Receive Diversity (sv1btl/diversity-ui.js): the speaker gets the better of this
+      // receiver and a second one; the decoders above keep the local audio. UberSDR
+      // decodes its mono stream as two identical channels: channel 0 is combined and the
+      // result goes to both.
+      if (window.ubersdr_div_process && decoded.channelData.length && decoded.channelData.length <= 2) {
+        var dvOut = window.ubersdr_div_process(decoded.channelData[0], this._decoderSR);
+        if (dvOut && dvOut !== decoded.channelData[0]) {
+          decoded.channelData[0] = dvOut;
+          if (decoded.channelData.length === 2) decoded.channelData[1] = dvOut;
+        }
+      }
       if (state.squelch || state.agcBoost || this._lvl) {
         if (decoded.channelData.length) levelProcess(this, decoded.channelData);
         if (!(state.squelch || state.agcBoost)) this._lvl = null;   // all off again
@@ -771,16 +782,66 @@
     return null;
   };
 
+  // Band memory, as in PhantomSDR-Plus (App.svelte bandMemory): the last frequency
+  // tuned in each amateur band, so its button brings you back where you were instead
+  // of the band's default. A second click on the button already selected forgets it,
+  // and the button tunes to the default (HAM_BANDS). Kept in this browser
+  // (localStorage), keyed by label and edges; the displayed frequency (kHz), the mode
+  // and the filter (lo/hi) are kept (mode and filter too, unlike PhantomSDR-Plus: 2026-10-21).
+  var BAND_MEM_KEY = 'ubersdr_bandmem', bandMem = {}, bandMemTimer = null, bandMemHold = false;
+  try { bandMem = JSON.parse(localStorage.getItem(BAND_MEM_KEY) || '{}') || {}; } catch (e) { bandMem = {}; }
+  function bandMemKey(hb) { return hb[0] + '|' + hb[1] + '|' + hb[2]; }
+  function bandMemSave() {
+    clearTimeout(bandMemTimer);
+    bandMemTimer = setTimeout(function () {
+      try { localStorage.setItem(BAND_MEM_KEY, JSON.stringify(bandMem)); } catch (e) {}
+    }, 1000);
+  }
+  function bandRemember(fk, mo, l, h) {        // called on every retune, mode and filter change (savePos)
+    if (bandMemHold || !(fk > 0)) return;      // not halfway through a band button
+    for (var i = 0; i < HAM_BANDS.length; i++)
+      if (fk >= HAM_BANDS[i][1] && fk <= HAM_BANDS[i][2]) {
+        bandMem[bandMemKey(HAM_BANDS[i])] = { f: Math.round(fk * 100) / 100, m: String(mo).toUpperCase(), lo: l, hi: h };
+        bandMemSave();
+      }
+  }
+  function bandRemembered(hb) {                // only if it still lies inside the band
+    var r = bandMem[bandMemKey(hb)];
+    if (typeof r === 'number') r = { f: r, m: null };   // saved before the mode was kept
+    return r && typeof r.f === 'number' && r.f >= hb[1] && r.f <= hb[2] ? r : null;
+  }
+
   window.ubersdr_gotoband = function (i) {
     var hb = HAM_BANDS[i];
     var e = bi[band];
     if (hb[3] < e.centerfreq - e.samplerate / 2 || hb[3] > e.centerfreq + e.samplerate / 2) return;
-    set_mode(hb[4]);
-    setfreq(hb[3]);
-    // Zoom the waterfall to show the whole band (same arithmetic as wfset(3))
-    var width = hb[2] - hb[1], z = 0;
-    while (2 * width < e.samplerate && z < e.maxzoom) { z++; width *= 2; }
-    wfset_freq(band, z, (hb[1] + hb[2]) / 2);
+    var btn = document.getElementById('btnHam-' + i);
+    if (btn && btn.classList.contains('btn-selected')) {   // second click: back to the band default
+      delete bandMem[bandMemKey(hb)];
+      try { localStorage.setItem(BAND_MEM_KEY, JSON.stringify(bandMem)); } catch (x) {}
+    }
+    var mem = bandRemembered(hb);
+    // the old band keeps what it had: nothing is recorded until the new band is tuned
+    bandMemHold = true;
+    try {
+      set_mode(hb[4]);
+      if (mem !== null) {
+        setfreq(mem.f - (iscw() ? (hi + lo) / 2 : 0));   // displayed → carrier (CW), as applyPos
+        var memFilt = typeof mem.lo === 'number' && typeof mem.hi === 'number' && mem.hi > mem.lo;
+        if ((mem.m && mem.m !== String(window.mode).toUpperCase()) || (memFilt && (mem.lo !== lo || mem.hi !== hi))) {
+          // the visitor's own mode and filter: past the band-plan mode that setfreq has just set
+          if (window.ubersdr_listener_mode) window.ubersdr_listener_mode();
+          if (mem.m) set_mode(mem.m);
+          if (mem.m && memFilt) setmf(mem.m.toLowerCase(), mem.lo, mem.hi);   // as applyPos
+          setfreq(mem.f - (iscw() ? (hi + lo) / 2 : 0));   // same displayed frequency in that mode/filter
+        }
+      } else setfreq(hb[3]);
+      // Zoom the waterfall to show the whole band (same arithmetic as wfset(3))
+      var width = hb[2] - hb[1], z = 0;
+      while (2 * width < e.samplerate && z < e.maxzoom) { z++; width *= 2; }
+      wfset_freq(band, z, (hb[1] + hb[2]) / 2);
+    } finally { bandMemHold = false; }
+    if (typeof nominalfreq === 'function') bandRemember(nominalfreq(), window.mode, lo, hi);
     var btns = document.getElementsByClassName('btnBand');
     for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('btn-selected', btns[k].id === 'btnHam-' + i);
   };
@@ -1456,6 +1517,14 @@
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
+  // Receive Diversity (PhantomSDR-Plus's combiner, sv1btl/psdr/diversity.js): desktop and mobile
+  window.addEventListener('load', function () {
+    var d = document.createElement('script');
+    d.type = 'module';
+    d.src = 'sv1btl/diversity-ui.js?v=20261021f';
+    d.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/diversity-ui.js'); };
+    document.head.appendChild(d);
+  });
 
   // ── Centre column grows the panel (desktop) ─────────────────────────────────
   // RW3PS's layout places the centre column with position:absolute and height:93%,
@@ -1584,7 +1653,7 @@
       origSound2.apply(this, arguments);
       if (lastPos && !soundRestored) { soundRestored = true; applyPos(lastPos); }
     };
-    function savePos() { if (posReady) window.ubersdr_savepos(nominalfreq(), mode, lo, hi); }
+    function savePos() { if (posReady) { window.ubersdr_savepos(nominalfreq(), mode, lo, hi); bandRemember(nominalfreq(), mode, lo, hi); } }
     // Band-plan mode on a band change (CAT sync, e.g. DJ0MY's CATSync): whenever the
     // frequency moves into another amateur band - from this page or from a radio - the
     // band's mode in HAM_BANDS is set (40m LSB, 20m USB, MW AM…). For BAND_MODE_HOLD_MS
@@ -2389,6 +2458,8 @@
   }
   function specHide() {
     vlSpan(false);
+    var ln = document.getElementById('ubersdr-wf-cursor');
+    if (ln) ln.style.display = 'none';
     if (!spec.canvas) return;
     spec.canvas.style.display = 'none';
     var wfc = wfcDiv();
@@ -2477,7 +2548,29 @@
     if (!specCanvas()) return;
     spec.canvas.style.display = 'block';
     if (specReadLine()) spec.dirty = true;
-    if (spec.dirty) { spec.dirty = false; specDraw(); }
+    if (spec.dirty) { spec.dirty = false; specDraw(); specWfLine(); }
+  }
+
+  // With Type = spectrum + waterfall the dashed hover line carries on down the
+  // waterfall, as in PhantomSDR-Plus (App.svelte .waterfall-cursor-line). It is a
+  // div over the waterfall in #wfdiv0, which is stretched with it (wfScale), so its
+  // left is in the waterfall's own 1024 pixels like spec.hoverX.
+  function specWfLine() {
+    var wfdiv = document.getElementById('wfdiv0'), wfc = wfcDiv();
+    var ln = document.getElementById('ubersdr-wf-cursor');
+    if (!ln && wfdiv) {
+      ln = document.createElement('div');
+      ln.id = 'ubersdr-wf-cursor';
+      ln.style.cssText = 'position:absolute;width:1px;pointer-events:none;z-index:3;display:none;' +
+        'background:repeating-linear-gradient(to bottom,rgba(255,240,80,0.6) 0 4px,transparent 4px 7px);';
+      wfdiv.appendChild(ln);
+    }
+    if (!ln) return;
+    if (!spec.on || !spec.split || spec.hoverX === null || !wfc) { ln.style.display = 'none'; return; }
+    ln.style.left = spec.hoverX + 'px';
+    ln.style.top = wfc.offsetTop + 'px';
+    ln.style.height = wfc.offsetHeight + 'px';
+    ln.style.display = 'block';
   }
   window.addEventListener('load', function () { requestAnimationFrame(specLoop); });
 

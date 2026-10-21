@@ -45,6 +45,12 @@ window.STATION = {
   // and Asia (ITU Regions 1 and 3), 10 kHz in the Americas (Region 2).
   mwStepKHz: 9,
 
+  // ── Receive Diversity: the WebSDR relay ────────────────────────────────────
+  // Port of the relay through which classic WebSDR stations are used as the second
+  // receiver (relay/websdr_relay.json; install.sh asks for it and fills this in).
+  // Forward it on your router like the WebSDR port. Default 8902.
+  diversityRelayPort: 8902,
+
   // ── "Switch to another WebSDR" buttons (up to 6 per row) ──────────────────
   // [ 'button text', 'address' ],
   otherWebSDRs: [
