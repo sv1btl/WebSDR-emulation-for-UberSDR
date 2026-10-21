@@ -1058,13 +1058,10 @@ Max    </span>
    
 <br>
 <b style="font-size: 14px;">Broadcast Station Information: </b> <!-- removed class="btnAA" --><br>
-<input type="button" class="btnMem" title="Lookup current listening frequency in the fmscan.org database (new window)" value="FM" onClick="window.open('http://fmscan.org/am-frequency.php?f='+Math.round(nominalfreq())+'&amp;b=38.76&amp;l=-77.21&amp;m=s&amp;r=m','websdrstationinfo','')">  
-<input type="button" class="btnMem" title="Lookup current listening frequency in the mwlist.org database (new window)" value="MW"
-     onclick="if (nominalfreq()<150) window.open('http://www.mwlist.org/vlf.php?area=1&amp;kHz='+Math.round(nominalfreq()*10)/10,'websdrstationinfo','')
-              else if (nominalfreq()<1710) window.open('http://www.mwlist.org/mwlist_quick_and_easy.php?area=1&amp;kHz='+Math.round(nominalfreq()),'websdrstationinfo','')
-
-              else window.open('http://www.mwlist.org/now.php?kHz='+Math.round(nominalfreq()),'websdrstationinfo','')">
-  <input type="button" class="btnMem" title="Lookup current listening frequency in the short-wave.info database (new window)" value="SW" onClick="window.open('http://www.short-wave.info/index.php?freq='+Math.round(nominalfreq())+'&amp;timbus=NOW&amp;ip=179&amp;porm=4','websdrstationinfo','')">
+<input type="button" class="btnMem" title="Lookup current listening frequency in the fmscan.org database (new window)" value="FM" onClick="window.open('https://fmscan.org/am-frequency.php?f='+Math.round(nominalfreq())+'&amp;b=38.76&amp;l=-77.21&amp;m=s&amp;r=m','websdrstationinfo','')">  
+<input type="button" class="btnMem" title="Open the mwlist.org medium-wave database (free login required; new window)" value="MW"
+     onclick="window.open('https://www.mwlist.org/mwlist_qae_login_required.php','websdrstationinfo','')">
+  <input type="button" class="btnMem" title="Lookup current listening frequency in the short-wave.info database (new window)" value="SW" onClick="window.open('https://www.short-wave.info/index.php?freq='+Math.round(nominalfreq())+'&amp;timbus=NOW&amp;ip=179&amp;porm=4','websdrstationinfo','')">
 
   </div>
  </div>
