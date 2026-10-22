@@ -1513,7 +1513,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261022off';
+    s.src = 'sv1btl/decoders.js?v=20261023frq';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -1679,7 +1679,9 @@
       var before = hamIndex(nominalfreq());
       origSetfreq.apply(this, arguments);
       var after = hamIndex(nominalfreq());
-      if (posReady && !restoring && after >= 0 && after !== before) {
+      // a running decoder (sv1btl/decoders.js) owns the mode and filter: no band-plan mode
+      var decOn = window.ubersdr_dec_label && window.ubersdr_dec_label();
+      if (posReady && !restoring && !decOn && after >= 0 && after !== before) {
         var bm = String(HAM_BANDS[after][4]).toUpperCase();
         if (String(window.mode).toUpperCase() !== bm) {
           var nom = nominalfreq();

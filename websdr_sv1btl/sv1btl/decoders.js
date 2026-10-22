@@ -149,20 +149,26 @@ const FAX_STATIONS = [
 ];
 
 // Dial frequencies (kHz, USB), from PhantomSDR-Plus modePriors.js
-const FT8_DIALS  = [1840, 3573, 5357, 7074, 10136, 14074, 18100, 21074, 24915, 28074, 50313];
+const FT8_DIALS  = [1840, 3573, 5357, 7074, 10136, 14074, 18100, 21074, 24915, 28074, 50313, 50323];
 const FT4_DIALS  = [3575.5, 7047.5, 10140, 14080, 18104, 21140, 24919, 28180];
 const JS8_DIALS  = [1842, 3578, 7078, 10130, 14078, 18104, 21078, 24922, 28078];
-const WSPR_DIALS = [136, 474.2, 1836.6, 3568.6, 5287.2, 7038.6, 10138.7, 14095.6, 18104.6, 21094.6, 24924.6, 28124.6];
+const WSPR_DIALS = [136, 474.2, 1836.6, 3568.6, 3592.6, 5287.2, 7038.6, 10138.7, 14095.6, 18104.6, 21094.6, 24924.6, 28124.6];
 const NAVTEX_STATIONS = [
   ['International NAVTEX 518 kHz', 518], ['National NAVTEX 490 kHz', 490], ['Japan 424 kHz', 424],
-  ['HF NAVTEX 4209.5 kHz', 4209.5], ['HF 6314 kHz', 6314], ['HF 8416.5 kHz', 8416.5],
-  ['HF 12579 kHz', 12579], ['HF 16806.5 kHz', 16806.5]];
+  ['MF NBDP 2174.5 kHz (ITU working)', 2174.5],
+  ['HF NAVTEX 4209.5 kHz', 4209.5], ['HF SITOR 4210 kHz', 4210], ['HF 6314 kHz', 6314], ['HF 8416.5 kHz', 8416.5],
+  ['HF 12579 kHz', 12579], ['HF 16806.5 kHz', 16806.5], ['HF 19680.5 kHz', 19680.5], ['HF 22376 kHz', 22376],
+  ['HF 26100.5 kHz', 26100.5]];   // HF: ITU Appendix 15 NBDP/SITOR-B (PhantomSDR-Plus maritime list)
 const RTTY_FREQS = {          // signal centre, kHz (PhantomSDR-Plus FSK_KNOWN_FREQUENCIES)
   ham: [['80m RTTY 3590', 3590], ['40m RTTY 7043', 7043], ['30m RTTY 10143', 10143], ['20m RTTY 14083', 14083],
         ['15m RTTY 21083', 21083], ['10m RTTY 28083', 28083]],
   weather: [['DWD DDK2 4583', 4583], ['DWD DDH7 7646', 7646], ['DWD DDK9 10100.8', 10100.8],
-            ['DWD DDH9 11039', 11039], ['DWD DDH8 14467.3', 14467.3]]
+            ['DWD DDH9 11039', 11039], ['DWD DDH8 14467.3', 14467.3],
+            ['DWD DDH47 147.3 (LF, 85 Hz)', 147.3, 85]]   // 3rd: its own shift, Hz (DDH47 is ±42.5 Hz)
 };
+// Packet: the HF APRS USB dial (tones at 1600/1800 Hz); PhantomSDR-Plus's VHF entries are
+// outside this receiver
+const PACKET_DIALS = [['30m HF APRS 10147.6 (dial, 300 Bd)', 10147.6]];
 // PSK31 and Olivia: signal frequencies, kHz (PhantomSDR-Plus FSK_KNOWN_FREQUENCIES)
 const PSK31_FREQS = [['80m 3580.15', 3580.15], ['40m 7040.15', 7040.15], ['30m 10142.15', 10142.15], ['20m 14070.15', 14070.15],
                      ['17m 18100.15', 18100.15], ['15m 21080.15', 21080.15], ['12m 24920.15', 24920.15], ['10m 28120.15', 28120.15]];
@@ -759,6 +765,7 @@ function navtexWindow() {
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
 const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 } };
+let rttyShift = 0;            // a listed frequency's own shift, Hz (DDH47); 0 = the mode's
 function rttyVariant() { return lsGet('ubersdr_rtty', 'ham') === 'weather' ? 'weather' : 'ham'; }
 function rttyFreqOptions(v) { return `<option value="">Frequency…</option>` + RTTY_FREQS[v].map(([n, f]) => `<option value="${f}">${n}</option>`).join(''); }
 // RTTY squelch as PhantomSDR-Plus: dB SNR (3 kHz reference), FSK_SQ_OFF and below = off;
@@ -777,11 +784,12 @@ function rttySquelchShow() {
 function rttySend() {
   if (!fsk) return;
   const v = rttyVariant(), r = RTTY[v];
-  fsk.setConfig({ center: r.center, shift: r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
+  fsk.setConfig({ center: r.center, shift: rttyShift || r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
                   inverted: v === 'weather', squelch: rttySquelch() });
 }
 function rttyWindow() {
   const v = rttyVariant();
+  rttyShift = 0;
   textWindow('RTTY decoder', `${familySelect(v)}
     <select class="dw-tune dec-sel">${rttyFreqOptions(v)}</select>
     <label class="dw-sqbox" title="Squelch (SNR): print only while the signal is at least this far above the noise. Noise reads −12 to −15 dB; RTTY stays readable down to about −4 dB. Far left turns it off.">Squelch
@@ -796,11 +804,16 @@ function rttyWindow() {
   fsk.setVariant(v); rttySquelchShow(); rttySend(); fsk.setEnabled(true);
   vs.onchange = () => {
     if (familyChange(vs.value)) return;
-    fsk.setVariant(vs.value); rttySquelchShow(); rttySend();
+    rttyShift = 0; fsk.setVariant(vs.value); rttySquelchShow(); rttySend();
     $('.dw-tune').innerHTML = rttyFreqOptions(vs.value); picked(0); applyFilter('rtty');
   };
   $('.dw-sq').oninput = () => { lsSet('ubersdr_rttysq_' + rttyVariant(), $('.dw-sq').value); rttySquelchShow(); rttySend(); };
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter('rtty'); picked(d); } };
+  $('.dw-tune').onchange = (e) => {
+    const f = +e.target.value; if (!f) return;
+    const it = RTTY_FREQS[rttyVariant()].find((x) => x[1] === f);
+    rttyShift = (it && it[2]) || 0; rttySend();
+    const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter('rtty'); picked(d);
+  };
   status(`Listening (tones centred on ${RTTY[v].center} Hz)…`);
 }
 
@@ -1015,8 +1028,9 @@ function modemStatus() {
 // VHF, which this receiver does not cover. Tones 1600/1800 Hz (centre 1700), USB.
 function packetWindow() {
   const v = lsGet('ubersdr_rtty', 'packet') === 'aprs' ? 'aprs' : 'packet';
-  textWindow(v === 'aprs' ? 'APRS decoder' : 'Packet (AX.25) decoder', `${familySelect(v)}<span class="dw-met"></span>`);
+  textWindow(v === 'aprs' ? 'APRS decoder' : 'Packet (AX.25) decoder', `${familySelect(v)}<select class="dw-tune dec-sel"><option value="">Frequency…</option>${PACKET_DIALS.map(([n, f]) => `<option value="${f}">${n}</option>`).join('')}</select><span class="dw-met"></span>`);
   $('.dw-var').onchange = (e) => familyChange(e.target.value);
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f); applyFilter('packet'); picked(f); } };
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
     if (!ev || st.on !== 'packet') return;
     if (ev.type === 'line') textOut((ev.text || '') + '\n');
@@ -1032,7 +1046,7 @@ function packetWindow() {
 function decFilter(k) {
   const d = DEC[k];
   if (k === 'rtty' && rttyKey() !== 'rtty') return decFilter(rttyKey());
-  if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = r.shift / 2 + 1.43 * r.baud; return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000]; }
+  if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = (rttyShift || r.shift) / 2 + 1.43 * r.baud; return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000]; }
   if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
   if (k === 'psk31') return ['usb', 0.9, 1.1];                           // 1000 Hz ± 100 Hz
   if (k === 'olivia') { const hw = (oliviaMode().b / 2 + 150) / 1000; return ['usb', 1 - hw, 1 + hw]; }
@@ -1190,6 +1204,17 @@ function labelMode(html) {
   for (const [re, k, v] of LABEL_MODES) { const m = re.exec(text); if (m && m.index < at) { best = k; at = m.index; labelVariant = v || null; } }
   return best;
 }
+// A decoder that decodes above the dial (FAX 1.9, NAVTEX 0.5, RTTY 1.0 kHz; PSK31, Olivia,
+// the fldigi modems and Packet at their audio centre): the label is the signal's frequency,
+// so the dial goes that far below it and the box shows the label's (518usb NAVTEX: dial
+// 517.50, shown 518.00), as for a typed frequency. The shift is the box's own: the decoder
+// offset, or the passband middle with a CW-like (narrow) filter.
+function labelSignal(k) {
+  const lf = Number(W.ubersdr_label_khz);
+  if (st.on !== k || !(lf > 0)) return;
+  const shift = (W.iscw() ? (Number(W.hi) + Number(W.lo)) / 2 : 0) + (W.ubersdr_dec_offset() || 0);
+  if (shift > 0.0005 && Math.abs(dialKHz() - (lf - shift)) > 0.0005) { tuneKHz(lf - shift); applyFilter(k); }
+}
 document.addEventListener('click', (e) => {
   const lab = e.target.closest && e.target.closest('.statinfo0, .statinfo0l');
   if (!lab) return;
@@ -1199,15 +1224,18 @@ document.addEventListener('click', (e) => {
     lsSet('ubersdr_rtty', labelVariant);
     const mf = /\bMFSK ?-?(16|32|64)\b/i.exec(lab.textContent || '');
     if (labelVariant === 'mfsk' && mf) lsSet('ubersdr_modem_mfsk', 'mfsk' + mf[1]);
-    if (st.on === k) { start(k); return; }
+    if (st.on === k) { start(k); labelSignal(k); return; }
   }
   setTimeout(() => {                               // after setfreqm's tuning has settled
     try {
       const d = DEC[k], f = dialKHz(), near = d.dials ? nearest(d.dials, f) : null;
       const keepDial = near === null || Math.abs(near - f) > 2;
-      if (st.on !== k) { start(k, { keepDial }); return; }
-      if (!keepDial && Math.abs(near - f) > 0.01) tuneKHz(near);
-      applyFilter(k); lightPresets();
+      if (st.on !== k) start(k, { keepDial });
+      else {
+        if (!keepDial && Math.abs(near - f) > 0.01) tuneKHz(near);
+        applyFilter(k); lightPresets();
+      }
+      labelSignal(k);
     } catch (err) { console.error('decoders: label', err); }
   }, 0);
 });

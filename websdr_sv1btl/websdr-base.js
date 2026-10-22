@@ -579,6 +579,7 @@ function dx(freq,mode,text)
 
 function setfreqm(b,f,mo)
 {
+   window.ubersdr_label_khz=f;   // SV1BTL: the label's own frequency, for sv1btl/decoders.js
    setband(b);
    set_mode(mo);
    if (iscw()) f-=(hi+lo)/2;
@@ -1166,7 +1167,8 @@ function setfreqb(f)
       // SV1BTL: RW3PS's band-plan table (modeperfreq) only for a frequency typed in the box
       // by a person; a change of amateur band sets the band's mode in setfreq
       // (ubersdr-compat.js, also for CAT tools), and within a band a mode set by software is kept.
-      if (window.ubersdr_typed_freq && (initmodeflag==1 || mode=="USB")) modeperfreq(f);
+      // (not while a decoder runs: it owns the mode and filter, sv1btl/decoders.js)
+      if (window.ubersdr_typed_freq && (initmodeflag==1 || mode=="USB") && !(window.ubersdr_dec_label && window.ubersdr_dec_label())) modeperfreq(f);
       initmodeflag=1;
       return;
    }

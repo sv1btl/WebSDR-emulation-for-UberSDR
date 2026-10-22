@@ -218,6 +218,9 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
   RTTY, PSK31, Olivia, MFSK16/32/64, DominoEX, THOR, THROB, Hell, MT63, Packet, APRS) also starts that decoder, with its own sideband and filter (desktop page). Within
   2 kHz of the mode's usual frequency it tunes to that frequency. "FT8<br>JT65" starts
   FT8. Clicking a label without a digital mode stops a running decoder.
+  For the decoders that read the signal above the dial (FAX, NAVTEX, RTTY, PSK31, Olivia,
+  the FLDIGI modems, Packet) the label is the signal's own frequency: `518usb NAVTEX`
+  tunes the dial to 517.50 and the display shows 518.00.
 - Lines starting with `#` are comments.
 - `<br>` in the text starts a second line.
 
@@ -373,14 +376,14 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 | JS8 | USB 0.1–3.0 kHz, the band's JS8 frequency | messages put together from JS8 frames; speed Normal/Fast/Turbo/Slow/Ultra |
 | WSPR | USB 1.3–1.7 kHz, the band's WSPR frequency | spots every 2 minutes (even UTC minutes): call, locator, dBm, kHz, SNR, distance |
 | SSTV | LSB below 10 MHz, USB above; 1.0–2.5 kHz | the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies |
-| FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency |
-| NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations |
-| FLDIGI | USB, around the mode's audio centre | the window's list: Ham RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB / THROBX, Hellschreiber, MT63, Packet (AX.25), APRS, DWD weather RTTY (the FLDIGI button reopens the last one). RTTY: text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz, with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
+| FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency, which the display shows |
+| NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations and the ITU SITOR-B channels (2174.5, 4210 … 26100.5 kHz) |
+| FLDIGI | USB, around the mode's audio centre | the window's list: Ham RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB / THROBX, Hellschreiber, MT63, Packet (AX.25), APRS, DWD weather RTTY (the FLDIGI button reopens the last one). RTTY: text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz (DDH47 on 147.3 kHz LF: 85 Hz, set when picked), with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
 | PSK31 (FLDIGI list) | USB 0.9–1.1 kHz, the signal at 1000 Hz | text; calling frequencies; **Auto-tune** finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK31 trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus |
 | Olivia (FLDIGI list) | USB around 1000 Hz, the signal bandwidth + 150 Hz each side | text; mode 8/250, 16/500, 32/1000 or 16/1000 (must match the signal); **Squelch** slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter |
 | MFSK16·32·64, DominoEX, THOR, THROB / THROBX, MT63 (FLDIGI list) | USB around 1500 Hz (MT63: its lowest carrier at 500 Hz), the signal bandwidth plus a margin | text; a Mode list (speed or bandwidth, must match the signal: MFSK16/32/64, DominoEX Micro–88, THOR Micro–100, THROB/THROBX 1/2/4, MT63 500/1000/2000 short or long) and its own **Squelch** scale as in PhantomSDR-Plus (MFSK 0–60, default 22; DominoEX and THOR 0–80, default 25; THROB 0–20 dB, default 4; MT63 0–15, default 4; far left = off); **Auto-tune** finds the strongest signal within 0.3–2.7 kHz and moves the dial onto it — THROB must be within ±3 Hz. A click on a trace puts it in the filter. MFSK and MT63 text comes a few seconds behind the signal |
 | Hellschreiber (FLDIGI list) | USB around 1500 Hz | a picture of the received text, as on paper (no squelch, as fldigi); Feld Hell, Slow Hell, Hell X5/X9, FSK Hell 245/105, Hell 80; **Reverse** for FSK Hell sent the other way round; **Save** as PNG; Auto-tune |
-| Packet (AX.25), APRS (FLDIGI list) | USB 1.3–2.1 kHz, tones 1600/1800 Hz | 300 Bd HF packet: every frame like a TNC monitor, or APRS decoded into plain text (positions, weather, messages…). Only frames with a correct checksum are printed. 1200 Bd VHF packet needs FM above 30 MHz, which this receiver does not cover; there is no APRS map |
+| Packet (AX.25), APRS (FLDIGI list) | USB 1.3–2.1 kHz, tones 1600/1800 Hz | 300 Bd HF packet: every frame like a TNC monitor, or APRS decoded into plain text (positions, weather, messages…). Only frames with a correct checksum are printed. List: the 30 m HF APRS dial, 10147.6 kHz. 1200 Bd VHF packet needs FM above 30 MHz, which this receiver does not cover; there is no APRS map |
 
 - JS8 and WSPR show a bar under the window title: it fills over the
   current slot (teal while capturing, grey while waiting for the first slot) with the
@@ -389,9 +392,16 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   allow for the time the audio takes to arrive. The page learns this "time shift" from
   the decoded DT values (shown in the window) and keeps it in the listener's browser.
   The listener's PC clock must be right (within about a second).
-- While a decoder runs, the frequency display shows the dial frequency (WSPR 14095.6,
-  NAVTEX 517.5 for the 518 kHz station), also with the narrow WSPR, NAVTEX and RTTY
-  filters. Otherwise the page shows the middle of a filter narrower than 1.4 kHz, as in CW.
+- While a decoder runs, the frequency display shows the **signal's** frequency, as in
+  PhantomSDR-Plus: the dial plus the audio centre the decoder reads (FAX 1.9 kHz, NAVTEX
+  0.5 kHz, RTTY 1.0 kHz; PSK31, Olivia, the FLDIGI modems and Packet their centre). So
+  NAVTEX on 518 kHz reads 518.00 with the dial on 517.50, and a frequency typed in while it
+  runs is taken as the signal's. The dial frequency (shown when the decoder stops) is what
+  the waterfall, memories, links and CAT use. FT8, FT4, FT2, JS8, WSPR and SSTV show the
+  dial (WSPR 14095.6). Without a decoder the page shows the middle of a filter narrower
+  than 1.4 kHz, as in CW.
+- A running decoder keeps its own mode and filter: neither the band's usual mode (CW on
+  30 m) nor a typed frequency changes them.
 - The distance column needs the station locator in `station.js` (`locator`).
 - The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files) and
   `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
