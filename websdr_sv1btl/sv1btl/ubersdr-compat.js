@@ -1513,7 +1513,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261013dig';
+    s.src = 'sv1btl/decoders.js?v=20261022off';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -1521,7 +1521,7 @@
   window.addEventListener('load', function () {
     var d = document.createElement('script');
     d.type = 'module';
-    d.src = 'sv1btl/diversity-ui.js?v=20261021f';
+    d.src = 'sv1btl/diversity-ui.js?v=20261021g';
     d.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/diversity-ui.js'); };
     document.head.appendChild(d);
   });

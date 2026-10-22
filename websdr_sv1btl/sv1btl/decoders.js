@@ -216,6 +216,19 @@ const pageIscw = W.iscw;
 // PSK31 and Olivia are the exception: their lists give signal frequencies, and a click on a
 // trace should put it in the middle of the narrow filter, which is what CW-like does.
 W.iscw = function () { return st.on && !DEC[st.on].centred ? false : pageIscw(); };
+// kHz between the dial and the signal a decoder reads (the audio centre it decodes at): the
+// page's frequency box adds it, so NAVTEX shows 518.00 on a 517.50 dial (PhantomSDR-Plus
+// decoderDisplayOffsetHz). PSK31 / Olivia / fldigi modems with a CW-like (narrow) filter
+// already show the passband middle, which is their centre. Packet shows as before.
+W.ubersdr_dec_offset = function () {
+  if (st.on === 'fax') return 1.9;
+  if (st.on === 'navtex') return 0.5;
+  if (st.on === 'rtty') return RTTY[rttyVariant()].center / 1000;
+  if (pageIscw()) return 0;
+  if (st.on === 'psk31' || st.on === 'olivia') return 1;
+  if (st.on === 'modem') return modemCenter(modemVariant()) / 1000;
+  return 0;
+};
 // The display follows when that changes (decoder on/off with a narrow filter)
 function showDial() { try { W.setfreq(W.freq); } catch (e) {} }
 // Puts the dial on f. With a filter narrower than 1.4 kHz and no decoder running the page

@@ -200,7 +200,7 @@ function onSrcState (state, detail) {
   }
   if (state === 'ready') retune(true)               // a (re)connected receiver starts untuned
   if ((state === 'closed' || state === 'error') && st.comb) st.comb.reset()   // the alignment is lost
-  render()
+  refresh()
 }
 
 // Called by ubersdr-compat.js for every decoded block of the local stream
@@ -254,7 +254,7 @@ async function start () {
   retune(true)                    // before connecting: UberSDR carries the tuning in its connect URL
   st.src.connect()
   st.tuneTimer = setInterval(() => retune(false), TUNE_POLL_MS)
-  st.statusTimer = setInterval(render, STATUS_POLL_MS)
+  st.statusTimer = setInterval(refresh, STATUS_POLL_MS)
   render()
 }
 
@@ -449,6 +449,18 @@ function statTable (s) {
   row('switches', String(s.switches || 0))
   if (s.inRange === false && s.state === 'ready') row('', 'the second receiver does not cover this frequency', 'amber')
   return t
+}
+
+// The live figures only: the title line and the status table. Rebuilding the whole
+// panel twice a second replaced the Start/Stop button under the pointer, so a press
+// that spanned a rebuild was lost (Stop seemed not to stop).
+function refresh () {
+  if (!panel) return
+  const s = status()
+  renderHead(s)
+  if (!st.expanded || st.dragFrom >= 0) return
+  const tbl = body.querySelector('table.dv-stat')
+  if (tbl) tbl.replaceWith(statTable(s))
 }
 
 function render () {

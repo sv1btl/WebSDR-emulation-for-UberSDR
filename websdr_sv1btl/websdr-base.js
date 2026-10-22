@@ -543,6 +543,15 @@ function nominalfreq()
    return freq;
 }
 
+// SV1BTL: decoders that tune the dial below the signal they decode (FAX 1.9, NAVTEX 0.5,
+// RTTY 1.0 kHz…, sv1btl/decoders.js) show the signal's frequency in the box, as
+// PhantomSDR-Plus does: NAVTEX reads 518.00, not the 517.50 dial. Display and typed
+// frequencies only; the dial, memories, links and CAT keep the real dial (nominalfreq).
+function decoderoffset()
+{
+   try { return window.ubersdr_dec_offset ? (+window.ubersdr_dec_offset() || 0) : 0; } catch (e) { return 0; }
+}
+
 function freq2x(f,b)
 {
    return (f-bi[b].effcenterfreq)*1024/bi[b].effsamplerate+512;
@@ -707,7 +716,7 @@ function setfreq(f)
    send_soundsettings_to_server();
    if (view!=Views.blind) draw_passband();
    if (dont_update_textual_frequency) return;
-   var nomfreq=nominalfreq();
+   var nomfreq=nominalfreq()+decoderoffset();
    if (freq.toFixed) document.freqform.frequency.value=nomfreq.toFixed(2);
    else document.freqform.frequency.value=nomfreq+" kHz";
 }
@@ -1148,6 +1157,7 @@ function setfreqb(f)
 // sets frequency but also autoselects band
 {
    if (iscw()) f-=(hi+lo)/2;
+   else if (window.ubersdr_typed_freq) f-=decoderoffset();   // typed: the signal's frequency
    var e=bi[band];
    if (f>e.centerfreq-e.samplerate/2-4 && f<e.centerfreq+e.samplerate/2+4) {
       // new frequency is in the current band
