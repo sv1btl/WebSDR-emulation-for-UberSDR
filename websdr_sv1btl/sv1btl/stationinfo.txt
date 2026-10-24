@@ -1,3 +1,9 @@
+# Station labels for the WebSDR page (read by sv1btl/ubersdr-compat.js fetchdx).
+# <freq kHz><mode> <text>   mode: am fm usb lsb cw, or a PhantomSDR-Plus markers.json mode
+# (ft8 ft4 ft2 js8 wspr sstv fax navtex sitor rtty rtty-wx psk31 olivia aprs radel radeu morse:
+# a click starts that decoder; hfdl drm: no decoder here, the band plan picks the mode).
+
+# Own labels
 60.0cw MSF
 61.8cw RBU
 62.6cw FUG
@@ -5,24 +11,15 @@
 65.8cw FUE
 66.6cw RBU
 68.0cw GBY20?
-77.5cw DCF77
 81.0cw GYN2
 82.75cw GYB/MKL
-100.0am LORAN
 122.5cw DCF42
 123.7cw DCF42
-129.1cw DCF49
-135.8cw SXV
-1360usb WSPR
-139cw DCF39
 140.22usb DCF60
 162cw TDF time signal
 171am Medi 1 (Morocco)
 225am Polskie R.RP1
 252am RTA Algeria)
-474.2usb WSPR
-490usb NAVTEX
-518usb NAVTEX
 531am R.Yavne (ISR)
 540am R.Kossuth (HU)
 549am R.Ukrainian
@@ -40,78 +37,282 @@
 1044am Radio Daffy (GR)
 1215am Absolute Radio (GB)
 1221am R. Nobel (GR)
+1360usb WSPR
 1386am R.Svoboda Moscow
 1404am Romania Sighet
 1413am R.Vesti(RU)
 1557am A44 (GR)
-1836.6usb WSPR
-1840usb FT8
-1843usb FT2
-1846usb JS8
 1850lsb 1850
 1910lsb 1910
-2182usb Int Rescue
-2730usb Olympia Radio
-2789usb Messina (IT)
-2799usb Hellas Radio
-2830usb Hellas Radio
 2920am >'Troika' russian pirates
-2941usb Rostov VOLMET (RU)
 3250am <'Troika' russian pirates
-3568.6usb WSPR
 3570usb JS8
-3573usb FT8
-3575usb FT4
 3595usb WSPR
 3685lsb 3685
 3720lsb 3720
+5288.6usb WSPR
+7120lsb 7120
+9420am ERT5 (GR)
+10138usb JS8
+10138.6usb WSPR
+14095usb WSPR
+14280usb 14280
+21385usb 21385
+28585usb 28585
+
+# From PhantomSDR-Plus frequencylist/mymarkers.json + decodermarkers.json (2026-10-24;
+# mymarkers wins on the same frequency)
+77.5morse DCF77
+100am LORAN
+129.1morse DCF42 (DE)
+135.8morse SXV
+136wspr WSPR
+139morse DCF42 (DE)
+147.3rtty-wx DWD DDH47
+474.2wspr WSPR
+490navtex NAVTEX
+518navtex NAVTEX
+1836.6wspr WSPR
+1840ft8 FT8
+1843ft2 FT2
+1846js8 JS8
+1870radel FreeDV
+1876usb Volmet
+2174.5sitor SITOR MSI
+2182usb Int Rescue
+2618.5fax FAX GYA
+2680morse 4XZ (ISR)
+2730usb Olympia Radio
+2789usb Messina (IT)<br>Hellas Radio
+2799usb Hellas Radio
+2830usb Olympia Radio
+2941usb Rostov VOLMET (RU)
+2986hfdl HFDL Bahrain
+2998hfdl HFDL Shannon
+3016hfdl HFDL Johannesburg
+3205drm DRM KCBS (Korea)
+3455hfdl HFDL Shannon
+3560morse CW QRP
+3568.6wspr WSPR
+3573ft8 FT8
+3575ft4 FT4
+3578js8 JS8<br>FT2
+3580.15psk31 PSK31
+3583olivia Olivia
+3590rtty RTTY
+3625radel FreeDV
+3735sstv SSTV
 3740lsb 3740
 3750lsb 3750
+3767radel FreeDV
+3770lsb 3770
 3785lsb 3785
-5288.6usb WSPR
-5357usb FT8
-5360usb 5360
+3855fax FAX DDH/DDK
+3900hfdl HFDL Reykjavik
+3955drm DRM BBC WS (EU)
+4209.5navtex NAVTEX Heraklion
+4210sitor SITOR MSI
+4280rtty PBB RTTY (Holland)
+4310usb The Goose
+4331morse 4XZ (ISR)
+4361.5usb (TU)
+4405sitor Instambul Marine Weather
+4482.9fax FAX SVJ4
+4557.7morse D beacon Rostov
+4582rtty-wx DDK2
+4583rtty-wx DWD DDK2
+4610fax FAX GYA
+4625usb The Buzzer
+4681hfdl HFDL Johannesburg
+5336fax FAX RBW41
+5357js8 JS8
+5360ft2 FT2
+5363usb 5363
+5364.7wspr WSPR
+5366.5radel FreeDV
 5450usb RAF Volmet (UK)
 5505usb RAF Volmet (UK)
+5529hfdl HFDL Johannesburg
+5544hfdl HFDL Bahrain
+5547hfdl HFDL Shannon
+5583usb HFDL/HFACARS
+5616usb Int. Air Traffic ctr.
+5622hfdl HFDL Krasnoyarsk
+5649usb Int. Air Traffic ctr.
+5670usb Int. Air Traffic ctr.
 5680usb Int Rescue
-7038.6usb WSPR
-7047.5usb FT4
-7062usb FT2
-7074usb FT8
-7087lsb FreeDV
-7120lsb 7120
-7177lsb FreeDV
+5680.5usb Int. Air Traffic ctr.
+5715usb NATO RTTY
+5720hfdl HFDL Reykjavik
+5830am Radio Mystery (Pirate)
+5895am The Ferry (Pirate)
+5910drm DRM RRI (EU)
+6030drm DRM CNR-1 (China)
+6140drm DRM KCBS (Korea)
+6250usb Japanese Slot Machine
+6314sitor SITOR MSI
+6417usb Japanese Slot Machine
+6445usb Japanese Slot Machine
+6445.5fax FAX RBW41
+6529hfdl HFDL Canarias
+6532hfdl HFDL Shannon
+6596hfdl HFDL Krasnoyarsk
+6607morse 4XZ (ISR)
+6617usb Rostov Volmet
+6646hfdl HFDL Bahrain
+6712hfdl HFDL Reykjavik
+6825morse M51
+6832usb SINPO
+6911usb Russian Ticking Clock
+7030morse CW QRP
+7038.6wspr WSPR
+7040olivia Olivia
+7040.15psk31 PSK31
+7043rtty RTTY
+7047.5ft4 FT4
+7062ft2 FT2
+7072.5olivia Olivia
+7074ft8 FT8
+7078js8 JS8
+7087radel FreeDV
+7171sstv SSTV
+7177radel FreeDV
 7197lsb 7197
-9420am ERT5 (GR)
-9996cw RWM Russian time signal 
-10000cw WWV
-10140usb FT4
-10138.6usb WSPR
-10136usb FT8
-10138usb JS8
-10138.7usb WSPR
-10140usb FT4
-14074usb FT8
-14080usb FT4
-14084usb FT2
-14095usb WSPR
-14230usb SSTV
-14236usb FreeDV
-14280usb 14280
-18100usb FT8
-18104usb FT4
-18104.6usb WSPR
-18118usb FreeDV
-18104.6usb WSPR
-21074usb FT8
-21078usb JS8
-21094.6usb WSPR
-21140usb FT4
-21385usb 21385
-24915usb FT8
-24922usb JS8
-24923usb FT2
-24924.6usb WSPR
+7425drm DRM RNZ Pacific (Pacific)
+7646rtty-wx DWD DDH7
+7880fax FAX DDH/DDK
+7908.8fax FAX RBW41
+8039usb MeteoFax Northwood, U.K GYA
+8040fax FAX GYA
+8106.9fax FAX SVJ4
+8416.5sitor SITOR MSI
+8424morse De SV0 (Pirgos, GR)
+8430usb TAH Instambul
+8444fax FAX RBW41
+8566.6usb Weather RTTY (FR)
+8588usb Japanese Slot Machine
+8812usb Marine Ch. 832
+8834hfdl HFDL Johannesburg
+8843hfdl HFDL Shannon
+8885hfdl HFDL Bahrain
+8886hfdl HFDL Krasnoyarsk
+8888usb Volmet
+8942hfdl HFDL Shannon
+8948hfdl HFDL Canarias
+8977hfdl HFDL Reykjavik
+9570drm DRM RRI (EU)
+9655drm DRM CNR-1 (China)
+9780drm DRM RNZ Pacific (Pacific)
+9996morse RWM
+10000morse WWV
+10030hfdl HFDL Bahrain
+10081hfdl HFDL Shannon
+10087hfdl HFDL Krasnoyarsk
+10100.8rtty-wx DWD DDK9
+10108ft2 FT2
+10116morse CW QRP
+10130js8 JS8
+10136ft8 FT8
+10138.7wspr WSPR
+10140ft4 FT4
+10142.15psk31 PSK31
+10143rtty RTTY
+10144ft2 FT2
+10147.6aprs HF APRS
+11039rtty-wx DWD DDH9
+11086.5fax FAX GYA
+11184hfdl HFDL Reykjavik
+11321hfdl HFDL Johannesburg
+11348hfdl HFDL Canarias
+11384hfdl HFDL Shannon
+11615drm DRM Music 4 Joy (Africa)
+11690drm DRM RNZ Pacific (Pacific)
+11695drm DRM CNR-1 (China)
+11710drm DRM Music 4 Joy (EU)
+12579sitor SITOR MSI
+12654morse TAH (TR)
+13128usb Marine Ch. 1218
+13264usb Shannon Volmet (IRL)
+13303hfdl HFDL Canarias
+13312hfdl HFDL Bahrain
+13321hfdl HFDL Johannesburg/Krasnoyarsk
+13419usb Russian RTTY Mazielka (X06)
+13690drm DRM RRI (EU)
+13730drm DRM Music 4 Joy (Africa)
+13750drm DRM RRI (EU)
+13790drm DRM CNR-1 (China)
+13810drm DRM CNR-1 (China)
+13825drm DRM CNR-1 (China)
+13835drm DRM CNR-1 (China)
+13840drm DRM RNZ Pacific (Pacific)
+13882.5fax FAX DDH/DDK
+14060morse CW QRP
+14070.15psk31 PSK31
+14072.5olivia Olivia
+14074ft8 FT8
+14078js8 JS8
+14080ft4 FT4
+14083rtty RTTY
+14084ft2 FT2
+14095.6wspr WSPR
+14108.5olivia Olivia
+14230sstv SSTV
+14233sstv SSTV
+14236radeu FreeDV
+14467.3rtty-wx DWD DDH8
+15025hfdl HFDL Reykjavik
+15180drm DRM CNR-1 (China)
+15777usb Russian RTTY Mazielka (X06)
+15785drm DRM funklust (EU)
+16806.5sitor SITOR MSI
+17575drm DRM BBC WS (India)
+17580drm DRM RRI (S.America)
+17670drm DRM Music 4 Joy (Asia)
+17680drm DRM RRI (India)
+17720drm DRM CNR-1 (China)
+17760drm DRM RRI (China)
+17770drm DRM CNR-1 (China)
+17790drm DRM RRI (India)
+17830drm DRM CNR-1 (China)
+17912hfdl HFDL Krasnoyarsk
+17922hfdl HFDL Johannesburg
+17928hfdl HFDL Canarias
+17967hfdl HFDL Bahrain
+17985hfdl HFDL Reykjavik
+18086morse CW QRP
+18099olivia Olivia
+18100ft8 FT8
+18100.15psk31 PSK31
+18104ft4 FT4<br>JS8
+18104.6wspr WSPR
+18118radeu FreeDV
+19680.5sitor SITOR MSI
+21060morse CW QRP
+21072.5olivia Olivia
+21074ft8 FT8
+21078js8 JS8
+21080.15psk31 PSK31
+21083rtty RTTY
+21094.6wspr WSPR
+21140ft4 FT4
+21144ft2 FT2
+21313radeu FreeDV
+21340sstv SSTV
+21949hfdl HFDL Johannesburg
+21955hfdl HFDL Canarias
+21982hfdl HFDL Bahrain
+21990hfdl HFDL Krasnoyarsk
+22376sitor SITOR MSI
+24906morse CW QRP
+24915ft8 FT8
+24919ft4 FT4
+24920.15psk31 PSK31
+24922js8 JS8
+24922.5olivia Olivia
+24923ft2 FT2
+24924.6wspr WSPR
+24933radeu FreeDV
+26100.5sitor SITOR MSI
 26965fm 1
 26975fm 2
 26985fm 3
@@ -134,9 +335,9 @@
 27205fm 20
 27215fm 21
 27225fm 22
-27255fm 23
-27235fm 24
-27245fm 25
+27235fm 23
+27245fm 24
+27255fm 25
 27265fm 26
 27275fm 27
 27285fm 28
@@ -152,7 +353,18 @@
 27385fm 38
 27395fm 39
 27405fm 40
-28074usb FT8<br>JT65
-28180usb FT4
-28124.6usb WSPR
-28585usb 28585
+28060morse CW QRP
+28074ft8 FT8
+28078js8 JS8
+28083rtty RTTY
+28120.15psk31 PSK31
+28122.5olivia Olivia
+28124.6wspr WSPR
+28180ft4 FT4
+28184ft2 FT2
+28330radeu FreeDV
+28680sstv SSTV
+29620fm Repeater
+29640fm Repeater
+29650fm Repeater
+29660fm Repeater

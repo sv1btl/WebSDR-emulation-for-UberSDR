@@ -965,6 +965,7 @@
   var RADE_LO_HZ = 700, RADE_HI_HZ = 2200;
   function radeBW(side) { return side === 'usb' ? [RADE_LO_HZ, RADE_HI_HZ] : [-RADE_HI_HZ, -RADE_LO_HZ]; }
   window.ubersdr_rade_active = function () { return !!rade.side; };
+  window.ubersdr_rade_side = function () { return rade.side || null; };   // 'lsb' | 'usb' | null (station labels, decoders.js)
 
   // ── FreeDV Reporter window (shown while RADE is on) ────────────────────────
   // The same live list as UberSDR's FreeDV panel: stations reported to
@@ -1021,6 +1022,15 @@
       '<th>km</th><th>kHz</th><th class="rr-m">Message</th><th>TX</th><th class="rr-r">Last RX</th></tr></thead>' +
       '<tbody></tbody></table></div>';
     anchor.parentNode.insertBefore(p, anchor.nextSibling);
+    // QSY on a station's row. On the press, from one listener on the table: the rows are
+    // rebuilt on every reporter update and retune, and a click (press + release on the
+    // same row) was lost whenever that happened in between.
+    p.querySelector('tbody').addEventListener('mousedown', function (ev) {
+      var tr = ev.button === 0 && ev.target.closest && ev.target.closest('tr.rr-tune');
+      if (!tr) return;
+      ev.preventDefault();
+      repTuneTo(Number(tr.dataset.hz));
+    });
     return p;
   }
   function repStatus(t) { var p = repPanel(false); if (p) p.querySelector('.rr-status').textContent = t || ''; }
@@ -1045,9 +1055,23 @@
     return null;
   }
   function repTuneTo(hz) {
-    var f = hz / 1000;
+    if (!(hz > 0)) return;
+    var f = hz / 1000, side = rade.side;
     if (typeof window.setwaterfall === 'function' && window.bi) setwaterfall(band, f);
     setfreq(f);
+    // Into another amateur band (the list shows all bands outside them) the band's mode
+    // goes in and switches RADE off: RADE stays on, on its sideband
+    // (the listener's own choice: past the page's band-mode guard, which ignores software
+    // mode changes for a moment after a band change)
+    if (side && window.ubersdr_listener_mode) window.ubersdr_listener_mode();
+    if (side && rade.side !== side) window.ubersdr_rade(side);
+    else if (side && String(window.mode).toLowerCase() !== side) {   // still on, but the band's mode went in
+      var bw = radeBW(side);
+      rade.switching = true;
+      try { set_mode(side); setmf(side, bw[0] / 1000, bw[1] / 1000); } finally { rade.switching = false; }
+      radeButtons();
+    }
+    repSchedule();                          // the on-frequency dot at once
   }
   function repRender() {
     var p = repPanel(false);
@@ -1113,7 +1137,7 @@
       if (u.freq_hz > 0 && u.freq_hz <= maxHz) {
         tr.className += ' rr-tune';
         tr.title = 'Tune to ' + (u.freq_hz / 1000).toFixed(1) + ' kHz';
-        tr.addEventListener('click', function () { repTuneTo(u.freq_hz); });
+        tr.dataset.hz = String(u.freq_hz);  // QSY: see repPanel
       }
       tb.appendChild(tr);
     });
@@ -1361,8 +1385,32 @@
   // Like PhantomSDR-Plus it gets the raw received audio, before squelch, AGC boost,
   // notch and NR, so muting or squelch do not stop it. Nothing is sent to the server.
   var CW_MAX_CHARS = 3000;
-  var CW_JS = 'sv1btl/cw-decoder.js?v=20261007a';
+  var CW_JS = 'sv1btl/cw-decoder.js?v=20261024a';
   var cwd = { on: false, worker: null, local: null, sr: 0, loading: false, tuned: '', fed: 0 };
+  // CW pitch, as PhantomSDR-Plus's CW window: the audio tone of the CW signal on the shown
+  // frequency, 500-800 Hz in 50 Hz steps, default 600, remembered (ubersdr_cwpitch). On
+  // this page the tone is the middle of the CW passband, so every CW filter (the CW, CW-N
+  // and CW-W buttons, the CW bandwidth presets, the C key, labels, restored positions) is
+  // centred on it with its own width, by the setmf wrapper (ubersdr_compat_after_base).
+  // Dragging a passband edge still moves only that edge.
+  var CW_PITCH_KEY = 'ubersdr_cwpitch', CW_PITCH_DEF = 600;
+  function cwPitch() {
+    var v = NaN;
+    try { v = Number(localStorage.getItem(CW_PITCH_KEY)); } catch (e) {}
+    return v >= 500 && v <= 800 && v % 50 === 0 ? v : CW_PITCH_DEF;
+  }
+  window.ubersdr_cw_pitch_lohi = function (l, h) {       // a CW filter (kHz) centred on the pitch
+    var p = cwPitch() / 1000, w = h - l, c = (l + h) <= 0 ? -p : p;
+    return [Math.round((c - w / 2) * 10000) / 10000, Math.round((c + w / 2) * 10000) / 10000];
+  };
+  function cwSetPitch(v) {
+    try { localStorage.setItem(CW_PITCH_KEY, String(v)); } catch (e) {}
+    var p = cwPanel(false); if (p) p.querySelector('.cw-pv').textContent = v;
+    if (String(window.mode || '').toUpperCase() !== 'CW') return;
+    var nom = nominalfreq();                             // the same signal, now heard at v Hz
+    setmf('cw', lo, hi);
+    setfreq(nom - (hi + lo) / 2);
+  }
   (function cwStyle() {
     var st = document.createElement('style');
     st.textContent =
@@ -1372,6 +1420,7 @@
       '.cwdec .cw-title{font-weight:bold;flex:1}' +
       '.cwdec .cw-stat{color:#222}.cwdec .cw-stat b{color:#000}' +
       '.cwdec button{font-size:10px;padding:0 4px;height:17px}' +
+      '.cwdec .cw-ps{width:70px;height:12px;margin:0 2px;vertical-align:middle}' +
       '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#000;' +
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
       '.cwdec .cw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd}' +
@@ -1387,13 +1436,18 @@
     p.id = 'cwdecoder'; p.className = 'cwdec'; p.hidden = true;
     p.innerHTML =
       '<div class="cw-head"><span class="cw-title">CW decoder</span>' +
-      '<span class="cw-stat">Pitch <b class="cw-pitch">---</b> Hz</span>' +
+      '<span class="cw-stat" title="Tone of the CW signal found">≈ <b class="cw-pitch">---</b> Hz</span>' +
       '<span class="cw-stat"><b class="cw-wpm">---</b> WPM</span>' +
+      '<label class="cw-stat" title="Audio pitch of the CW tone (frequency offset from the dial)">Pitch ' +
+        '<input type="range" class="cw-ps" min="500" max="800" step="50"> <b class="cw-pv"></b> Hz</label>' +
       '<button type="button" class="cw-clear">Clear</button></div>' +
       '<div class="cw-text"></div><div class="cw-status"></div>';
     var rp = document.getElementById('radereporter');
     (rp || anchor).parentNode.insertBefore(p, (rp || anchor).nextSibling);
     p.querySelector('.cw-clear').onclick = function () { p.querySelector('.cw-text').textContent = ''; };
+    var ps = p.querySelector('.cw-ps');
+    ps.value = String(cwPitch()); p.querySelector('.cw-pv').textContent = cwPitch();
+    ps.oninput = function () { cwSetPitch(Number(ps.value)); };
     return p;
   }
   function cwStatus(t, err) {
@@ -1513,7 +1567,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261023frq';
+    s.src = 'sv1btl/decoders.js?v=20261024mk';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -1695,12 +1749,50 @@
     };
     // sv1btl/decoders.js: a decoder's mode and filter are the listener's choice too
     window.ubersdr_listener_mode = function () { lastHuman = Date.now(); };
+
+    // The Band button (wfset(3), Waterfall Settings) follows the band plan: it zooms to
+    // the whole band the shown frequency is in and sets that band's mode, keeping the
+    // shown frequency. The band is the amateur band of HAM_BANDS (40m 7000-7200 LSB,
+    // 30m CW…), else RW3PS's band-plan segment (modeperfreq in websdr-base.js, read from
+    // its source: 41 m 7205-7605 AM…). A running decoder stops (it owns mode and filter).
+    // Outside both it zooms as before (±100 kHz) and leaves the mode alone.
+    var planSegs = null;
+    function planBand(f) {
+      for (var i = 0; i < HAM_BANDS.length; i++)
+        if (f >= HAM_BANDS[i][1] && f <= HAM_BANDS[i][2]) return [HAM_BANDS[i][1], HAM_BANDS[i][2], HAM_BANDS[i][4]];
+      if (!planSegs) {
+        planSegs = [];
+        var re = /ffff\s*>=?\s*([0-9.]+)\s*&&\s*ffff\s*<\s*([0-9.]+)\s*\)\s*setmf\(\s*["'](\w+)["']/g, m;
+        while ((m = re.exec(String(window.modeperfreq || '')))) planSegs.push([+m[1], +m[2], m[3]]);
+      }
+      var hit = null;
+      for (var j = 0; j < planSegs.length; j++) if (f >= planSegs[j][0] && f < planSegs[j][1]) hit = planSegs[j];   // the last wins, as there
+      return hit;
+    }
+    var origWfset = window.wfset;
+    window.wfset = function (cmd) {
+      if (cmd !== 3) return origWfset.apply(this, arguments);
+      var nom = nominalfreq(), pb = planBand(nom), e = bi[band];
+      if (!pb || !e) return origWfset.apply(this, arguments);
+      try { timeout_idle_restart(); } catch (x) {}
+      var width = pb[1] - pb[0], z = 0;                 // same arithmetic as the band buttons
+      while (2 * width < e.samplerate && z < e.maxzoom) { z++; width *= 2; }
+      wfset_freq(band, z, (pb[0] + pb[1]) / 2);
+      try { if (window.ubersdr_decoders && window.ubersdr_decoders.state().on) window.ubersdr_decoders.stop(true); } catch (x) {}
+      lastHuman = Date.now();                           // the listener's choice: past the band-mode guard
+      set_mode(String(pb[2]).toLowerCase());
+      setfreq(nom - (iscw() ? (hi + lo) / 2 : 0));      // the same shown frequency in that mode
+    };
     var origSetmf = window.setmf;
     window.setmf = function (m) {
       var now = Date.now();
       if (!applyingBand && now < bandHold.until && now - lastHuman > 1500 &&
           String(m).toUpperCase() !== bandHold.mode) return;      // software echo of the old mode: ignore
-      origSetmf.apply(this, arguments); savePos(); bandLight(); radeFollowMode();
+      var args = Array.prototype.slice.call(arguments);
+      if (String(m).toLowerCase() === 'cw' && isFinite(args[1]) && isFinite(args[2])) {   // centred on the CW pitch
+        var c = window.ubersdr_cw_pitch_lohi(+args[1], +args[2]); args[1] = c[0]; args[2] = c[1];
+      }
+      origSetmf.apply(this, args); savePos(); bandLight(); radeFollowMode();
     };
     // Clicking a listener in the users strip: tune to the exact frequency they are on
     // (the RW3PS click also shifted it by this page's own passband offset) and switch to
@@ -1746,8 +1838,28 @@
     // (stationinfo=[...]) that websdr-base.js does not read, so the labels come from
     // sv1btl/stationinfo.txt instead, in the original WebSDR format, one per line:
     //   <freq kHz><mode> <text>      e.g.  1188am R. Nikolas (GR)   or   28074usb FT8<br>JT65
-    // mode is am/fm/usb/lsb/cw (any case); lines starting with # are comments. The file
+    // mode is am/fm/usb/lsb/cw (any case), or a PhantomSDR-Plus markers.json mode (FT8,
+    // RTTY-WX, SITOR, MORSE, RADEL, HFDL… see LABEL_MODES): the label then gets that
+    // mode's receiver mode and carries the mode name (data-dec) for sv1btl/decoders.js,
+    // which starts its decoder on a click. A mode with no decoder here (HFDL, DRM) or an
+    // unknown one follows the band plan. Lines starting with # are comments. The file
     // is re-read on each band/zoom change, so edits show after a page reload.
+    var LABEL_MODES = { ft8: 'usb', ft4: 'usb', ft2: 'usb', js8: 'usb', wspr: 'usb', fax: 'usb', wefax: 'usb',
+      navtex: 'usb', sitor: 'usb', rtty: 'usb', 'rtty-wx': 'usb', psk31: 'usb', olivia: 'usb', mfsk: 'usb',
+      mfsk16: 'usb', mfsk32: 'usb', mfsk64: 'usb', dominoex: 'usb', thor: 'usb', throb: 'usb', hell: 'usb',
+      feldhell: 'usb', mt63: 'usb', packet: 'usb', aprs: 'usb', radeu: 'usb', rade: 'usb', freedv: 'usb',
+      radel: 'lsb', morse: 'cw', sstv: 'sb', hfdl: 'bp', drm: 'bp' };
+    // The page's band plan for f (kHz): the amateur band's mode, else RW3PS's table
+    // (modeperfreq in websdr-base.js, read without letting it change anything)
+    function bandplanMode(f) {
+      var m = window.ubersdr_bandmode ? window.ubersdr_bandmode(f) : null;
+      if (!m && typeof window.modeperfreq === 'function') {
+        var orig = window.setmf, wm = window.watermode;     // its calls also set watermode
+        window.setmf = function (mo) { m = mo; };
+        try { window.modeperfreq(f); } catch (e) {} finally { window.setmf = orig; window.watermode = wm; }
+      }
+      return m ? String(m).toLowerCase() : (f < 10000 ? 'lsb' : 'usb');
+    }
     window.fetchdx = function (b) {
       var e = bi[b];
       var min = e.effcenterfreq - e.effsamplerate / 2, max = e.effcenterfreq + e.effsamplerate / 2;
@@ -1759,13 +1871,17 @@
           var list = [];
           var lines = xhr.responseText.split(/\r?\n/);
           for (var i = 0; i < lines.length; i++) {
-            var m = /^\s*([0-9]+(?:\.[0-9]*)?)\s*([a-zA-Z]*)\s+(.+?)\s*$/.exec(lines[i]);
+            var m = /^\s*([0-9]+(?:\.[0-9]*)?)\s*([a-zA-Z][a-zA-Z0-9-]*)?\s+(.+?)\s*$/.exec(lines[i]);
             if (!m || lines[i].charAt(0) === '#') continue;
             var f = parseFloat(m[1]);
             if (f < min || f > max) continue;
-            var mo = m[2].toLowerCase();
-            if (!/^(am|fm|usb|lsb|cw)$/.test(mo)) mo = f < 10000 ? 'lsb' : 'usb';
-            list.push([f, mo, m[3]]);
+            var mo = (m[2] || '').toLowerCase(), text = m[3];
+            if (!/^(am|fm|usb|lsb|cw)$/.test(mo)) {
+              var lm = LABEL_MODES[mo];
+              if (lm && lm !== 'bp') text += '<span hidden data-dec="' + mo.toUpperCase() + '"></span>';
+              mo = lm === 'sb' ? (f < 10000 ? 'lsb' : 'usb') : (lm && lm !== 'bp' ? lm : bandplanMode(f));
+            }
+            list.push([f, mo, text]);
           }
           list.sort(function (p, q) { return p[0] - q[0]; });   // showdx expects ascending order
           for (var j = 0; j < list.length; j++) dx(list[j][0], list[j][1], list[j][2]);

@@ -56,7 +56,14 @@ const HBINS_205 = (NBINS_411 - 1) >> 1;                   // 205
 
 const FMIN = -110;
 const FMAX =  110;
-const MAX_NPK = 12;
+// Candidates per pass. 12 (Kiwi's limit) kept only the 12 strongest peaks,
+// but a busy band carries 20-40 stations in its 200 Hz. With 40 and NPASS
+// decode passes with signal subtraction between them, as wsprd does, a
+// crowded slot went 8 stations 79 -> 100 %, 15: 67 -> 89 %, 25: 44 -> 60 %
+// (2026-10-24, ~/sdr-shots/scripts/wspr-reliability.mjs). More than 40
+// candidates or 3 passes gained nothing.
+const MAX_NPK = 40;
+const NPASS = 3;
 const NPK     = 256;
 
 // Front-end (real audio -> 375 Hz complex IQ)
@@ -167,11 +174,19 @@ export async function decodeWSPR(pcm, sampleRate = AUDIO_SR, dialFreqHz = 0) {
   const { idat, qdat } = _downconvert(audio);
   const np = idat.length;
 
-  // Spectrogram.
-  const { pwr, psavg, nffts } = _buildSpectrogram(idat, qdat, np);
-  console.log(`[WSPR] IQ=${np} samples, nffts=${nffts}`);
-
-  const results = _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0);
+  // Decode, subtract what was decoded, decode the rest again (wsprd's two
+  // passes): a station masked by a stronger one nearby comes out in pass 2.
+  const results = [], uniques = [];
+  for (let pass = 0; pass < NPASS; pass++) {
+    if (Date.now() - t0 > DECODE_BUDGET_MS) break;
+    const { pwr, psavg, nffts } = _buildSpectrogram(idat, qdat, np);
+    console.log(`[WSPR] pass ${pass + 1}: IQ=${np} samples, nffts=${nffts}`);
+    const res = _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0, uniques);
+    for (const r of res) results.push(r);
+    if (!res.length || pass === NPASS - 1) break;
+    for (const r of res) _subtractSignal(idat, qdat, np, r._sub);
+  }
+  for (const r of results) delete r._sub;
 
   results.sort((a, b) => (a.freq - b.freq) || (b.snr - a.snr));
   console.log(`[WSPR] Total decoded: ${results.length} in ${Date.now() - t0} ms`);
@@ -711,7 +726,7 @@ function unpk_(decdata) {
 // ═══════════════════════════════════════════════════════════════════════════
 // wspr_decode() — orchestration (wspr.cpp)
 // ═══════════════════════════════════════════════════════════════════════════
-function _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0) {
+function _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0, uniques = []) {
   const { smspec, min_snr, snr_scaling } = _renormalize(psavg);
 
   // ── Build peak list (local maxima), limit to ±110 Hz, top MAX_NPK by SNR ──
@@ -763,8 +778,7 @@ function _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0) {
     }
   }
 
-  const uniques = [];   // { call, freq }
-  const results = [];
+  const results = [];   // uniques: { call, freq }, shared across passes
   const st = { f1: 0, shift1: 0, symbols: new Uint8Array(NSYM) };
 
   // ── MORE_EFFORT pass loop (bounded by time budget for the browser) ────────
@@ -870,6 +884,7 @@ function _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0) {
         drift: +drift1.toFixed(1),
         sync: +sync1.toFixed(3),
         confidence: +sync1.toFixed(3),
+        _sub: { f1: st.f1, shift1: st.shift1, drift: drift1, data: Uint8Array.from(decoded.data) },
       });
       console.log(`[WSPR] decode: ${msg.callsign} ${msg.grid} ${msg.dBm}dBm  f=${audioHz.toFixed(1)}Hz snr=${p.snr0.toFixed(1)} dt=${dt.toFixed(1)} drift=${drift1} sync=${sync1.toFixed(3)}`);
     }
@@ -878,6 +893,59 @@ function _wsprDecode(idat, qdat, np, pwr, psavg, nffts, dialFreqHz, t0) {
   }
 
   return results;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Signal subtraction (wsprd's subtract_signal2, rewritten): rebuild the
+// decoded station's 162 channel symbols from its 81 decoded bits (the same
+// convolutional code, interleaver and sync vector), synthesise it at its
+// frequency, drift and time in the 375 Hz baseband, track its complex
+// amplitude with a moving average of data·conj(ref) over ~1.4 symbols, and
+// subtract it.
+// ═══════════════════════════════════════════════════════════════════════════
+const SUB_NFILT = 360;
+function _channelSymbols(data) {
+  const conv = new Uint8Array(NSYM);
+  let enc = 0, p = 0;
+  for (let i = 0; i < NBITS; i++) {
+    const bit = (data[i >> 3] >> (7 - (i & 7))) & 1;
+    enc = ((enc << 1) | bit) >>> 0;
+    const sym = ENCODE(enc);
+    conv[p++] = (sym >> 1) & 1; conv[p++] = sym & 1;
+  }
+  const il = new Uint8Array(NSYM);
+  for (let i = 0, q = 0; i < 256 && q < NSYM; i++) {
+    let j = 0; for (let b = 0; b < 8; b++) j = (j << 1) | ((i >> b) & 1);
+    if (j < NSYM) il[j] = conv[q++];
+  }
+  for (let i = 0; i < NSYM; i++) il[i] = pr3[i] + 2 * il[i];
+  return il;
+}
+function _subtractSignal(idat, qdat, np, sub) {
+  const sy = _channelSymbols(sub.data);
+  const nw = NSYM * SPS, rr = new Float64Array(nw), ri = new Float64Array(nw);
+  let ph = 0;
+  for (let i = 0; i < NSYM; i++) {
+    const fp = sub.f1 + (sub.drift / 2.0) * (i - FHSYM) / FHSYM;
+    const dphi = TWOPIDT * (fp + (sy[i] - 1.5) * DF);
+    for (let j = 0; j < SPS; j++) { const k = i * SPS + j; rr[k] = Math.cos(ph); ri[k] = Math.sin(ph); ph += dphi; }
+  }
+  // z = data · conj(ref), prefix-summed for the moving average
+  const cr = new Float64Array(nw + 1), ci = new Float64Array(nw + 1);
+  for (let k = 0; k < nw; k++) {
+    const q = sub.shift1 + k; const a = (q >= 0 && q < np) ? idat[q] : 0, b = (q >= 0 && q < np) ? qdat[q] : 0;
+    cr[k + 1] = cr[k] + a * rr[k] + b * ri[k];
+    ci[k + 1] = ci[k] + b * rr[k] - a * ri[k];
+  }
+  const h = SUB_NFILT >> 1;
+  for (let k = 0; k < nw; k++) {
+    const q = sub.shift1 + k; if (q < 0 || q >= np) continue;
+    const a0 = k - h < 0 ? 0 : k - h, a1 = k + h > nw ? nw : k + h, n = a1 - a0;
+    const ar = (cr[a1] - cr[a0]) / n, ai = (ci[a1] - ci[a0]) / n;
+    idat[q] -= ar * rr[k] - ai * ri[k];
+    qdat[q] -= ar * ri[k] + ai * rr[k];
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

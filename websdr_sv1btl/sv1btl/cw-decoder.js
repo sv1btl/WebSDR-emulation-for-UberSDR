@@ -107,6 +107,20 @@ function transformFlat(re, im, inverse) {
 const SIG_OPEN  = 2.2;
 const SIG_CLOSE = 1.7;
 
+// QSB-tracking slicer (see _decodeFrame). Tuned 2026-10-24 on a fixed-seed
+// bench of AWGN, sine QSB and Rayleigh fading: QSB fading to -10 dB went
+// from 41 % to 11 % CER, Rayleigh fading at +6 dB from 32 % to 18 %, with
+// steady signals, Farnsworth and 40 wpm unchanged.
+const PK_DROP   = 0.4;   // the signal-level peak falls to 40 % ...
+const PK_DOTS   = 7;     // ... over 7 dots (a word gap) without a mark
+const NOISE_PCT = 0.3;   // noise level = 30th percentile of the matched filter
+const FLOOR_R   = 2.2;   // signal level never below 2.2 × noise (the gate ratio)
+const FLOOR_SPAN = 0.3;  // ... nor below 30 % of the estimator's on/off span
+const IDLE_DOTS = 12;    // no mark for 12 dots (a pause, not a word gap) …
+const IDLE_SPAN = 0.8;   // … and the level floor rises to 80 % of the span
+const SLICE_HI  = 0.55;  // key-down above noise + 55 % of the span ...
+const SLICE_LO  = 0.35;  // ... key-up below noise + 35 %
+
 // ── Morse table (code → character) ──────────────────────────────────────────
 const MORSE = {
   '.-':'A',   '-...':'B', '-.-.':'C', '-..':'D',  '.':'E',
@@ -143,6 +157,23 @@ const DECODE_BY_LEN = (() => {
   return byLen;
 })();
 
+// Codewords as element lists (1 = dot, 3 = dash) for the soft decoder.
+const SOFT_CODES = Object.keys(MORSE).map((code) => {
+  const ch = MORSE[code];
+  const freq = LETTER_FREQ[ch] != null ? LETTER_FREQ[ch] : 0.05;
+  return { char: ch, els: [...code].map((c) => (c === '-' ? 3 : 1)), logPrior: Math.log(freq) };
+});
+// Soft-decoder settings, tuned 2026-10-24 on perfectly timed AND ±15/25 %
+// jittered synthetic Morse (tighter timing priors look better only on perfect
+// timing). Letter errors vs the slicer-length MAP: −8 dB 72 -> 39, −10 dB
+// 225 -> 177, ±25 % jitter at 0 dB 337 -> 211 (of 1056).
+const SOFT_PRIOR_W = 0.5;    // weight of the letter-frequency prior
+const SOFT_SIG_MK  = 0.25;   // log-normal spread of a mark's length
+const SOFT_SIG_GP  = 0.3;    // ... of a gap inside a letter
+const SOFT_LLR_W   = 0.3;    // quarter-dot steps are correlated (input filter)
+const SOFT_GAP_MIN = 0.7;    // shortest gap inside a letter, in dots
+const SOFT_MK_MIN  = 0.6;    // shortest mark, as a share of its nominal length
+
 class CWDecoder {
   constructor({ sampleRate = 12000, callback = null } = {}) {
     this.sr = sampleRate || 12000;
@@ -161,9 +192,12 @@ class CWDecoder {
     this._configure();
 
     // Tone acquisition
-    this.toneHz = 700; this.toneValid = false;
+    this.toneHz = 700; this.toneValid = false; this.jumpHz = -1;
     this.specAvg = null; this.specFrames = 0;
     this.fftBuf = new Float32Array(this.FFT_N); this.fftFill = 0;
+    // Raw audio from just before the tone lock, replayed once it locks.
+    this.preBuf = new Float32Array(this.PRE_N); this.prePos = 0; this.preFill = 0;
+    this._prerollPending = false;
 
     // NCO + I/Q low-pass
     this.oscC = 1; this.oscS = 0; this.oscNorm = 0;
@@ -174,6 +208,7 @@ class CWDecoder {
 
     // Envelope ring buffer
     this.envBuf = new Float64Array(this.BUF);
+    this.lvlBuf = new Float64Array(this.BUF);   // the slicer's signal level per frame (soft decoder)
     this.envPos = 0; this.envCount = 0;
     this.frameNo = 0;            // absolute frame counter
     this.decodePos = 0;          // next absolute frame index to decode
@@ -183,9 +218,9 @@ class CWDecoder {
     this.sepEma = null;          // averaged separability-vs-period landscape
     this.mfWin = 8;              // matched-filter boxcar width (frames)
     this.onLvl = 0; this.offLvl = 0;
-    // Fast local on/off level followers that ride QSB between the (slow, ~0.7 s)
-    // estimator updates. Anchored to onLvl/offLvl; null until the first lock.
-    this.onLvlLocal = null; this.offLvlLocal = null;
+    // QSB-tracking slicer levels: noise from the estimator window, signal
+    // from a decaying peak of the matched filter (see _decodeFrame).
+    this.noiseLvl = 0; this.pk = 0; this.pkDecay = 1; this.idleFrames = 0;
     this.framesSinceEst = 0;
 
     // Keying state
@@ -198,13 +233,20 @@ class CWDecoder {
     this.wordEmitted = true;
     this.silent = false;
     this.gapHist = [];           // recent character/word gaps (frames), for _wordThresh
+    this.charStartP = -1; this.charEndP = -1; this.prevCharEndP = -1; this.curP = 0;
+    this.lvlFrom = Infinity;     // first frame with a slicer level in lvlBuf
     this.sigOpen = false;        // signal gate — see _estimateSpeed
+    this.gateClosedAt = 0;       // frame the gate last closed at
+    this.everOpen = false;       // the gate has opened since the tone locked
+    this.openCand = 0;           // dot of the last estimate that would open the gate
+    this._rewindTo = -1;         // re-decode from here when the gate reopens
     this._wordThrCache = 0;
   }
 
   _configure() {
     const sr = this.sr;
     this.FFT_N   = 2048;                                 // ~0.17 s @ 12 kHz
+    this.PRE_N   = Math.max(7 * this.FFT_N, Math.round(sr * 1.2)); // tone-lock pre-roll
     this.hop     = Math.max(1, Math.round(sr * 0.002));  // ~2 ms frames
     this.frameMs = (this.hop / sr) * 1000;
     this._setToneCoeffs(this.toneHz || 700);
@@ -232,33 +274,57 @@ class CWDecoder {
     for (let n = 0; n < pcm.length; n++) {
       const x = pcm[n];
 
+      // Raw audio ring, for the replay after the tone locks.
+      this.preBuf[this.prePos] = x;
+      this.prePos = (this.prePos + 1) % this.PRE_N;
+      if (this.preFill < this.PRE_N) this.preFill++;
+
       // (1) Tone acquisition buffer.
       this.fftBuf[this.fftFill++] = x;
       if (this.fftFill >= this.FFT_N) { this._detectTone(); this.fftFill = 0; }
       if (Math.abs(this.toneHz - this.oscFreq) > 1.5) this._setToneCoeffs(this.toneHz);
 
-      // (2) Complex downconvert by e^{-jωn} via incremental rotator.
-      const c = this.oscC, s = this.oscS;
-      const iIn = x * c, qIn = -x * s;
-      this.oscC = c * this.oscStepC - s * this.oscStepS;
-      this.oscS = s * this.oscStepC + c * this.oscStepS;
-      if (++this.oscNorm >= 1024) {
-        const g = 1 / Math.hypot(this.oscC, this.oscS);
-        this.oscC *= g; this.oscS *= g; this.oscNorm = 0;
+      // The tone has just locked: everything before it was mixed with the
+      // wrong tone and is discarded, which cost the first element or two of
+      // a cold start (P read as G, Q as K). Run the last ~1.2 s of raw audio,
+      // this sample included, through the locked downconverter instead.
+      if (this._prerollPending) {
+        this._prerollPending = false;
+        this.lpI1 = this.lpI2 = this.lpQ1 = this.lpQ2 = 0;
+        this.hopCount = 0; this.magAccum = 0;
+        const N = this.preFill, P = this.PRE_N;
+        let i = (this.prePos - N + P) % P;
+        for (let k = 0; k < N; k++) { this._baseband(this.preBuf[i]); i = (i + 1) % P; }
+        continue;
       }
+      this._baseband(x);
+    }
+  }
 
-      // I/Q low-pass (2-pole each) → envelope magnitude.
-      const a = this.lpA;
-      this.lpI1 += a * (iIn - this.lpI1); this.lpI2 += a * (this.lpI1 - this.lpI2);
-      this.lpQ1 += a * (qIn - this.lpQ1); this.lpQ2 += a * (this.lpQ1 - this.lpQ2);
-      this.magAccum += Math.hypot(this.lpI2, this.lpQ2);
+  // (2)+(3) of the pipeline for one sample: complex downconvert, I/Q
+  // low-pass, envelope, decimation to ~2 ms frames.
+  _baseband(x) {
+    // Complex downconvert by e^{-jωn} via incremental rotator.
+    const c = this.oscC, s = this.oscS;
+    const iIn = x * c, qIn = -x * s;
+    this.oscC = c * this.oscStepC - s * this.oscStepS;
+    this.oscS = s * this.oscStepC + c * this.oscStepS;
+    if (++this.oscNorm >= 1024) {
+      const g = 1 / Math.hypot(this.oscC, this.oscS);
+      this.oscC *= g; this.oscS *= g; this.oscNorm = 0;
+    }
 
-      // (3) Decimate to a ~2 ms envelope frame.
-      if (++this.hopCount >= this.hop) {
-        const e = this.magAccum / this.hop;
-        this.magAccum = 0; this.hopCount = 0;
-        this._processFrame(e);
-      }
+    // I/Q low-pass (2-pole each) → envelope magnitude.
+    const a = this.lpA;
+    this.lpI1 += a * (iIn - this.lpI1); this.lpI2 += a * (this.lpI1 - this.lpI2);
+    this.lpQ1 += a * (qIn - this.lpQ1); this.lpQ2 += a * (this.lpQ1 - this.lpQ2);
+    this.magAccum += Math.hypot(this.lpI2, this.lpQ2);
+
+    // Decimate to a ~2 ms envelope frame.
+    if (++this.hopCount >= this.hop) {
+      const e = this.magAccum / this.hop;
+      this.magAccum = 0; this.hopCount = 0;
+      this._processFrame(e);
     }
   }
 
@@ -308,8 +374,29 @@ class CWDecoder {
       if (!this.toneValid) {
         if (this.specFrames < 2) { this._emitFreq(); return; }
         this.toneHz = hz; this.toneValid = true;
-        this._resetTiming();   // discard pre-lock garbage
+        this._resetTiming();   // discard pre-lock garbage …
+        this._prerollPending = true;   // … and replay the raw audio instead (feed)
+      } else if (!this.sigOpen && Math.abs(hz - this.toneHz) > 20) {
+        // A jump while nothing is being read: the first lock was on noise or
+        // on a station that has gone (it locked at 265 Hz on noise just
+        // before a 700 Hz signal began, and the first element or two were
+        // mixed with the wrong tone). Start over on the new tone, with the
+        // pre-roll — but only once the new peak has held for two spectrum
+        // frames: on a weak signal the peak hops to noise and back, and
+        // restarting on every hop kept it from ever locking (nothing at all
+        // was printed at −11 dB). A one-frame outlier is ignored.
+        if (Math.abs(hz - this.jumpHz) < 6) {
+          this.toneHz = hz;
+          this.jumpHz = -1;
+          this._resetTiming();
+          this._prerollPending = true;
+        } else {
+          this.jumpHz = hz;
+        }
+        this._emitFreq();
+        return;
       } else {
+        this.jumpHz = -1;
         this.toneHz = hz;      // averaged spectrum is stable; follow directly
       }
       this._emitFreq();
@@ -320,10 +407,12 @@ class CWDecoder {
     this.envPos = 0; this.envCount = 0;
     this.frameNo = 0; this.decodePos = 0;
     this.Td = 0; this.sepEma = null; this.framesSinceEst = 0;
-    this.onLvlLocal = null; this.offLvlLocal = null;
+    this.noiseLvl = 0; this.pk = 0; this.pkDecay = 1;
     this.keyOn = false; this.markFrames = 0; this.spaceFrames = 0;
     this.curElems = []; this.charFlushed = true; this.wordEmitted = true;
     this.silent = false; this.gapHist = []; this._wordThrCache = 0; this.sigOpen = false;
+    this.gateClosedAt = 0; this._rewindTo = -1; this.everOpen = false; this.openCand = 0;
+    this.lvlFrom = Infinity; this.charStartP = -1; this.charEndP = -1; this.prevCharEndP = -1;
   }
 
   _emitFreq() {
@@ -353,31 +442,98 @@ class CWDecoder {
     // oldest buffered frame and replay everything captured during acquisition,
     // recovering the first word/character otherwise lost to the ~1.5 s lock
     // latency. Td/levels from the lock are applied to those buffered frames.
-    if (hadTd === 0) this.decodePos = this.frameNo - this.envCount;
+    if (hadTd === 0) {
+      this.decodePos = this._findOnset(this.frameNo - this.envCount);
+      this._restartKeying();
+    }
+    else if (this._rewindTo >= 0) {
+      // The gate has just reopened (see _estimateSpeed): decode again, with
+      // the new estimate, the start of the new transmission — it was decoded
+      // while the gate was shut and never shown.
+      this.decodePos = this._findOnset(Math.max(this._rewindTo, this.frameNo - this.envCount));
+      this._restartKeying();
+    }
+    this._rewindTo = -1;
 
     // Decode all frames up to the current one (normally just the newest; a whole
     // buffer's worth on the first-lock replay).
     while (this.decodePos < this.frameNo) { this._decodeFrame(this.decodePos); this.decodePos++; }
   }
 
+  // Where the transmission that is on now began, searching back no further
+  // than frame `from`. A replay from the start of the buffer decoded the
+  // noise before the signal with the signal's levels and printed junk ahead
+  // of the first word ("I PEIEEE S ES MT CQ …" at −8 dB). Looking back from
+  // now, the signal ends at the last stretch of ONSET_GAP dots or more whose
+  // 8-dot envelope mean sits near the noise; word gaps, even Farnsworth ones,
+  // are far shorter.
+  _findOnset(from) {
+    const T = this.Td, now = this.frameNo;
+    const bufStart = now - this.envCount;
+    if (from < bufStart) from = bufStart;
+    const n = now - from;
+    const W = Math.max(4, Math.round(8 * T)), GAP = Math.round(20 * T);
+    if (n < W + GAP) return from;
+    const cum = new Float64Array(n + 1);
+    const BUF = this.BUF;
+    for (let k = 0; k < n; k++) {
+      const idx = ((this.envPos - (now - (from + k))) % BUF + BUF) % BUF;
+      cum[k + 1] = cum[k] + this.envBuf[idx];
+    }
+    const off = this.noiseLvl > 0 ? this.noiseLvl : this.offLvl;
+    const thr = off + 0.15 * (this.onLvl - off);
+    let low = 0;
+    for (let k = n - W; k >= 0; k--) {
+      const m = (cum[k + W] - cum[k]) / W;
+      if (m < thr) { if (++low >= GAP) return from + k + low - Math.round(2 * T); }
+      else low = 0;
+    }
+    return from;
+  }
+
+  // Fresh keying/character state for a re-decode; timing and levels stay.
+  _restartKeying() {
+    this.lvlFrom = this.decodePos;
+    this.keyOn = false; this.markFrames = 0; this.spaceFrames = 0;
+    this.curElems = []; this.charFlushed = true; this.wordEmitted = true;
+    this.silent = false; this.pk = this.onLvl;
+    this.idleFrames = Infinity;   // nothing came before: start with the idle floor
+    // Gaps learned from the earlier, gate-shut decode of this stretch are
+    // noise; keeping them set the word threshold so the first space went
+    // missing ("VK3ABCDE SV1BTL").
+    this.gapHist = []; this._wordThrCache = 0; this.afterRestart = true;
+  }
+
   // Slice + edge-detect one buffered frame (absolute index p) through the
   // matched filter → keying state. Used for both live decoding and replay.
   _decodeFrame(p) {
+    this.curP = p;
     const sm = this._boxcarAt(p, this.mfWin);
 
-    // QSB-tracking slice levels. The estimator's onLvl/offLvl are stable but only
-    // refreshed every ~0.7 s; a fading signal drifts between updates, so slicing
-    // against a static level chops dashes / merges characters. Ride the fade with
-    // fast local followers (onLvlLocal/offLvlLocal) that update per-frame from the
-    // matched-filter output while gated by the current key state — anchored to the
-    // estimator so they can't run away, and with a static fallback if a deep fade
-    // collapses the local span.
-    let eOn = this.onLvlLocal, eOff = this.offLvlLocal;
-    const estSpan = this.onLvl - this.offLvl;
-    if (eOn === null || eOn - eOff < 0.25 * estSpan) { eOn = this.onLvl; eOff = this.offLvl; }
-    const span = eOn - eOff;
-    const HIGH = eOff + 0.55 * span;
-    const LOW  = eOff + 0.35 * span;
+    // QSB-tracking slice levels. The old followers learned the on-level only
+    // from marks and the off-level only from spaces, so in a fade the marks
+    // fell under the threshold, were counted as spaces and raised the
+    // off-level: the threshold climbed while the signal sank, and nothing was
+    // read until the signal came back strongly. Now the signal level is a
+    // peak of the matched filter that jumps up on any mark and decays by
+    // itself (to 40 % over 7 dots), so it follows a fade down without needing
+    // marks to be found first, never above the estimator's on-level (a peak
+    // is biased up by noise, which mattered for weak signals) and never below
+    // 2.2 × noise nor 30 % of the estimator's span, so the long gaps of
+    // Farnsworth or a pause cannot open the slicer to noise. The noise
+    // level is a low percentile from the estimator window, which hidden marks
+    // cannot raise; noise does not fade with the signal.
+    const off = this.noiseLvl > 0 ? this.noiseLvl : this.offLvl;
+    if (this.keyOn) this.idleFrames = 0; else this.idleFrames++;
+    const idle = this.idleFrames > IDLE_DOTS * this.Td;
+    const floor = Math.max(off * FLOOR_R, off + (idle ? IDLE_SPAN : FLOOR_SPAN) * (this.onLvl - off));
+    let pk = Math.max(sm, this.pk * this.pkDecay);
+    if (pk < floor) pk = floor;
+    this.pk = pk;
+    const span = Math.max(Math.min(pk, this.onLvl), floor) - off;
+    this.lvlBuf[((p % this.BUF) + this.BUF) % this.BUF] = off + span;
+    const HIGH = off + SLICE_HI * span;
+    const LOW  = off + SLICE_LO * span;
     let on = this.keyOn;
     if (!this.keyOn && sm > HIGH) on = true;
     else if (this.keyOn && sm < LOW) on = false;
@@ -390,20 +546,6 @@ class CWDecoder {
     if (this.keyOn) { this.markFrames++; }
     else { this.spaceFrames++; this._handleGaps(); }
 
-    // Advance the local followers AFTER the decision, gated by key state so marks
-    // train the on-level and spaces the off-level. Time constant ≈ 5 dots: fast
-    // enough for typical QSB (≈1–3 Hz), slow enough not to collapse within a dash.
-    // Followers are clamped to a plausible band around the estimator levels.
-    if (this.onLvlLocal !== null) {
-      const a = 1 / Math.max(3, 5 * this.Td);
-      if (this.keyOn) this.onLvlLocal += a * (sm - this.onLvlLocal);
-      else            this.offLvlLocal += a * (sm - this.offLvlLocal);
-      const lo = this.offLvl - 0.5 * estSpan, hi = this.onLvl + 0.7 * estSpan;
-      if (this.onLvlLocal > hi) this.onLvlLocal = hi;
-      if (this.onLvlLocal < this.offLvl + 0.3 * estSpan) this.onLvlLocal = this.offLvl + 0.3 * estSpan;
-      if (this.offLvlLocal < lo) this.offLvlLocal = lo;
-      if (this.offLvlLocal > this.onLvl - 0.3 * estSpan) this.offLvlLocal = this.onLvl - 0.3 * estSpan;
-    }
   }
 
   // Trailing matched-filter boxcar of `win` frames ending at absolute frame
@@ -425,11 +567,16 @@ class CWDecoder {
     // only) so the word threshold can find this operator's two gap widths —
     // see _wordThresh().
     const gap = this.spaceFrames, T = this.Td;
-    if (T > 0 && gap > T * 1.5 && gap < T * 25) {
+    // Not the gap before the first mark after a silence or a restart: that is
+    // a pause, and learned as a word gap it pushed the threshold over the
+    // real word gaps (one 23·T "gap" among 2.8·T ones split them at 8·T).
+    if (T > 0 && gap > T * 1.5 && gap < T * 25 && !this.silent && !this.afterRestart) {
       this.gapHist.push(gap);
       if (this.gapHist.length > 40) this.gapHist.shift();
       this._wordThrCache = 0;
     }
+    this.afterRestart = false;
+    if (this.curElems.length === 0 && this.charStartP < 0) this.charStartP = this.curP;
     this.spaceFrames = 0;
     this.markFrames = 0;
     this.charFlushed = false;
@@ -447,7 +594,10 @@ class CWDecoder {
     const T = this.Td;
     if (this._wordThrCache && this._wordThrT === T) return this._wordThrCache;
     const g = this.gapHist;
-    let thr = T * 6;
+    // Until it has learned (6 gaps), 4.5·T: the matched filter shortens a
+    // measured gap by most of a dot, so a 7·T word gap reads ~6.3·T and 6·T
+    // dropped the first spaces after a replay; letter gaps read ~2.3·T.
+    let thr = T * 4.5;
     if (g.length >= 6) {
       const v = g.map(Math.log).sort((a, b) => a - b), n = v.length;
       const tot = v.reduce((a, b) => a + b, 0);
@@ -479,6 +629,7 @@ class CWDecoder {
     this.spaceFrames = 0;
     // Reject marks shorter than ~40 % of a dot (noise spikes through the slicer).
     if (d < this.Td * 0.4) return;
+    this.charEndP = this.curP;
     if (this.curElems.length < 8) this.curElems.push(d);
     this.charFlushed = false;
   }
@@ -562,7 +713,50 @@ class CWDecoder {
       ema[Td] = ema[Td] * (1 - beta) + scoreArr[Td] * beta;
       if (ema[Td] > bestScore) { bestScore = ema[Td]; bestTd = Td; }
     }
-    if (bestTd === 0 || bestScore < 0.35) { this.sigOpen = false; return; }   // no confident CW
+    if (bestTd === 0 || bestScore < 0.35) {   // no confident CW
+      this._closeGate();
+      if (this.everOpen) return;
+    }
+
+    // Signal gate, decided BEFORE anything is adopted. The lock score above
+    // cannot tell Morse from noise — pure noise scores 0.56–0.82, well over
+    // 0.35 — so the decoder used to lock on an empty channel and print ~200
+    // junk characters every 5 minutes. The on/off level ratio does separate
+    // them: 99% of noise estimates stay below 1.74, while a still-readable
+    // −10 dB signal sits at 2.3–2.8. At 2.0 noise still opened the gate about
+    // once an hour (one burst of ~15 characters); at SIG_OPEN = 2.2 two hours
+    // of noise opened it never, and weak-signal copy did not change. Close
+    // below SIG_CLOSE (hysteresis).
+    //
+    // Once the gate has been open, a shut gate adopts nothing: an estimate of
+    // a window of pure noise (a pause in the QSO) used to replace the
+    // station's speed and levels with random ones, and the next transmission
+    // was decoded with them until a new lock — its first characters came out
+    // wrong. Before the first opening the estimates ARE adopted, gate shut or
+    // not: the input filter narrowing to the keying speed is what lifts a
+    // weak signal over SIG_OPEN (without it −11 dB never opened the gate).
+    const ratio = m1Arr[bestTd] / Math.max(1e-12, m0Arr[bestTd]);
+    //
+    // The gate REopens only when two estimates in a row agree on the dot (within
+    // 25 %): a window that holds the first tenth of a second of a reply and
+    // six seconds of pause can pass SIG_OPEN with a dot four times too long,
+    // and the replay then decoded the reply's first letters with it ("SV1BTL"
+    // came out as "M1BTL"). Waiting one estimate costs nothing — the replay
+    // goes back to the onset anyway.
+    if (bestTd === 0 || bestScore < 0.35 || (this.sigOpen ? ratio < SIG_CLOSE : ratio < SIG_OPEN)) {
+      this._closeGate(); this.openCand = 0;
+      if (this.everOpen || bestTd === 0) return;
+    } else if (!this.sigOpen) {
+      // (Reopening only: before the first opening a weak signal's estimates
+      // wander more than that, and −12 dB never opened at all.)
+      if (!this.everOpen || (this.openCand > 0 && Math.abs(bestTd - this.openCand) <= 0.25 * this.openCand)) {
+        this.sigOpen = true; this.everOpen = true; this.openCand = 0;
+        if (this.Td > 0) this._rewindTo = this.gateClosedAt;   // see _processFrame
+      } else {
+        this.openCand = bestTd;
+        if (this.everOpen) return;
+      }
+    }
 
     // Adopt / smooth the estimate.
     if (this.Td === 0 || Math.abs(bestTd - this.Td) > 0.3 * this.Td) this.Td = bestTd;
@@ -585,25 +779,38 @@ class CWDecoder {
     const fc = Math.min(90, Math.max(15, 4.5 * baud));
     this.lpA = 1 - Math.exp(-2 * Math.PI * fc / this.sr);
 
+    // Slicer noise level: a low percentile of the matched-filter output over
+    // the window (CW is key-up more than 30 % of the time even in a fade).
+    {
+      const mw = this.mfWin, n = W - mw;
+      if (n > 50) {
+        const sv = new Float64Array(n);
+        for (let j = 0; j < n; j++) sv[j] = (cum[j + mw] - cum[j]) / mw;
+        sv.sort();
+        this.noiseLvl = sv[Math.floor(n * NOISE_PCT)];
+      }
+      // spread of quarter-dot averages of the raw envelope, from its key-up
+      // (lower) part: what _softDecode scores against
+      const st = Math.max(1, Math.round(this.Td / 4)), m = Math.floor(W / st);
+      if (m > 50) {
+        const sa = new Float64Array(m);
+        for (let j = 0; j < m; j++) sa[j] = (cum[(j + 1) * st] - cum[j * st]) / st;
+        sa.sort();
+        this.stepSd = Math.max(1e-9, (sa[Math.floor(m * 0.3)] - sa[Math.floor(m * 0.05)]) / 1.46);
+      }
+    }
+    this.pkDecay = Math.pow(PK_DROP, 1 / (PK_DOTS * this.Td));
+
     this.offLvl = m0Arr[bestTd];
     this.onLvl  = m1Arr[bestTd];
     if (this.onLvl <= this.offLvl) this.onLvl = this.offLvl * 1.5 + 1e-9;
 
-    // Signal gate. The lock score above cannot tell Morse from noise — pure
-    // noise scores 0.56–0.82, well over 0.35 — so the decoder used to lock on
-    // an empty channel and print ~200 junk characters every 5 minutes. The
-    // on/off level ratio does separate them: 99% of noise estimates stay below
-    // 1.74, while a still-readable −10 dB signal sits at 2.3–2.8. At 2.0 noise
-    // still opened the gate about once an hour (one burst of ~15 characters);
-    // at SIG_OPEN = 2.2 two hours of noise opened it never, and weak-signal
-    // copy did not change. Close below SIG_CLOSE (hysteresis).
-    const ratio = this.onLvl / Math.max(1e-12, this.offLvl);
-    if (!this.sigOpen && ratio >= SIG_OPEN) this.sigOpen = true;
-    else if (this.sigOpen && ratio < SIG_CLOSE) this.sigOpen = false;
-    // Seed the fast local followers on the first lock; afterwards leave them to
-    // track QSB on their own (nudge only if they've drifted implausibly far).
-    if (this.onLvlLocal === null) { this.onLvlLocal = this.onLvl; this.offLvlLocal = this.offLvl; }
+    if (this.pk === 0) this.pk = this.onLvl;   // seed the peak on the first lock
     this._emitFreq();
+  }
+
+  _closeGate() {
+    if (this.sigOpen) { this.sigOpen = false; this.gateClosedAt = this.frameNo; }
   }
 
   // CW structure score: slice slot values at `thr`, then measure how well the
@@ -674,11 +881,91 @@ class CWDecoder {
   // ── Dictionary-constrained MAP character decode ───────────────────────────
   _flushChar() {
     const durs = this.curElems;
+    const a = this.charStartP, b = this.charEndP;
     this.curElems = [];
     this.charFlushed = true;
+    this.charStartP = -1;
     if (durs.length === 0) return;
-    const ch = this._mapDecode(durs);
+    const ch = this._softDecode(a, b) || this._mapDecode(durs);
+    this.prevCharEndP = b;
     if (ch && this.callback && this.sigOpen) this.callback({ type: 'char', char: ch });
+  }
+
+  // Raw envelope at absolute frame p (0 outside the buffer).
+  _envAt(p) {
+    const bufStart = this.frameNo - this.envCount;
+    if (p < bufStart || p >= this.frameNo) return 0;
+    const BUF = this.BUF;
+    return this.envBuf[((this.envPos - (this.frameNo - p)) % BUF + BUF) % BUF];
+  }
+
+  // Soft-decision letter decode. At −10 dB 115 of 121 wrong letters had the
+  // wrong NUMBER of elements — a dot lost in noise, two dots merged across a
+  // gap the slicer missed — which a decision among codewords of the slicer's
+  // length cannot repair. So the letter is decided on the envelope itself:
+  // the stretch around the slicer's letter, in steps of a quarter dot, is
+  // fitted to every Morse character of any length with a duration-tolerant
+  // Viterbi alignment (each mark and gap may stretch, log-normally), scored by
+  // the Gaussian likelihood of each step being key-down or key-up between the
+  // letter's own on-level and the noise level, plus the letter prior.
+  _softDecode(a, b) {
+    const T = this.Td;
+    if (T < 4 || a < 0 || b <= a) return null;
+    const step = Math.max(1, Math.round(T / 4)), dot = T / step;
+    let lo = a - Math.round(2 * T), hi = b + Math.round(1 * T);
+    if (this.prevCharEndP >= 0) lo = Math.max(lo, this.prevCharEndP + Math.round(0.5 * T));
+    lo = Math.max(lo, this.frameNo - this.envCount); hi = Math.min(hi, this.frameNo);
+    const n = Math.floor((hi - lo) / step);
+    if (n < 4) return null;
+    const x = new Float64Array(n);
+    for (let s = 0; s < n; s++) { let acc = 0; for (let k = 0; k < step; k++) acc += this._envAt(lo + s * step + k); x[s] = acc / step; }
+    // levels: noise from the estimator; the key-down level step by step from
+    // the slicer's own QSB-tracking level (one level per letter misread fast
+    // fades: 1 Hz QSB went from 26 % to 44 % errors); spread from the
+    // estimator window
+    const off = this.noiseLvl > 0 ? this.noiseLvl : this.offLvl;
+    const sd = this.stepSd;
+    if (!(sd > 0)) return null;
+    const BUF = this.BUF, P = new Float64Array(n + 1), k2 = SOFT_LLR_W / (2 * sd * sd);
+    // the slicer's level lags the envelope by its boxcar; read it half a window later
+    const lag = Math.round(this.mfWin / 2);
+    for (let s = 0; s < n; s++) {
+      const q = Math.min(this.curP, lo + s * step + (step >> 1) + lag);
+      // before the decode (re)started there is no slicer level yet: use the
+      // estimator's (the first letter of a transmission, C of CQ, misread)
+      const on = q < this.lvlFrom ? this.onLvl : Math.max(this.lvlBuf[((q % BUF) + BUF) % BUF], off * 1.05);
+      const v = x[s];
+      P[s + 1] = P[s] + ((v - off) * (v - off) - (v - on) * (v - on)) * k2;
+    }
+    const segOn = (u, v) => 0.5 * (P[v] - P[u]), segOff = (u, v) => -0.5 * (P[v] - P[u]);
+    const lp = (d, nom, sg) => { const z = Math.log(d / nom) / sg; return -0.5 * z * z; };
+    let best = -Infinity, bestCh = null;
+    let cur = new Float64Array(n + 1), nxt = new Float64Array(n + 1);
+    for (const cw of SOFT_CODES) {
+      // lead-in key-up of any length
+      for (let t = 0; t <= n; t++) cur[t] = segOff(0, t);
+      const els = cw.els;
+      for (let e = 0; e < els.length; e++) {
+        // mark
+        const nomM = els[e] * dot, dminM = Math.max(1, Math.floor(nomM * SOFT_MK_MIN)), dmaxM = Math.ceil(nomM * 1.8);
+        nxt.fill(-Infinity);
+        for (let t = 0; t <= n; t++) { if (cur[t] === -Infinity) continue;
+          for (let d = dminM; d <= dmaxM && t + d <= n; d++) { const v = cur[t] + segOn(t, t + d) + lp(d, nomM, SOFT_SIG_MK); if (v > nxt[t + d]) nxt[t + d] = v; } }
+        [cur, nxt] = [nxt, cur];
+        if (e === els.length - 1) break;
+        // gap inside the letter
+        const nomG = dot, dminG = Math.max(1, Math.round(nomG * SOFT_GAP_MIN)), dmaxG = Math.ceil(nomG * 2.2);
+        nxt.fill(-Infinity);
+        for (let t = 0; t <= n; t++) { if (cur[t] === -Infinity) continue;
+          for (let d = dminG; d <= dmaxG && t + d <= n; d++) { const v = cur[t] + segOff(t, t + d) + lp(d, nomG, SOFT_SIG_GP); if (v > nxt[t + d]) nxt[t + d] = v; } }
+        [cur, nxt] = [nxt, cur];
+      }
+      // tail key-up of any length
+      let sc = -Infinity; for (let t = 0; t <= n; t++) if (cur[t] > -Infinity) { const v = cur[t] + segOff(t, n); if (v > sc) sc = v; }
+      sc += SOFT_PRIOR_W * cw.logPrior;
+      if (sc > best) { best = sc; bestCh = cw.char; }
+    }
+    return bestCh;
   }
 
   _mapDecode(durs) {

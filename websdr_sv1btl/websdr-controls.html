@@ -427,14 +427,14 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
     <table>
       <tbody>
       <tr>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset : 700 Hz - 800 Hz (CW)" onClick="setmf('cw', -0.8, -0.7);  rememberpreset();">100 Hz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset : 650 Hz - 850 Hz (CW)" onClick="setmf('cw', -0.85, -0.65);  rememberpreset();">200 Hz</button></td>
-        <td><button type="button" class="btnBandW" title="Bandwidth preset : 600 Hz - 900 Hz (CW)" onClick="setmf('cw', -0.9, -0.6);  rememberpreset();">300 Hz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (CW): 100 Hz wide, centred on the CW pitch (CW decoder window, default 600 Hz)" onClick="setmf('cw', -0.8, -0.7);  rememberpreset();">100 Hz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (CW): 200 Hz wide, centred on the CW pitch (CW decoder window, default 600 Hz)" onClick="setmf('cw', -0.85, -0.65);  rememberpreset();">200 Hz</button></td>
+        <td><button type="button" class="btnBandW" title="Bandwidth preset (CW): 300 Hz wide, centred on the CW pitch (CW decoder window, default 600 Hz)" onClick="setmf('cw', -0.9, -0.6);  rememberpreset();">300 Hz</button></td>
 
 	</tr>
     <tr>
-         <td><button type="button" class="btnBandW" title="Bandwidth preset : 550 Hz - 950 Hz (CW)" onClick="setmf('cw', -0.95, -0.55);  rememberpreset();">400 Hz</button></td>
-		<td><button type="button" class="btnBandW" title="Bandwidth preset : 500 Hz - 1 kHz (CW)" onClick="setmf('cw', -1, -0.5);  rememberpreset();">500 Hz</button></td>
+         <td><button type="button" class="btnBandW" title="Bandwidth preset (CW): 400 Hz wide, centred on the CW pitch (CW decoder window, default 600 Hz)" onClick="setmf('cw', -0.95, -0.55);  rememberpreset();">400 Hz</button></td>
+		<td><button type="button" class="btnBandW" title="Bandwidth preset (CW): 500 Hz wide, centred on the CW pitch (CW decoder window, default 600 Hz)" onClick="setmf('cw', -1, -0.5);  rememberpreset();">500 Hz</button></td>
     </tr>
     	</tbody>
         </table>
@@ -775,7 +775,7 @@ Your browser does not seem to support HTML5 WebAudio; please try a recent versio
       <span title="view entire frequency range of this receiver"><button type="button" class="btnZoom" onClick="wfset(4);" style="
     border-radius: 40px 0px 0px 40px;">Max out</button></span>
       <span title="zoom out one step"><button type="button" class="btnZoom" onClick="wfset(1);" style="">Zoom out</button></span>
-      <span title="view the entire current amateur or broadcast band"><button type="button" class="btnZoom" onClick="wfset(3);">Band</button></span>
+      <span title="view the entire current amateur or broadcast band and set its band-plan mode (40m LSB, 41m AM, 30m CW…)"><button type="button" class="btnZoom" onClick="wfset(3);">Band</button></span>
       <span title="zoom in one step"><button type="button" class="btnZoom" onClick="wfset(0);">Zoom in</button></span>
       <span title="zoom in as deep as possible"><button type="button" class="btnZoom" onClick="wfset(2);" style="
     border-radius: 0px 40px 40px 0px;">Max in</button></span>

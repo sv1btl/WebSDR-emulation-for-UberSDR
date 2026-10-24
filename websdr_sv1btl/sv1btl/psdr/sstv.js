@@ -480,6 +480,19 @@ export class KiwiSSTVDecoder {
     this._holdSeconds     = 4;
     this._holdLinesMin    = 10;
     this._holdLinesMax    = 40;
+    // Presence detector (2026-10-24). Below about −3 dB (in 2500 Hz) almost no
+    // single sync pulse passes the per-line test, so the hold above stopped the
+    // drawing after a dozen lines of a picture that was still there (Martin M1
+    // at −5 dB: 16 of 256 lines). Averaged over many lines, though, the 1200 Hz
+    // energy where the sync pulses should be stands clearly above the 1200 Hz
+    // energy inside the picture content (where SSTV never sends 1200 Hz):
+    // equal on noise, several times higher with a picture. That compares the
+    // signal with itself, so the receiver's filter skirts do not matter. It
+    // only keeps a lock that already exists drawing and alive; it never makes
+    // one.
+    this._presK           = 2.0;    // sync/reference energy ratio for "present"
+    this._presMinLines    = 8;      // lines of evidence before it counts
+    this._presAlpha       = 0.12;   // EMA weight per line (~ the last 8-16 lines)
     this._gateHold    = Math.round(2.0 * this._decodeSps);   // hangover after signal drops
 
     // ── Lock confirmation (AUTO / FORCED only — VIS is parity-checked) ─────
@@ -1290,6 +1303,10 @@ export class KiwiSSTVDecoder {
     this._syncHitRate  = 1;
     this._syncLines    = 0;
     this._syncHits     = 0;
+    this._presSync     = 0;   // presence detector, see _process
+    this._presRef      = 0;
+    this._presLines    = 0;
+    this._sinceEvidence = 0;
     this._imageW       = mode.width;
     this._imageH       = mode.height;
     if (!announce) return;
@@ -1428,10 +1445,31 @@ export class KiwiSSTVDecoder {
     // same mode: adjacent anchors of a correct lock score almost identically, so
     // that comparison is always ~0 and would veto every real signal.  It asks
     // only whether a DIFFERENT mode is competing.
+    // Line-period harmonics. A grid whose line is a whole multiple of the
+    // signal's lands on every k-th sync pulse and scores just as well: Robot
+    // 72 (300 ms) = 2 x Robot 36 (150 ms), Scottie DX (1050.3 ms) ~ 7 x Robot
+    // 36. Started mid-picture (no VIS) a clean Robot 36 was locked as Robot 72,
+    // then as Scottie DX. So if a mode with a SHORTER line passes the test on
+    // its own and the winner's line is a multiple of it, the signal is that
+    // mode — a short grid on a long-line signal misses most of its pulses and
+    // cannot pass. Harmonic modes are then no rival in the margin test.
+    const multipleOf = (longMs, shortMs) => {
+      const k = Math.round(longMs / shortMs);
+      return k >= 2 && Math.abs(longMs - k * shortMs) <= 0.005 * longMs;
+    };
+    const passes = (v) => v.score >= this._autoMinScore && v.minLine >= this._autoMinQ;
+    if (best && !forcedKey) {
+      for (const [k, v] of bestByKey)
+        if (k !== best.key && passes(v) && multipleOf(this._modes[best.key].lineMs, this._modes[k].lineMs) &&
+            this._modes[k].lineMs < this._modes[best.key].lineMs) best = v;
+    }
+
     let rival = null;
     if (best) {
+      const bl = this._modes[best.key].lineMs;
       for (const [k, v] of bestByKey)
-        if (k !== best.key && (!rival || v.score > rival.score)) rival = v;
+        if (k !== best.key && !multipleOf(this._modes[k].lineMs, bl) &&
+            (!rival || v.score > rival.score)) rival = v;
     }
     const margin2 = rival ? best.score - rival.score : Infinity;
     const accepted = forcedKey
@@ -1952,6 +1990,31 @@ export class KiwiSSTVDecoder {
         : (this._syncAnchor + lineS);
 
       const found = this._findSyncNear(expectedSync);
+
+      // Presence (see _presK): 1200 Hz energy at the predicted sync against the
+      // same window inside the first video channel of this line.
+      {
+        const expLine = (m.family === 'scottie') ? expectedSync - syncOffsetScottie : expectedSync;
+        const refMs = (m.family === 'scottie')
+          ? m.porchMs + m.chanMs / 2
+          : m.syncMs + m.porchMs + (m.chanMs != null ? m.chanMs : m.yMs) / 2;
+        const refPos = expLine + Math.round(refMs * this._decodeSps / 1000);
+        if (expectedSync >= 0 && refPos >= 0 && refPos + syncS < this._bufLen && expectedSync + syncS < this._bufLen) {
+          // the strongest of 1150/1200/1250 Hz, so a picture tuned up to
+          // ~50 Hz off still counts (at +50 Hz the 1200 Hz bin alone read 1.4)
+          const a = this._presAlpha;
+          const e = (pos) => Math.max(this._goertzel(pos, syncS, 1150), this._goertzel(pos, syncS, 1200), this._goertzel(pos, syncS, 1250));
+          this._presSync += a * (e(expectedSync) - this._presSync);
+          this._presRef  += a * (e(refPos) - this._presRef);
+          this._presLines++;
+        }
+      }
+      const present = this._presLines >= this._presMinLines &&
+                      this._presSync > this._presK * this._presRef;
+      // Lines since the last evidence of a picture — an accepted pulse OR
+      // presence. Giving up and stopping the drawing count these; the plain
+      // miss count (_lostSyncCount) only widens the sync search.
+
       // Two conditions, not one:
       //   • ABSOLUTE — the pulse must stand above the noise-referenced floor.
       //     Without this the first line was accepted at any quality > 0
@@ -1962,6 +2025,7 @@ export class KiwiSSTVDecoder {
                         found.tonality >= this._minSyncTonality &&
                         found.quality > (this._lastSyncQuality * 0.35);
       const syncStart = useFound ? found.pos : expectedSync;
+      this._sinceEvidence = (useFound || present) ? 0 : (this._sinceEvidence || 0) + 1;
 
       this._syncLines++;
       this._syncHitRate += 0.15 * ((useFound ? 1 : 0) - this._syncHitRate);
@@ -1976,6 +2040,12 @@ export class KiwiSSTVDecoder {
           : Math.max(found.quality, 1e-9);
         this._lostSyncCount   = 0;
       } else {
+        // Counted even when the picture is present: the miss count widens the
+        // sync search (_findSyncNear), and that is what keeps catching the sync
+        // of a mistuned picture — at +50 Hz the per-line test fails on almost
+        // every line and without the wider search the timing drifted off the
+        // picture (a clean Robot 36 restarted half-way). Not counting it while
+        // present drew more of a −5 dB picture (197 lines vs 149) but lost that.
         this._lostSyncCount++;
         // The relative bar must FOLLOW the signal down.  _lastSyncQuality is
         // updated only on hits, so after a fade it stayed anchored to the
@@ -2001,8 +2071,8 @@ export class KiwiSSTVDecoder {
           this._maxLostLinesMin,
           Math.min(this._maxLostLinesMax,
                    Math.round(this._maxLostSeconds * 1000 / m.lineMs)));
-        if (this._lostSyncCount > lostBar ||
-            (!proven &&
+        if (this._sinceEvidence > lostBar ||
+            (!present && !proven &&
              this._syncLines >= this._minRateLines &&
              this._syncHitRate < this._minSyncHitRate)) {
           this._emit({ type: 'status', text: `${m.name} — sync lost, resetting` });
@@ -2053,7 +2123,7 @@ export class KiwiSSTVDecoder {
         this._holdLinesMin,
         Math.min(this._holdLinesMax,
                  Math.round(this._holdSeconds * 1000 / m.lineMs)));
-      const drawing = this._lostSyncCount <= holdBar;
+      const drawing = this._sinceEvidence <= holdBar;
 
       for (const row of (drawing ? rows : [])) {
         this._emit({

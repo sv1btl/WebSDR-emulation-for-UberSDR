@@ -1193,12 +1193,32 @@ function stop(quiet) {
 // usual filter (set by setfreqm) stay.
 const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2'], [/\bJS8(?:CALL)?\b/i, 'js8'],
   [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty'],
-  [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia'], [/\bMFSK ?-?(?:16|32|64)?\b/i, 'modem', 'mfsk'],
+  [/\bSITOR(?:-?B)?\b/i, 'navtex'], [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia'], [/\bMFSK ?-?(?:16|32|64)?\b/i, 'modem', 'mfsk'],
   [/\bDOMINO ?EX\b/i, 'modem', 'dominoex'], [/\bTHOR\b/i, 'modem', 'thor'], [/\bTHROB ?X?\b/i, 'modem', 'throb'],
   [/\b(?:FELD ?)?HELL(?:SCHREIBER)?\b/i, 'modem', 'hell'], [/\bMT-?63\b/i, 'modem', 'mt63'],
-  [/\bPACKET\b/i, 'packet', 'packet'], [/\bAPRS\b/i, 'packet', 'aprs']];let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet)
+  [/\bPACKET\b/i, 'packet', 'packet'], [/\bAPRS\b/i, 'packet', 'aprs']];
+// A label from a markers.json mode (data-dec, set by ubersdr-compat.js fetchdx) names its
+// decoder outright, as PhantomSDR-Plus's MARKER_DECODERS: [decoder, FLDIGI list entry,
+// MFSK sub-mode]. 'rade' = UberSDR's RADE V1 (RADEL lower, the rest upper sideband).
+// MORSE has none here: its label sets CW, which opens the CW decoder by itself.
+const MARKER_MODES = { FT8: ['ft8'], FT4: ['ft4'], FT2: ['ft2'], JS8: ['js8'], WSPR: ['wspr'], SSTV: ['sstv'],
+  FAX: ['fax'], WEFAX: ['fax'], NAVTEX: ['navtex'], SITOR: ['navtex'], RTTY: ['rtty', 'ham'],
+  'RTTY-WX': ['rtty', 'weather'], PSK31: ['psk31'], OLIVIA: ['olivia'], MFSK: ['modem', 'mfsk'],
+  MFSK16: ['modem', 'mfsk', 'mfsk16'], MFSK32: ['modem', 'mfsk', 'mfsk32'], MFSK64: ['modem', 'mfsk', 'mfsk64'],
+  DOMINOEX: ['modem', 'dominoex'], THOR: ['modem', 'thor'], THROB: ['modem', 'throb'], HELL: ['modem', 'hell'],
+  FELDHELL: ['modem', 'hell'], MT63: ['modem', 'mt63'], PACKET: ['packet', 'packet'], APRS: ['packet', 'aprs'],
+  RADEL: ['rade', 'lsb'], RADEU: ['rade', 'usb'], RADE: ['rade', 'usb'], FREEDV: ['rade', 'usb'] };
+let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet, ham/weather RTTY)
+let labelSub = null;                  // its MFSK sub-mode, from a marker mode (MFSK32…)
 function labelMode(html) {
-  labelVariant = null;
+  labelVariant = labelSub = null;
+  const tag = /data-dec="([^"]*)"/.exec(String(html));
+  if (tag) {
+    const m = MARKER_MODES[tag[1].toUpperCase()];
+    if (!m) return null;
+    labelVariant = m[1] || null; labelSub = m[2] || null;
+    return m[0];
+  }
   const text = String(html).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' ');
   let best = null, at = Infinity;
   for (const [re, k, v] of LABEL_MODES) { const m = re.exec(text); if (m && m.index < at) { best = k; at = m.index; labelVariant = v || null; } }
@@ -1215,16 +1235,35 @@ function labelSignal(k) {
   const shift = (W.iscw() ? (Number(W.hi) + Number(W.lo)) / 2 : 0) + (W.ubersdr_dec_offset() || 0);
   if (shift > 0.0005 && Math.abs(dialKHz() - (lf - shift)) > 0.0005) { tuneKHz(lf - shift); applyFilter(k); }
 }
+// An RTTY label on a listed station with a shift of its own (DWD DDH47, 85 Hz) uses it, as
+// a pick from the RTTY window's list does
+function labelRttyShift(k) {
+  const lf = Number(W.ubersdr_label_khz);
+  if (k !== 'rtty' || st.on !== 'rtty' || !(lf > 0)) return;
+  const it = RTTY_FREQS[rttyVariant()].find((x) => Math.abs(x[1] - lf) < 0.01);
+  rttyShift = (it && it[2]) || 0; rttySend(); applyFilter('rtty');
+}
 document.addEventListener('click', (e) => {
   const lab = e.target.closest && e.target.closest('.statinfo0, .statinfo0l');
   if (!lab) return;
   const k = labelMode(lab.innerHTML);
   if (!k) { if (st.on) stop(true); return; }
-  if (labelVariant) {                           // a modem / packet label: that entry of the FLDIGI list
+  if (k === 'rade') {                           // RADE V1: on the label's sideband (setfreqm has set it)
+    if (st.on) stop(true);
+    const side = labelVariant;
+    setTimeout(() => {
+      try { if (W.ubersdr_rade && (!W.ubersdr_rade_side || W.ubersdr_rade_side() !== side)) W.ubersdr_rade(side); }
+      catch (err) { console.error('decoders: label RADE', err); }
+    }, 0);
+    return;
+  }
+  if (labelVariant) {                           // a modem / packet / RTTY label: that entry of the FLDIGI list
+    const same = st.on === k && lsGet('ubersdr_rtty', 'ham') === labelVariant && !labelSub;   // kept as it is
     lsSet('ubersdr_rtty', labelVariant);
     const mf = /\bMFSK ?-?(16|32|64)\b/i.exec(lab.textContent || '');
-    if (labelVariant === 'mfsk' && mf) lsSet('ubersdr_modem_mfsk', 'mfsk' + mf[1]);
-    if (st.on === k) { start(k); labelSignal(k); return; }
+    if (labelSub) lsSet('ubersdr_modem_mfsk', labelSub);
+    else if (labelVariant === 'mfsk' && mf) lsSet('ubersdr_modem_mfsk', 'mfsk' + mf[1]);
+    if (st.on === k && !same) { start(k); labelSignal(k); labelRttyShift(k); return; }
   }
   setTimeout(() => {                               // after setfreqm's tuning has settled
     try {
@@ -1235,7 +1274,7 @@ document.addEventListener('click', (e) => {
         if (!keepDial && Math.abs(near - f) > 0.01) tuneKHz(near);
         applyFilter(k); lightPresets();
       }
-      labelSignal(k);
+      labelSignal(k); labelRttyShift(k);
     } catch (err) { console.error('decoders: label', err); }
   }, 0);
 });
