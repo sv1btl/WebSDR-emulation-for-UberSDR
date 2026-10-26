@@ -1,6 +1,6 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-Version 2026-09-30 · by SV1BTL · based on RW3PS's WebSDR template
+Version 2026-10-26 · by SV1BTL · based on RW3PS's WebSDR template
 
 - **Repository:** https://github.com/sv1btl/WebSDR-emulation-for-UberSDR
 - **Live example:** http://sv1btlham.no-ip.org:8901/ (SV1BTL's WebSDR, Athens)
@@ -14,6 +14,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - a **spectrum** in the PhantomSDR style, either over the waterfall or above it
   ("spectrum + waterfall", the default for first-time visitors); there the dashed line
   that follows the mouse runs down through the waterfall as well, as in PhantomSDR-Plus;
+- a **3D spectrum** as in PhantomSDR-Plus, with the waterfall's own colours (the **3D**
+  switch next to "Tube & Waterfall & DSP & Audio"; see "3D spectrum" below);
 - **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz;
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
@@ -24,7 +26,12 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   whole receiver range and stays lit while the waterfall is fully zoomed out. As in
   PhantomSDR-Plus, each band button **remembers** the last frequency tuned in that band,
   here with its mode and filter too (kept in the visitor's browser); a second press on the
-  band already lit goes back to the band's default;
+  band already lit goes back to the band's default. The **Band** button in Waterfall
+  Settings follows the band plan: it zooms to the whole band you are in and sets that
+  band's mode, keeping the frequency shown (40 m 7000–7200 LSB, 30 m CW, 41 m broadcast
+  7205–7605 AM…; amateur bands from the band table, the rest from the page's band-plan
+  table, `modeperfreq` in `websdr-base.js`). A running decoder stops; outside both it
+  zooms ±100 kHz as before;
 - **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
   decoded by UberSDR's own FreeDV extension;
 - the desktop page **fits the browser window**: it is scaled to the window's width, from
@@ -221,6 +228,15 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
   For the decoders that read the signal above the dial (FAX, NAVTEX, RTTY, PSK31, Olivia,
   the FLDIGI modems, Packet) the label is the signal's own frequency: `518usb NAVTEX`
   tunes the dial to 517.50 and the display shows 518.00.
+- The mode can also be a **PhantomSDR-Plus `markers.json` mode**, written the same way:
+  `ft8`, `ft4`, `ft2`, `js8`, `wspr`, `sstv`, `fax`, `navtex`, `sitor`, `rtty`, `rtty-wx`,
+  `psk31`, `olivia`, `aprs`, `radel`, `radeu`, `morse`, `hfdl`, `drm`. Then the mode alone
+  decides what a click does, whatever the text says: `147.3rtty-wx DWD DDH47` starts the
+  DWD weather RTTY decoder, `2174.5sitor SITOR MSI` the NAVTEX / SITOR-B decoder,
+  `7087radel FreeDV` RADE on LSB, and `77.5morse DCF77` CW with its decoder. HFDL and DRM
+  have no decoder here, so they take the page's band plan (`2986hfdl` USB, `3205drm` AM).
+  SV1BTL's file has the markers of PhantomSDR-Plus's `frequencylist/mymarkers.json` and
+  `decodermarkers.json` in this form, after the station's own labels.
 - Lines starting with `#` are comments.
 - `<br>` in the text starts a second line.
 
@@ -312,8 +328,9 @@ Below it, a small **FreeDV Reporter** window lists the stations reported to Free
 Reporter on the band you are on, as in UberSDR's own FreeDV panel: callsign, country,
 distance, frequency (a green dot when you are on it), message, TX and last RX. Stations
 transmitting now come first (red TX badge), then those that transmitted most recently;
-the TX column shows how long ago ("3m", "2h"). Clicking a station tunes to it. The
-window shows four rows at a time and scrolls for more.
+the TX column shows how long ago ("3m", "2h"). Clicking a station tunes to it (RADE
+stays on, also when the station is on another band). The window shows four rows at a
+time and scrolls for more.
 
 On the **mobile page**, RADEL and RADEU are at the end of the mode list, with the same
 status line under the buttons (the reporter window is on the desktop page only).
@@ -337,8 +354,13 @@ While the mode is **CW** (the CW button, CW narrow or wide, a keyboard key or CA
 software), a window opens under the Mode buttons with the decoded text. The decoder is
 the one from **PhantomSDR-Plus** (`sv1btl/cw-decoder.js`): it locks on the strongest
 steady tone in the audio, finds the speed by itself and decodes even weak or fading
-signals. It shows the pitch and the speed in WPM; a line break marks a pause or a new
-frequency. **Clear** empties the window. Choosing another mode closes it.
+signals. It shows the tone it found (≈ Hz) and the speed in WPM; a line break marks a
+pause or a new frequency. **Clear** empties the window. Choosing another mode closes it.
+
+The **Pitch** slider, as in PhantomSDR-Plus, sets the tone a CW signal is heard at:
+500–800 Hz in 50 Hz steps, **600 Hz** by default, kept in the listener's browser. Every
+CW filter (CW, CW narrow, CW wide, the CW bandwidth presets) is centred on it with its
+own width; moving the slider keeps you on the same signal and only changes its tone.
 
 It runs in the listener's browser, on the audio the page receives (before squelch, NR
 and the notch filters, so muting does not stop it). Nothing extra is asked of UberSDR:
@@ -403,8 +425,10 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 - A running decoder keeps its own mode and filter: neither the band's usual mode (CW on
   30 m) nor a typed frequency changes them.
 - The distance column needs the station locator in `station.js` (`locator`).
-- The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files) and
-  `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
+- The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files, as of
+  2026-10-24: WSPR decodes in up to three passes, taking out each decoded station so
+  weaker ones under it show up; SSTV keeps drawing weak pictures and no longer mistakes
+  Robot 36 for Robot 72) and `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
   downloaded when JS8 is used.
 - Desktop page only.
 
@@ -557,11 +581,27 @@ commands, and refuses private addresses. The other WebSDR's user list shows the 
 "<callsign> diversity". WebSDR operators added the Origin check on purpose: keep the
 limits and stop if an operator asks. `uninstall.sh` offers to remove the relay container.
 
+### 3D spectrum
+
+The **3D** switch next to "Tube & Waterfall & DSP & Audio" shows the spectrum in relief, as
+in PhantomSDR-Plus: frequency across, the last 320 lines going back into the screen, level
+as height. It takes the place and size of the 2D spectrum (with Type = waterfall, switching
+it on sets Type to spectrum + waterfall). It shows exactly what the waterfall shows: the
+same levels in the same colours, through the waterfall's brightness and contrast, so Auto
+brightness (or the sliders) changes the waterfall and the whole 3D picture alike. dBFS
+marks on the right, seconds back on the left; ⚙ sets angle and depth. With spectrum +
+waterfall, hovering shows the frequency and a click tunes there (on an older line: that
+line's frequency). It needs WebGL2; the choice is kept in the visitor's browser.
+
+**Auto brightness** reacts at once after a page load, zoom or band change (first setting
+after one new line, then with every line for the first twelve), then calmly: a check every
+4 s with small, eased steps.
+
 ### Page size, look and dark theme
 
-- **Fits the window.** The desktop page is scaled to the width of the browser window
-  (0.5× to 3×), so it fills a 1024 px laptop screen as well as a Full HD, 2K or 4K
-  monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and
+- **Fits the window.** The desktop page is scaled to 90% of the width of the browser
+  window, centred (0.5× to 3×; `FIT_SHARE` in `ubersdr-compat.js`), so it suits a 1024 px
+  laptop screen as well as a Full HD, 2K or 4K monitor, and follows when the window is resized. Clicks, drags, the mouse wheel and
   the frequency digits stay exact. Add `?nofit` to the address for the old fixed size.
 - **Dark theme.** The **Light GUI / Dark GUI** switch next to Auto brightness turns dark: the page
   header, the WebSDR Information panel, the Waterfall / Keyboard Control / Background
@@ -687,7 +727,7 @@ editing, raise the `?v=` number (see section 6).
 | `NR_MULT`, `NR_FLOOR` | per level | noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong |
 | `SQL_OPEN_DB`, `SQL_CLOSE_DB`, `SQL_HANG_S` | 8, 4, 0.6 | squelch: opens this many dB above the noise |
 | `LIM_CEIL`, `LIM_KNEE` | 0.7, 0.8 | soft limiter |
-| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.10, 0.70, 0.17 | auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.10, speckle limit 0.28; with `WF_SIG_W` 1.25 = how hard it pushes signals brighter, `WF_C_MAX` 3.5 = most contrast; the low end of the colour table is darkened so the background is near black) |
+| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.17, 0.74, 0.22 | auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.17, speckle limit 0.31; with `WF_SIG_W` 1.25 = how hard it pushes signals brighter, `WF_C_MAX` 3.5 = most contrast; the low end of the colour table is darkened so the background is near black) |
 | `WFTYPE_DEFAULT` | `'2'` | first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall |
 | `GEO_SERVICES` | geojs.io, ipwho.is | location lookup; set it to `[]` to switch the location in the users list off |
 | `SPEC_RANGE_DB` | 70 | spectrum height in dB |

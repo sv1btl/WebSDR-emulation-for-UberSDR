@@ -1940,13 +1940,15 @@
   // Mouse positions are divided by pageZoom where the page code works in page pixels
   // (getMouseXY above, the spectrum crosshair, the frequency digits, the wheel zoom
   // of the waterfall below). Off with ?nofit in the address.
-  var PAGE_MARGIN = 30, FIT_MIN = 0.5, FIT_MAX = 3;
+  // FIT_SHARE (2026-10-26): the page takes 90% of the window width, centred.
+  var PAGE_MARGIN = 30, FIT_MIN = 0.5, FIT_MAX = 3, FIT_SHARE = 0.9;
   var pageZoom = 1;
   window.ubersdr_pagezoom = function () { return pageZoom; };
   function fitPage() {
     var panel = document.getElementById('mainpanel');
     if (!panel || !panel.offsetWidth || /[?&]nofit\b/.test(location.search)) return;
-    var z = document.documentElement.clientWidth / (panel.offsetWidth + PAGE_MARGIN);
+    document.body.style.maxWidth = (panel.offsetWidth + PAGE_MARGIN) + 'px';
+    var z = FIT_SHARE * document.documentElement.clientWidth / (panel.offsetWidth + PAGE_MARGIN);
     z = Math.max(FIT_MIN, Math.min(FIT_MAX, Math.floor(z * 100) / 100));
     if (Math.abs(z - pageZoom) < 0.005) return;
     pageZoom = z;
@@ -2046,26 +2048,26 @@
   // (On 2026-09-29 the waterfall briefly used the spectrum's colours with a colour table
   // rebuilt while listening; that was reverted to this, at the user's request.)
 
-  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.14;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29, 0.10 until 2026-10-13: lighter, then 0.12)
+  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.17;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29, 0.10 until 2026-10-13: lighter, then 0.12, 0.14 until 2026-10-26: brighter)
   // Auto contrast (2026-09-29): brightness and contrast are fitted together so that
   //   - the noise floor (median pixel) sits on WF_NOISE_T,
   //   - the noise grain (WF_GRAIN_PCT pixel) stays below WF_GRAIN_MAX, so a quiet band
   //     is not stretched into bright speckle,
   //   - strong signals (WF_SIG_PCT pixel) come close to WF_SIG_T (yellow → orange,
   //     short of the saturated red end).
-  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.19;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands), 0.17 until 2026-10-13, then 0.18
-  var WF_SIG_PCT = 0.997, WF_SIG_T = 0.70;
+  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.22;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands), 0.17 until 2026-10-13, then 0.18, 0.19 until 2026-10-26 (brighter)
+  var WF_SIG_PCT = 0.997, WF_SIG_T = 0.74;   // 0.70 until 2026-10-26 (brighter)
   var WF_SIG_W = 1.25;   // weight of the signal goal (was 1): signals come out brighter (2026-10-12)
   var WF_C_MIN = 0.8, WF_C_MAX = 3.5;   // was 3: more room to stretch signals away from the noise (2026-10-12)
   // Wide views (all 0–30 MHz, more than WF_WIDE_KHZ across): each pixel covers many kHz,
   // so most pixels hold signals and the 85 % pixel is a signal, not noise grain. There the
   // grain limit is left out (it dimmed the whole picture) and the floor sits a bit higher.
-  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.14;   // was 0.15 (2026-10-12: noise darker on busy views), 0.10 until 2026-10-13, then 0.12
+  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.17;   // was 0.15 (2026-10-12: noise darker on busy views), 0.10 until 2026-10-13, then 0.12, 0.14 until 2026-10-26 (brighter)
   // ... but a softer speckle limit is kept there (weight 3, was none): without it busy
   // stretches came out medium blue
-  var WF_GRAIN_MAX_WIDE = 0.28;
+  var WF_GRAIN_MAX_WIDE = 0.31;   // 0.28 until 2026-10-26 (brighter)
   function wfWide() { var e = window.bi && bi[window.band]; return !!(e && e.effsamplerate > WF_WIDE_KHZ); }
-  var WF_AUTO_INTERVAL = 2000;                  // ms between measurements once settled
+  var WF_AUTO_INTERVAL = 4000;                  // ms between measurements once settled (2000 until 2026-10-26: slower)
   var WF_TICK = 250;                            // ms: how often new waterfall lines are looked for
 
   var wfB = 1, wfC = 1, wfAutoTimer = null;
@@ -2185,7 +2187,7 @@
   //     applied at once; then a fit with every new line, eased in halfway, until
   //     WF_FAST_LINES clean lines are in;
   //   - then the calm regime: every WF_AUTO_INTERVAL, up to WF_ROWS lines, hysteresis.
-  var WF_SKIP_LINES = 2, WF_FAST_MIN_LINES = 2, WF_FAST_ROWS = 8, WF_FAST_LINES = 12;
+  var WF_SKIP_LINES = 1, WF_FAST_MIN_LINES = 1, WF_FAST_ROWS = 8, WF_FAST_LINES = 12;   // skip/min were 2 until 2026-10-26: the first fit one line sooner
   var wfViewKey = '', wfNewLines = 0, wfLinesSinceFit = 0, wfFastFits = 0, wfBottomSig = null, wfLastStep = 0;
   function wfCleanLines() { return Math.max(0, wfNewLines - WF_SKIP_LINES); }
   function wfViewChanged() {
@@ -2244,8 +2246,9 @@
       // Small corrections are eased in so the picture does not flicker, tiny ones are
       // ignored; when the current setting is clearly off, jump straight to the new one.
       if (fit.cost > nowCost - WF_HYST) return;                // current setting is good enough
+      // (2026-10-26: slower once settled, 0.25 / 0.6, were 0.4 / 1)
       var off = Math.max(Math.abs(now.noise - fit.noise), Math.abs(now.sig - fit.sig) / 3);
-      k = off > 0.08 ? 1 : 0.4;
+      k = off > 0.08 ? 0.6 : 0.25;
     }
     wfB = Math.exp((1 - k) * Math.log(wfB) + k * Math.log(fit.B));
     wfC = Math.exp((1 - k) * Math.log(wfC) + k * Math.log(fit.C));
@@ -2320,7 +2323,9 @@
                view: '', hoverX: null, grad: null, gradH: 0, dirty: true, minDb: null };
   function lvlToDb(l) { return l * 100 / 255 - 120 - WF_CAL_DB; }
 
-  // Waterfall colour → level (the standard WebSDR table, as in websdr-waterfall.js)
+  // Waterfall colour → level (the standard WebSDR table, as in websdr-waterfall.js);
+  // palRGB = [R, G, B] per level, the other way round (for the 3D spectrum)
+  var palRGB = null;
   var palIndex = (function () {
     var E = new Uint8Array(256), F = new Uint8Array(256), G = new Uint8Array(256), e, m = {};
     for (e = 0; e < 64; e++) { E[e] = 0; F[e] = 0; G[e] = 2 * e; }
@@ -2328,6 +2333,7 @@
     for (; e < 192; e++) { E[e] = e + 64; F[e] = 256 * Math.sqrt((e - 128) / 64); G[e] = 511 - 2 * e; }
     for (; e < 256; e++) { E[e] = 255; F[e] = 255; G[e] = 512 + 2 * e; }
     for (e = 255; e >= 0; e--) m[(E[e] << 16) | (F[e] << 8) | G[e]] = e;
+    palRGB = [E, F, G];
     return m;
   })();
 
@@ -2662,11 +2668,13 @@
 
   function specLoop() {
     requestAnimationFrame(specLoop);
-    if (!spec.on) { specHide(); return; }
+    if (!spec.on) { specHide(); v3Hide(); return; }
     if (!specCanvas()) return;
     spec.canvas.style.display = 'block';
-    if (specReadLine()) spec.dirty = true;
-    if (spec.dirty) { spec.dirty = false; specDraw(); specWfLine(); }
+    var fresh = specReadLine();
+    if (fresh) spec.dirty = true;
+    v3Frame(fresh);                             // the 3D spectrum, when switched on, in its place
+    if (spec.dirty) { spec.dirty = false; if (!v3.on) specDraw(); specWfLine(); }
   }
 
   // With Type = spectrum + waterfall the dashed hover line carries on down the
@@ -2691,6 +2699,446 @@
     ln.style.display = 'block';
   }
   window.addEventListener('load', function () { requestAnimationFrame(specLoop); });
+
+  // ── 3D spectrum (2026-10-26) ─────────────────────────────────────────────────
+  // The last spectrum lines stacked in relief, as in PhantomSDR-Plus
+  // (frontend/src/lib/Waterfall3D.svelte, from PhantomSDR-ORSAT by F1NSK, GPLv3):
+  // frequency across, time into the screen, level as height. Switched with the "3D"
+  // switch beside "Tube & Waterfall & DSP & Audio" (remembered in localStorage
+  // 'ubersdr_spec3d'); it takes the place and the size of the 2D spectrum above
+  // (#ubersdr-spectrum), so it shows with Type = spectrum or spectrum + waterfall.
+  // It shows exactly what the waterfall shows: its lines are the waterfall's own levels
+  // (spec.lvl), stored as they are, and turned into colour and height at drawing time
+  // through the waterfall's brightness and contrast (wfB, wfC: Auto or the sliders) and
+  // its colour table (#svgGradientMap): v3Luts. So a change of brightness, by Auto or
+  // by hand, recolours the waterfall and the whole 3D history alike, at once, and every
+  // point has the colour of the same level in the waterfall. Drawn by the GPU (WebGL2): the
+  // history is a circular W×H texture, one row per line, and every row keeps the
+  // frequency range it was received with, so zoom and pan do not smear the history.
+  // The front row lines up with the waterfall: in spectrum + waterfall a click tunes
+  // to the frequency under the pointer (on a back row: the frequency of that row).
+  var V3_KEY = 'ubersdr_spec3d', V3_GEOM_KEY = 'ubersdr_spec3d_geom';
+  var V3_W = 1024, V3_H = 320;            // history: points per line, lines
+  var V3_AMP = 1.3, V3_ANGLE0 = 1.5, V3_DEPTH0 = 0.5, V3_SHARPEN = 0.7, V3_HPOW = 2;
+  var v3 = { on: false, failed: false, canvas: null, overlay: null, tools: null, geomBox: null,
+             gl: null, prog: null, vao: null, nIdx: 0, histTex: null, rangeTex: null, cmapTex: null, u: {},
+             hist: new Uint8Array(V3_W * V3_H * 2), ranges: new Float64Array(V3_H * 2),
+             times: new Float64Array(V3_H), head: 0, ref: 0, prev: new Float32Array(V3_W), havePrev: false,
+             prevView: '', viewL: 0, viewR: 0, angle: V3_ANGLE0, depth: V3_DEPTH0,
+             K: 0, BACKH: 0, RISE: 0, angleMax: 1.6, lastMarks: 0, dirty: true };
+  try {
+    var g3 = JSON.parse(localStorage.getItem(V3_GEOM_KEY) || 'null');
+    if (g3 && g3.angle >= 0.3 && g3.angle <= 1.6) v3.angle = g3.angle;
+    if (g3 && g3.depth >= 0 && g3.depth <= 1) v3.depth = g3.depth;
+  } catch (e) {}
+  function v3Geom() {
+    v3.K = Math.max(0.6 * v3.depth, 0.01);
+    v3.BACKH = 1 - v3.depth;
+    v3.angleMax = Math.max(0.3, Math.min(1.6, 2 - V3_AMP * v3.BACKH / (1 + v3.K)));
+    if (v3.angle > v3.angleMax) v3.angle = v3.angleMax;
+    v3.RISE = v3.angle;
+    v3.lastMarks = 0; v3.dirty = true;
+    try { localStorage.setItem(V3_GEOM_KEY, JSON.stringify({ angle: v3.angle, depth: v3.depth })); } catch (e) {}
+  }
+  v3Geom();
+  function v3sOf(d) { return 1 / (1 + v3.K * d); }
+  function v3AmpOf(d) { return V3_AMP * v3sOf(d) * (1 + (v3.BACKH - 1) * d); }
+  function v3GroundOf(d) { return -1 + v3.RISE * (1 - v3sOf(d)) / (1 - v3sOf(1)); }
+
+  var V3_VS = '#version 300 es\n' +
+    'in vec2 aUV;\n' +
+    'uniform highp usampler2D uHist;\n' +
+    'uniform highp sampler2D uRange;\n' +   // per row: range [L, R] (kHz from v3.ref)
+    'uniform highp sampler2D uHgt;\n' +     // raw level → height level (0-1), see v3Luts
+    'uniform int uHead;\n' +
+    'uniform vec2 uView;\n' +
+    'uniform float uRise, uK, uBackH, uAmp;\n' +
+    'flat out int vIdx;\n' +
+    'ivec2 sampleAt(float u, int age) {\n' +
+    '  int row = (uHead - age + ' + V3_H + ') % ' + V3_H + ';\n' +
+    '  vec2 rr = texelFetch(uRange, ivec2(row, 0), 0).rg;\n' +
+    '  if (!(rr.y > rr.x)) return ivec2(0);\n' +
+    '  if (rr.y - rr.x > 1.5 * (uView.y - uView.x)) return ivec2(0);\n' +   // recorded much wider: floor
+    '  float t = (uView.x + u * (uView.y - uView.x) - rr.x) / (rr.y - rr.x);\n' +
+    '  if (t < 0.0 || t >= 1.0) return ivec2(0);\n' +
+    '  int x = int(t * float(' + V3_W + '));\n' +
+    '  return ivec2(texelFetch(uHist, ivec2(min(x, ' + (V3_W - 1) + '), row), 0).rg);\n' +
+    '}\n' +
+    'void main() {\n' +
+    '  int age = int(aUV.y * float(' + (V3_H - 1) + ') + 0.5);\n' +
+    '  float d = aUV.y;\n' +
+    '  float s = 1.0 / (1.0 + uK * d);\n' +
+    '  float sx = (aUV.x * 2.0 - 1.0) * s;\n' +
+    '  ivec2 hc = sampleAt(aUV.x, age);\n' +
+    '  float hv = texelFetch(uHgt, ivec2(hc.x, 0), 0).r;\n' +
+    '  float sBack = 1.0 / (1.0 + uK);\n' +
+    '  float ground = -1.0 + uRise * (1.0 - s) / (1.0 - sBack);\n' +
+    '  float y = ground + pow(hv, ' + V3_HPOW.toFixed(1) + ') * uAmp * s * mix(1.0, uBackH, d);\n' +
+    '  vIdx = hc.y;\n' +
+    '  gl_Position = vec4(sx, y, d * 0.98, 1.0);\n' +
+    '}';
+  var V3_FS = '#version 300 es\n' +
+    'precision mediump float;\n' +
+    'flat in int vIdx;\n' +
+    'uniform sampler2D uCmap;\n' +          // raw level → the waterfall's colour, see v3Luts
+    'out vec4 frag;\n' +
+    'void main() {\n' +
+    '  frag = vec4(texelFetch(uCmap, ivec2(vIdx, 0), 0).rgb, 1.0);\n' +
+    '}';
+
+  function v3InitGL() {
+    var gl = v3.canvas.getContext('webgl2', { antialias: false, alpha: false });
+    if (!gl) throw new Error('WebGL2 unavailable');
+    function sh(type, src) {
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, V3_VS));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, V3_FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    ['uHist', 'uCmap', 'uHgt', 'uRange', 'uView', 'uHead', 'uRise', 'uK', 'uBackH', 'uAmp'].forEach(function (n) {
+      v3.u[n] = gl.getUniformLocation(prog, n);
+    });
+    // V3_W × V3_H mesh (u, v) and its triangles
+    var uv = new Float32Array(V3_W * V3_H * 2), i, j, k;
+    for (j = 0, k = 0; j < V3_H; j++)
+      for (i = 0; i < V3_W; i++) { uv[k++] = i / (V3_W - 1); uv[k++] = j / (V3_H - 1); }
+    var idx = new Uint32Array((V3_W - 1) * (V3_H - 1) * 6);
+    for (j = 0, k = 0; j < V3_H - 1; j++)
+      for (i = 0; i < V3_W - 1; i++) {
+        var a = j * V3_W + i, b = a + 1, c = a + V3_W, d = c + 1;
+        idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+      }
+    v3.nIdx = idx.length;
+    v3.vao = gl.createVertexArray();
+    gl.bindVertexArray(v3.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, 'aUV');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    function tex() {
+      var t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return t;
+    }
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    v3.histTex = tex();      // [height, colour] per point, 0-255
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8UI, V3_W, V3_H, 0, gl.RG_INTEGER, gl.UNSIGNED_BYTE, v3.hist);
+    v3.rangeTex = tex();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, V3_H, 1, 0, gl.RG, gl.FLOAT, new Float32Array(V3_H * 2));
+    v3.cmapTex = tex();      // raw level → colour, and → height: filled by v3Luts
+    v3.hgtTex = tex();
+    // the waterfall's colour table (#svgGradientMap feFuncR/G/B)
+    var fm = document.getElementById('svgGradientMap');
+    v3.wfTable = ['feFuncR', 'feFuncG', 'feFuncB'].map(function (nm) {
+      var el = fm && fm.querySelector(nm), tv = el ? el.getAttribute('tableValues').split(/[\s,]+/).filter(Boolean).map(Number) : [];
+      return tv.length ? tv : [0, 1];
+    });
+    v3.v3LutKey = '';
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0, 0, 0, 1);
+    v3.gl = gl; v3.prog = prog;
+  }
+
+  // The canvas, the marks overlay and the ⚙ angle/depth tools, in #wfdiv0 over the 2D spectrum
+  function v3Elements() {
+    var wfdiv = document.getElementById('wfdiv0');
+    if (!wfdiv) return false;
+    if (v3.canvas && v3.canvas.parentNode === wfdiv) return true;
+    var c = document.createElement('canvas');
+    c.id = 'ubersdr-spectrum3d';
+    c.style.cssText = 'position:absolute;left:0;top:0;z-index:1;display:none;cursor:crosshair;';
+    var o = document.createElement('canvas');
+    o.style.cssText = 'position:absolute;left:0;top:0;z-index:1;display:none;pointer-events:none;';
+    var t = document.createElement('div');
+    t.style.cssText = 'position:absolute;z-index:4;display:none;transform-origin:100% 0;font:11px sans-serif;';
+    t.innerHTML =
+      '<button type="button" title="Angle and depth" style="padding:1px 7px;border-radius:5px;' +
+      'border:1px solid #000;background:#1b2129;color:#22d3ee;font-weight:600;cursor:pointer;">⚙</button>' +
+      '<div style="display:none;position:absolute;right:0;top:24px;padding:6px 8px;border-radius:6px;' +
+      'background:rgba(10,14,22,.9);border:1px solid #000;color:#a5f3fc;white-space:nowrap;">' +
+      '<label style="display:block;">Angle <input type="range" min="0.3" max="1.6" step="0.01" style="width:110px;vertical-align:middle;"></label>' +
+      '<label style="display:block;">Depth <input type="range" min="0" max="1" step="0.05" style="width:110px;vertical-align:middle;"></label>' +
+      '<button type="button" style="margin-top:3px;border-radius:5px;border:1px solid #000;background:#1b2129;color:#22d3ee;cursor:pointer;">Reset</button></div>';
+    var btn = t.children[0], box = t.children[1], ins = box.querySelectorAll('input');
+    function sync() { ins[0].max = v3.angleMax; ins[0].value = v3.angle; ins[1].value = v3.depth; }
+    btn.addEventListener('click', function () { box.style.display = box.style.display === 'none' ? 'block' : 'none'; sync(); });
+    ins[0].addEventListener('input', function () { v3.angle = Number(ins[0].value); v3Geom(); });
+    ins[1].addEventListener('input', function () { v3.depth = Number(ins[1].value); v3Geom(); sync(); });
+    box.querySelector('button').addEventListener('click', function () { v3.angle = V3_ANGLE0; v3.depth = V3_DEPTH0; v3Geom(); sync(); });
+    t.addEventListener('wheel', function (ev) { ev.stopPropagation(); }, true);
+    wfdiv.appendChild(c); wfdiv.appendChild(o); wfdiv.appendChild(t);
+    v3.canvas = c; v3.overlay = o; v3.tools = t;
+    // Spectrum + waterfall: hover shows the frequency (and the dashed line down the
+    // waterfall), a click tunes there
+    c.addEventListener('mousemove', function (ev) {
+      var p = v3Pick(ev.clientX, ev.clientY), r = c.getBoundingClientRect();
+      spec.hoverX = p ? (p.clientX - r.left) / (wfScale * pageZoom) : null;
+      v3.hoverAge = p ? p.age : 0;
+      spec.dirty = true; v3.lastMarks = 0;
+    });
+    c.addEventListener('mouseleave', function () { spec.hoverX = null; spec.dirty = true; v3.lastMarks = 0; });
+    c.addEventListener('click', function (ev) {
+      var p = v3Pick(ev.clientX, ev.clientY);
+      if (p) tuneAtClientX(c, p.clientX);
+    });
+    try { v3InitGL(); } catch (err) { v3.failed = true; console.warn('3D spectrum:', err); }
+    return true;
+  }
+
+  function v3Hide() {
+    if (spec.canvas) spec.canvas.style.visibility = '';
+    if (!v3.canvas) return;
+    v3.canvas.style.display = 'none'; v3.overlay.style.display = 'none'; v3.tools.style.display = 'none';
+  }
+
+  // Same place and size as the 2D spectrum canvas
+  function v3Place() {
+    var sc = spec.canvas, c = v3.canvas, o = v3.overlay;
+    var w = sc.offsetWidth || 1024, h = sc.offsetHeight || sc.height, top = sc.offsetTop, left = sc.offsetLeft;
+    [c, o].forEach(function (el) {
+      el.style.left = left + 'px'; el.style.top = top + 'px';
+      el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.display = 'block';
+    });
+    c.style.pointerEvents = spec.split ? 'auto' : 'none';   // over the waterfall: the waterfall takes the mouse
+    sc.style.visibility = 'hidden';
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var bw = Math.max(1, Math.round(w * wfScale * pageZoom * dpr)), bh = Math.max(1, Math.round(h * pageZoom * dpr));
+    if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; v3.dirty = true; }
+    if (o.width !== w || o.height !== h) { o.width = w; o.height = h; v3.lastMarks = 0; }
+    var t = v3.tools;
+    t.style.display = 'block';
+    t.style.top = (top + 6) + 'px'; t.style.left = ''; t.style.right = (wfdivRight(sc) + 8) + 'px';
+    t.style.transform = 'scaleX(' + (1 / wfScale) + ')';   // #wfcontainer is stretched by wfScale: not the buttons
+  }
+  function wfdivRight(sc) { return sc.parentNode.clientWidth - sc.offsetLeft - sc.offsetWidth; }
+
+  // Ranges are kept in kHz from v3.ref, so the GPU's 32-bit floats stay fine-grained;
+  // a move of the view far away (another band) moves v3.ref and rewrites the table.
+  function v3SetRef(f) {
+    v3.ref = f;
+    var a = new Float32Array(V3_H * 2);
+    for (var i = 0; i < V3_H * 2; i++) a[i] = v3.ranges[i] ? v3.ranges[i] - f : 0;
+    if (!v3.gl) return;
+    v3.gl.bindTexture(v3.gl.TEXTURE_2D, v3.rangeTex);
+    v3.gl.texSubImage2D(v3.gl.TEXTURE_2D, 0, 0, 0, V3_H, 1, v3.gl.RG, v3.gl.FLOAT, a);
+  }
+
+  // Raw waterfall level (0-255) → what the waterfall shows for it: the palette colour
+  // through brightness(wfB) contrast(wfC) and #svgGradientMap, as the browser does it
+  // (tablePos, then the table read linearly between its entries). The position in the
+  // table is also the height level. Rebuilt whenever Auto or the sliders change wfB/wfC.
+  var v3lutH = new Float32Array(256);
+  function v3Luts() {
+    var gl = v3.gl, key = wfB + '/' + wfC;
+    if (!gl || !palRGB || key === v3.v3LutKey) return;
+    v3.v3LutKey = key;
+    var col = new Uint8Array(256 * 4), l, k;
+    for (l = 0; l < 256; l++) {
+      var p = tablePos(palRGB[0][l] / 255, palRGB[1][l] / 255, palRGB[2][l] / 255, wfB, wfC);
+      v3lutH[l] = p;
+      for (k = 0; k < 3; k++) {
+        var tv = v3.wfTable[k], pos = p * (tv.length - 1), a = Math.min(Math.floor(pos), tv.length - 1), b = Math.min(a + 1, tv.length - 1);
+        col[l * 4 + k] = Math.round((tv[a] + (tv[b] - tv[a]) * (pos - a)) * 255);
+      }
+      col[l * 4 + 3] = 255;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, v3.cmapTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, col);
+    gl.bindTexture(gl.TEXTURE_2D, v3.hgtTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 256, 1, 0, gl.RED, gl.FLOAT, v3lutH);
+    v3.dirty = true; v3.lastMarks = 0;
+  }
+
+  // New line: the waterfall's newest raw levels (spec.lvl), stored as they are
+  var v3line = new Uint8Array(V3_W * 2), v3norm = new Float32Array(V3_W), v3src = new Float32Array(V3_W),
+      v3lv = new Float32Array(V3_W);
+  function v3Push() {
+    var e = window.bi && bi[window.band], arr = spec.lvl, gl = v3.gl;
+    if (!gl || !e || !arr || !arr.length) return;
+    var L = e.effcenterfreq - e.effsamplerate / 2, R = e.effcenterfreq + e.effsamplerate / 2;
+    if (!(R > L)) return;
+    var view = L + '/' + R;
+    if (view !== v3.prevView) { v3.havePrev = false; v3.prevView = view; }
+    var n = arr.length, i, x;
+    if (v3src.length < n) { v3src = new Float32Array(n); v3lv = new Float32Array(n); }
+    for (i = 0; i < n; i++) v3lv[i] = arr[i];
+    for (i = 0; i < n; i++) {                   // sharpen across frequency: lower a peak's sides, never the peak
+      var m = v3lv[i], a = v3lv[i > 0 ? i - 1 : 0], c = v3lv[i < n - 1 ? i + 1 : n - 1];
+      var v = Math.min(m, m + V3_SHARPEN * (m - 0.5 * (a + c)));
+      v3src[i] = v <= 0 ? 0 : v;
+    }
+    for (x = 0; x < V3_W; x++) {
+      var i0 = Math.floor(x * n / V3_W), i1 = Math.max(i0 + 1, Math.floor((x + 1) * n / V3_W)), mx = 0, kk = Math.min(i0, n - 1);
+      for (i = i0; i < i1 && i < n; i++) if (v3src[i] > mx) { mx = v3src[i]; kk = i; }   // max keeps thin carriers
+      v3norm[x] = mx;
+      v3line[2 * x + 1] = Math.max(0, Math.min(255, Math.round(v3lv[kk])));        // colour: the unsharpened level
+    }
+    for (x = 0; x < V3_W; x++) {                // a light 10 % carry-over in time steadies the noise
+      var hv = v3norm[x];
+      if (v3.havePrev) hv = 0.9 * hv + 0.1 * v3.prev[x];
+      v3.prev[x] = hv;
+      v3line[2 * x] = Math.max(0, Math.min(255, Math.round(hv)));
+    }
+    v3.havePrev = true;
+    var hd = v3.head = (v3.head + 1) % V3_H;
+    v3.times[hd] = performance.now();
+    v3.hist.set(v3line, hd * V3_W * 2);
+    v3.ranges[hd * 2] = L; v3.ranges[hd * 2 + 1] = R;
+    gl.bindTexture(gl.TEXTURE_2D, v3.histTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, hd, V3_W, 1, gl.RG_INTEGER, gl.UNSIGNED_BYTE, v3line);
+    if (!v3.ref || Math.abs((L + R) / 2 - v3.ref) > 2000) v3SetRef((L + R) / 2);
+    else {
+      gl.bindTexture(gl.TEXTURE_2D, v3.rangeTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, hd, 0, 1, 1, gl.RG, gl.FLOAT, new Float32Array([L - v3.ref, R - v3.ref]));
+    }
+    v3.dirty = true;
+  }
+
+  function v3Render() {
+    var gl = v3.gl, e = window.bi && bi[window.band];
+    if (!gl || !e) return;
+    var L = e.effcenterfreq - e.effsamplerate / 2, R = e.effcenterfreq + e.effsamplerate / 2;
+    if (!(R > L)) return;
+    if (L !== v3.viewL || R !== v3.viewR) { v3.viewL = L; v3.viewR = R; v3.dirty = true; }
+    if (!v3.dirty) return;
+    v3.dirty = false;
+    gl.viewport(0, 0, v3.canvas.width, v3.canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(v3.prog);
+    gl.bindVertexArray(v3.vao);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, v3.histTex); gl.uniform1i(v3.u.uHist, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, v3.cmapTex); gl.uniform1i(v3.u.uCmap, 1);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, v3.hgtTex); gl.uniform1i(v3.u.uHgt, 3);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, v3.rangeTex); gl.uniform1i(v3.u.uRange, 2);
+    gl.uniform2f(v3.u.uView, L - v3.ref, R - v3.ref);
+    gl.uniform1i(v3.u.uHead, v3.head);
+    gl.uniform1f(v3.u.uRise, v3.RISE);
+    gl.uniform1f(v3.u.uK, v3.K);
+    gl.uniform1f(v3.u.uBackH, v3.BACKH);
+    gl.uniform1f(v3.u.uAmp, V3_AMP);
+    gl.drawElements(gl.TRIANGLES, v3.nIdx, gl.UNSIGNED_INT, 0);
+  }
+
+  // Scale marks on the overlay: dBFS on the front row (right, as the 2D spectrum's
+  // grid), seconds into the depth (left); the frequency under the pointer (top left)
+  function v3Marks() {
+    var o = v3.overlay, ctx = o.getContext('2d'), w = o.width, h = o.height;
+    function yPx(y) { return (1 - y) / 2 * h; }
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '9px monospace';
+    if (v3.failed) {
+      ctx.fillStyle = '#22d3ee'; ctx.font = '13px sans-serif';
+      specText(ctx, 'The 3D spectrum needs WebGL2, which this browser does not offer.', w / 2, h / 2, 'center');
+      return;
+    }
+    // dBFS of a raw level as the 2D spectrum labels it (lvlToDb), placed at that level's height
+    var lastY = Infinity;
+    for (var dB = Math.ceil(lvlToDb(0) / 10) * 10; dB <= lvlToDb(255); dB += 10) {
+      var v = v3lutH[Math.max(0, Math.min(255, Math.round((dB + 120 + WF_CAL_DB) * 255 / 100)))];
+      if (v <= 0.02) continue;
+      var y = Math.round(yPx(v3GroundOf(0) + Math.pow(v, V3_HPOW) * V3_AMP)) + 0.5;
+      if (y < 30) break;                         // clear of the ⚙ button
+      if (lastY - y < 12) continue;
+      lastY = y;
+      ctx.strokeStyle = 'rgba(34,211,238,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(w - 46 / wfScale, y); ctx.lineTo(w, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(165,243,252,0.9)';
+      specText(ctx, String(dB), w - 4, y - 3, 'right');
+    }
+    var hd = v3.head, now = v3.times[hd], oldest = 0, a;
+    for (a = V3_H - 1; a > 0; a--) if (v3.times[(hd - a + V3_H) % V3_H] > 0) { oldest = a; break; }
+    if (now > 0 && oldest > 4) {
+      var total = (now - v3.times[(hd - oldest + V3_H) % V3_H]) / 1000;
+      var step = [1, 2, 5, 10, 15, 30, 60, 120].filter(function (st) { return total / st <= 5; })[0] || 300;
+      ctx.setLineDash([4, 3]);
+      for (var sec = step, ag = 1; sec < total; sec += step) {
+        while (ag < oldest && (now - v3.times[(hd - ag + V3_H) % V3_H]) / 1000 < sec) ag++;
+        var d = ag / (V3_H - 1), ty = Math.round(yPx(v3GroundOf(d))) + 0.5;
+        ctx.strokeStyle = 'rgba(34,211,238,0.22)';
+        ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(w, ty); ctx.stroke();
+        ctx.fillStyle = 'rgba(165,243,252,0.85)';
+        specText(ctx, '−' + sec + ' s', 8, ty - 3, 'left');
+      }
+      ctx.setLineDash([]);
+    }
+    if (spec.split && spec.hoverX !== null && window.bi && bi[window.band]) {
+      var e = bi[band], f = e.effcenterfreq - e.effsamplerate / 2 + spec.hoverX / 1024 * e.effsamplerate;
+      ctx.font = '11px monospace'; ctx.fillStyle = 'rgba(255,255,180,0.95)';
+      specText(ctx, (f / 1000).toFixed(6) + ' MHz' + (v3.hoverAge >= 0.5 ? '  (−' + v3.hoverAge.toFixed(1) + ' s)' : ''), 10, 15, 'left');
+    }
+  }
+
+  // Level (0-1, height) of a row at position u of the view, as sampleAt() in the shader
+  function v3LevelAt(u, age) {
+    var row = (v3.head - age + V3_H) % V3_H, l = v3.ranges[row * 2], r = v3.ranges[row * 2 + 1];
+    if (!(r > l) || r - l > 1.5 * (v3.viewR - v3.viewL)) return v3lutH[0];
+    var t = (v3.viewL + u * (v3.viewR - v3.viewL) - l) / (r - l);
+    if (t < 0 || t >= 1) return v3lutH[0];
+    return v3lutH[v3.hist[(row * V3_W + Math.min(Math.floor(t * V3_W), V3_W - 1)) * 2]];
+  }
+  // The row under the pointer (the front-most one whose surface reaches up to it):
+  // the frequency there as a front-row clientX, and the row's age in seconds
+  function v3Pick(clientX, clientY) {
+    if (!v3.canvas || !(v3.viewR > v3.viewL)) return null;
+    var rc = v3.canvas.getBoundingClientRect();
+    if (!rc.width || !rc.height) return null;
+    var xs = (clientX - rc.left) / rc.width * 2 - 1, ys = 1 - (clientY - rc.top) / rc.height * 2;
+    for (var a = 0; a < V3_H; a++) {
+      var d = a / (V3_H - 1), sd = v3sOf(d);
+      if (Math.abs(xs) > sd) return null;
+      var u = 0.5 + 0.5 * xs / sd;
+      if (ys <= v3GroundOf(d) + Math.pow(v3LevelAt(u, a), V3_HPOW) * v3AmpOf(d)) {
+        var t = v3.times[(v3.head - a + V3_H) % V3_H];
+        return { clientX: rc.left + u * rc.width, age: t > 0 ? (v3.times[v3.head] - t) / 1000 : 0 };
+      }
+    }
+    return null;
+  }
+
+  // Called from specLoop while the 2D spectrum is shown; fresh = a new line came in
+  function v3Frame(fresh) {
+    if (!v3.on) { v3Hide(); return; }
+    if (!spec.canvas || !v3Elements()) return;
+    v3Place();
+    v3Luts();
+    if (fresh) v3Push();
+    v3Render();
+    var t = performance.now();
+    if (t - v3.lastMarks > 250) { v3.lastMarks = t; v3Marks(); }
+  }
+
+  // The "3D" switch beside "Tube & Waterfall & DSP & Audio". Turned on while
+  // Type = waterfall, it also switches Type to spectrum + waterfall, so it shows.
+  window.addEventListener('load', function () {
+    var sw = document.getElementById('spec3d_toggle');
+    if (!sw) return;
+    var saved = null;
+    try { saved = localStorage.getItem(V3_KEY); } catch (e) {}
+    sw.checked = v3.on = (saved === '1');
+    sw.addEventListener('change', function () {
+      v3.on = sw.checked;
+      try { localStorage.setItem(V3_KEY, v3.on ? '1' : '0'); } catch (e) {}
+      var sel = document.getElementById('wfmode');
+      if (v3.on && sel && sel.value === '1') {
+        sel.value = '2';
+        try { localStorage.setItem(WFTYPE_KEY, '2'); } catch (e) {}
+        window.waterfallmode(2);
+      }
+      v3.dirty = true; v3.lastMarks = 0; spec.dirty = true;
+    });
+  });
 
   // ── SNR the PhantomSDR-Plus way (its waterfall.js _updateSnr) ───────────────
   // Measured on the newest waterfall line, not from the S-meter's peak and minimum:
