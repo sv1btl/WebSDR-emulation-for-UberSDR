@@ -112,7 +112,7 @@ html { scroll-behavior: smooth; }
       <p>Installation and user guide for UberSDR sysops. This is the page SV1BTL's WebSDR (Athens, KM17vx) shows on UberSDR's WebSDR port, based on RW3PS's template.</p>
       <p class="links"><a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR" target="_blank" rel="noopener">GitHub repository</a> · <a href="http://sv1btlham.no-ip.org:8901/" target="_blank" rel="noopener">Live example</a> · <a href="https://github.com/sv1btl/WebSDR-emulation-for-UberSDR/issues" target="_blank" rel="noopener">Questions and problem reports</a></p>
     </div>
-    <div class="readout">WebSDR port<b>8901</b>package 2026-10-26</div>
+    <div class="readout">WebSDR port<b>8901</b>package 2026-10-28</div>
   </header>
 
   <div class="grid">
@@ -378,6 +378,7 @@ sv1btl/               everything else, served as /sv1btl/…
           <li><strong>Remote SNR trim</strong> (−15 … +15 dB) is added to the second receiver's SNR before the two are compared: + favours it, − this one. +15 and −15 force one site, to hear it alone. Start at 0; a KiwiSDR may want a few dB +. If it flips back and forth constantly, move the trim a little.</li>
           <li><strong>☰</strong> keeps every receiver used, per type, in the visitor's browser: give one a name, edit it, drag it up or down (or use ▲▼) to change the order, remove it, open its own page (🌍), and export or import all the lists as a file.</li>
           <li>The CW and digital decoders keep using <strong>this</strong> receiver (a switch in the middle of a slot would spoil a decode); diversity feeds the speaker only. RADE also uses this receiver.</li>
+          <li><strong>Weak-signal AGC</strong> is switched off when you press Start and back on when you press Stop.</li>
           <li>A session uses one listener slot on the other receiver for as long as it runs; please be considerate with volunteers' receivers.</li>
           <li>The panel is <code>sv1btl/diversity-ui.js</code>; the combiner and the receiver connections are PhantomSDR-Plus's own files in <code>sv1btl/psdr/</code> (<code>diversity.js</code>, <code>uberSource.js</code>, <code>kiwiSource.js</code>, <code>remoteSource.js</code>, <code>webSdrSource.js</code>, <code>webSdrCodec.js</code>, <code>diversityList.js</code>), with PhantomSDR-Plus's audio module (<code>psdr/modules/phantomsdrdsp_bg.*</code>) for FLAC from a PhantomSDR+.</li>
           <li>On the <strong>mobile page</strong> it is a section of its own, <strong>Receive Diversity:</strong>, just under the RADE status line (above Memories): tap it to open it. Type, address, Start/Stop, the trim, the status table and the saved receivers (tap one to use it, 🌍 its own page, ✕ remove, export and import) work as on the desktop; naming and reordering are on the desktop page. The saved list is kept per browser, so a phone starts empty: export it on the desktop and import the file on the phone.</li>
@@ -484,7 +485,7 @@ bash install.sh</code></pre></div>
             <tr><td><code>NR_MULT</code>, <code>NR_FLOOR</code></td><td>per level</td><td>noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong</td></tr>
             <tr><td><code>SQL_OPEN_DB</code>, <code>SQL_CLOSE_DB</code>, <code>SQL_HANG_S</code></td><td>8, 4, 0.6</td><td>squelch opens this many dB above the noise</td></tr>
             <tr><td><code>LIM_CEIL</code>, <code>LIM_KNEE</code></td><td>0.7, 0.8</td><td>soft limiter</td></tr>
-            <tr><td><code>WF_NOISE_T</code>, <code>WF_SIG_T</code>, <code>WF_GRAIN_MAX</code></td><td>0.17, 0.74, 0.22</td><td>auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.17, speckle limit 0.31; with <code>WF_SIG_W</code> 1.25 = how hard it pushes signals brighter, <code>WF_C_MAX</code> 3.5 = most contrast; the low end of the colour table is darkened so the background is near black)</td></tr>
+            <tr><td><code>WF_NOISE_T</code>, <code>WF_SIG_T</code>, <code>WF_GRAIN_MAX</code></td><td>0.15, 0.74, 0.20</td><td>auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.15, speckle limit 0.28; with <code>WF_SIG_W</code> 1.25 = how hard it pushes signals brighter, <code>WF_C_MAX</code> 3.5 = most contrast; the low end of the colour table is darkened so the background is near black)</td></tr>
             <tr><td><code>WFTYPE_DEFAULT</code></td><td><code>'2'</code></td><td>first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall</td></tr>
             <tr><td><code>GEO_SERVICES</code></td><td>geojs.io, ipwho.is</td><td>location lookup; <code>[]</code> switches the location in the users list off</td></tr>
             <tr><td><code>SPEC_RANGE_DB</code></td><td>70</td><td>spectrum height in dB</td></tr>

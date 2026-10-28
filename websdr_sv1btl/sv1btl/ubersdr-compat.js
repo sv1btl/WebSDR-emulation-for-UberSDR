@@ -357,8 +357,12 @@
 
 
   // Switch for the weak-signal AGC (both pages); the choice is kept in this browser
-  window.ubersdr_agcboost = function (on) {
+  // (not with nostore: Receive Diversity turns it off for its run only)
+  window.ubersdr_agcboost = function (on, nostore) {
     state.agcBoost = !!on;
+    var cb = document.getElementById('agcboostcheckbox');
+    if (cb) cb.checked = !!on;
+    if (nostore) return;
     try { localStorage.setItem('ubersdr_agcboost', on ? '1' : '0'); } catch (e) {}
   };
   window.addEventListener('DOMContentLoaded', function () {
@@ -1575,7 +1579,7 @@
   window.addEventListener('load', function () {
     var d = document.createElement('script');
     d.type = 'module';
-    d.src = 'sv1btl/diversity-ui.js?v=20261021g';
+    d.src = 'sv1btl/diversity-ui.js?v=20261028agc';
     d.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/diversity-ui.js'); };
     document.head.appendChild(d);
   });
@@ -2048,24 +2052,24 @@
   // (On 2026-09-29 the waterfall briefly used the spectrum's colours with a colour table
   // rebuilt while listening; that was reverted to this, at the user's request.)
 
-  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.17;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29, 0.10 until 2026-10-13: lighter, then 0.12, 0.14 until 2026-10-26: brighter)
+  var WF_NOISE_PCT = 0.50, WF_NOISE_T = 0.15;   // median pixel (the noise floor) → dark blue (was 0.20 until 2026-09-29, 0.10 until 2026-10-13: lighter, then 0.12, 0.14 until 2026-10-26: brighter, 0.17 until 2026-10-27: darker)
   // Auto contrast (2026-09-29): brightness and contrast are fitted together so that
   //   - the noise floor (median pixel) sits on WF_NOISE_T,
   //   - the noise grain (WF_GRAIN_PCT pixel) stays below WF_GRAIN_MAX, so a quiet band
   //     is not stretched into bright speckle,
   //   - strong signals (WF_SIG_PCT pixel) come close to WF_SIG_T (yellow → orange,
   //     short of the saturated red end).
-  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.22;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands), 0.17 until 2026-10-13, then 0.18, 0.19 until 2026-10-26 (brighter)
+  var WF_GRAIN_PCT = 0.85, WF_GRAIN_MAX = 0.20;   // was 0.22, then 0.20 (2026-10-12, darker background on busy bands), 0.17 until 2026-10-13, then 0.18, 0.19 until 2026-10-26 (brighter), 0.22 until 2026-10-27 (darker)
   var WF_SIG_PCT = 0.997, WF_SIG_T = 0.74;   // 0.70 until 2026-10-26 (brighter)
   var WF_SIG_W = 1.25;   // weight of the signal goal (was 1): signals come out brighter (2026-10-12)
   var WF_C_MIN = 0.8, WF_C_MAX = 3.5;   // was 3: more room to stretch signals away from the noise (2026-10-12)
   // Wide views (all 0–30 MHz, more than WF_WIDE_KHZ across): each pixel covers many kHz,
   // so most pixels hold signals and the 85 % pixel is a signal, not noise grain. There the
   // grain limit is left out (it dimmed the whole picture) and the floor sits a bit higher.
-  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.17;   // was 0.15 (2026-10-12: noise darker on busy views), 0.10 until 2026-10-13, then 0.12, 0.14 until 2026-10-26 (brighter)
+  var WF_WIDE_KHZ = 2000, WF_NOISE_T_WIDE = 0.15;   // was 0.15 (2026-10-12: noise darker on busy views), 0.10 until 2026-10-13, then 0.12, 0.14 until 2026-10-26 (brighter), 0.17 until 2026-10-27 (darker)
   // ... but a softer speckle limit is kept there (weight 3, was none): without it busy
   // stretches came out medium blue
-  var WF_GRAIN_MAX_WIDE = 0.31;   // 0.28 until 2026-10-26 (brighter)
+  var WF_GRAIN_MAX_WIDE = 0.28;   // 0.28 until 2026-10-26 (brighter), 0.31 until 2026-10-27 (darker)
   function wfWide() { var e = window.bi && bi[window.band]; return !!(e && e.effsamplerate > WF_WIDE_KHZ); }
   var WF_AUTO_INTERVAL = 4000;                  // ms between measurements once settled (2000 until 2026-10-26: slower)
   var WF_TICK = 250;                            // ms: how often new waterfall lines are looked for

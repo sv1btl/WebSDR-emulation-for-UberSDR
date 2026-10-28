@@ -249,6 +249,7 @@ async function start () {
     name: LISTED_NAME
   })
   st.running = true
+  if (typeof W.ubersdr_agcboost === 'function') W.ubersdr_agcboost(false, true)   // Weak-signal AGC off while it runs
   W.ubersdr_div_process = processBlock
   rememberAddr(st.endpoint)
   retune(true)                    // before connecting: UberSDR carries the tuning in its connect URL
@@ -267,6 +268,7 @@ function stop () {
   if (st.comb) { st.comb.active = false; st.comb.reset() }
   st.comb = null
   st.running = false; st.srcState = 'idle'; st.errorText = ''; st.closeCode = null; st.closeReason = ''
+  if (typeof W.ubersdr_agcboost === 'function') W.ubersdr_agcboost(true)          // and back on after
   render()
 }
 

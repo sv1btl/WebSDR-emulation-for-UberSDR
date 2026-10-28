@@ -283,7 +283,7 @@ body
 <!-- UberSDR: adapts the RW3PS page to UberSDR's Opus sound engine; must load before websdr-base.js -->
 <!-- Station settings (callsign, location, start frequency, …): edit sv1btl/station.js -->
 <script src="sv1btl/station.js?v=20261023web" type="text/javascript"></script>
-<script src="sv1btl/ubersdr-compat.js?v=20261026fit90b" type="text/javascript"></script>
+<script src="sv1btl/ubersdr-compat.js?v=20261028agc" type="text/javascript"></script>
 <script src="websdr-base.js" type="text/javascript"></script>
 <script>ubersdr_compat_after_base();</script>
 
@@ -424,6 +424,8 @@ body
    div:hover > .keylist {display: block;}
   .keylisttd1{width: 30%;}
   .keylisttd2{width: 65%;}
+  /* the Waterfall radio labels (All Bands, Single Band, off) and the Keyboard Control pop-up: the body text size */
+  .topbox input.radios + label, .topbox .keylist {font-size: 0.85rem;}
 
   .smeterpeak {
 /*    width:100px; */

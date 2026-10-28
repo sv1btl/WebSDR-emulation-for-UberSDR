@@ -1,6 +1,6 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-Version 2026-10-26 · by SV1BTL · based on RW3PS's WebSDR template
+Version 2026-10-28 · by SV1BTL · based on RW3PS's WebSDR template
 
 - **Repository:** https://github.com/sv1btl/WebSDR-emulation-for-UberSDR
 - **Live example:** http://sv1btlham.no-ip.org:8901/ (SV1BTL's WebSDR, Athens)
@@ -522,6 +522,8 @@ unrelated phase. So it buys continuity, not a stronger signal.
 - The CW and digital decoders keep using **this** receiver (a switch in the middle of a
   slot would spoil a decode); diversity feeds the speaker only. RADE also uses this
   receiver.
+- **Weak-signal AGC** is switched off when you press Start and back on when you press
+  Stop.
 - A session uses one listener slot on the other receiver for as long as it runs; please
   be considerate with volunteers' receivers.
 - The panel is `sv1btl/diversity-ui.js`; the combiner and the receiver connections are
@@ -727,7 +729,7 @@ editing, raise the `?v=` number (see section 6).
 | `NR_MULT`, `NR_FLOOR` | per level | noise-reduction strength, and how far noise is turned down: −9/−14/−18/−23 dB for Low/Medium/High/Strong |
 | `SQL_OPEN_DB`, `SQL_CLOSE_DB`, `SQL_HANG_S` | 8, 4, 0.6 | squelch: opens this many dB above the noise |
 | `LIM_CEIL`, `LIM_KNEE` | 0.7, 0.8 | soft limiter |
-| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.17, 0.74, 0.22 | auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.17, speckle limit 0.31; with `WF_SIG_W` 1.25 = how hard it pushes signals brighter, `WF_C_MAX` 3.5 = most contrast; the low end of the colour table is darkened so the background is near black) |
+| `WF_NOISE_T`, `WF_SIG_T`, `WF_GRAIN_MAX` | 0.15, 0.74, 0.20 | auto brightness: where the noise floor and strong signals sit in the colour scale (full 0–30 MHz view: noise 0.15, speckle limit 0.28; with `WF_SIG_W` 1.25 = how hard it pushes signals brighter, `WF_C_MAX` 3.5 = most contrast; the low end of the colour table is darkened so the background is near black) |
 | `WFTYPE_DEFAULT` | `'2'` | first-visit waterfall type: 0 spectrum, 1 waterfall, 2 spectrum + waterfall |
 | `GEO_SERVICES` | geojs.io, ipwho.is | location lookup; set it to `[]` to switch the location in the users list off |
 | `SPEC_RANGE_DB` | 70 | spectrum height in dB |
