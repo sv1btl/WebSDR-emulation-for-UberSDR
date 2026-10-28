@@ -2046,9 +2046,9 @@
   // waterfall lines and sets b so that the noise floor sits on dark blue; signals keep
   // their natural range above it (set by the Contrast slider), so a quiet band stays
   // quiet instead of having its noise stretched up to red.
-  // 2026-10-12: the low (noise) end of the PhantomSDR table in #svgGradientMap is
-  // darkened (blue/green x 0.25 at the bottom, back to 1 at entry 48), so the
-  // background is near black instead of navy; the colours above are unchanged.
+  // 2026-10-28: #svgGradientMap is PhantomSDR-Plus's 'PhantomSDR' map unchanged
+  // (phantomsdrData, first 256 rows), dark navy at the bottom; the near-black low end
+  // of 2026-10-12 is gone. The 3D spectrum reads the same table.
   // (On 2026-09-29 the waterfall briefly used the spectrum's colours with a colour table
   // rebuilt while listening; that was reverted to this, at the user's request.)
 
