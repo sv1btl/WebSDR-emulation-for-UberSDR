@@ -1,6 +1,6 @@
 // decoders.js — digital-mode decoders for the SV1BTL WebSDR page (desktop), 2026-10-07.
 //
-// FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX and RTTY, decoded in the listener's
+// FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, RTTY and HFDL, decoded in the listener's
 // browser by PhantomSDR-Plus's decoders (github.com/sv1btl/PhantomSDR-Plus,
 // frontend/src), copied unchanged into sv1btl/psdr/ (only the paths of their .wasm and
 // dictionary files changed). They run in Web Workers. This file is the glue: the
@@ -23,6 +23,9 @@ import { decodeFrame as js8DecodeFrame, loadDictionary as js8LoadDictionary } fr
 import { Js8Reassembler } from './psdr/modules/js8-reassembler.js';
 import { formatJs8Message } from './psdr/modules/js8-format.js';
 import { js8Period, js8CaptureSamples, js8SlotPos, js8StartWindow } from './psdr/modules/js8-slots.js';
+import { HFDLWorkerProxy } from './psdr/hfdlWorkerProxy.js';
+import { HFDL_STATIONS } from './psdr/lib/hfdlStations.js';
+import { AprsMap } from './psdr/lib/aprsMap.js';
 
 // HF FAX stations, from PhantomSDR-Plus App.svelte (frequencies: centre of the signal, kHz)
 const FAX_STATIONS = [
@@ -194,6 +197,8 @@ const DEC = {
   fax:    { label: 'FAX',    title: 'HF weather fax',        kind: 'fax',                 lo: 1.1, hi: 2.7 },
   navtex: { label: 'NAVTEX', title: 'NAVTEX / SITOR-B',      kind: 'navtex',              lo: 0.25, hi: 0.75 },
   rtty:   { label: 'FLDIGI', title: 'FLDIGI modes: RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63, Packet, APRS (chosen in the window)', kind: 'rtty' },
+  // PhantomSDR-Plus's HFDL: USB, the dial on the listed frequency, subcarrier at 1440 Hz
+  hfdl:   { label: 'HFDL',   title: 'HFDL — HF Data Link: aircraft ACARS messages on shortwave', kind: 'hfdl', lo: 0.15, hi: 2.75 },
   // No buttons of their own: chosen in the RTTY window's list (family 'rtty')
   psk31:  { label: 'PSK31',  title: 'PSK31 (BPSK, 31.25 Bd)', kind: 'psk31', centred: true, family: 'rtty' },
   olivia: { label: 'OLIVIA', title: 'Olivia (MFSK)',          kind: 'olivia', centred: true, family: 'rtty' },
@@ -282,7 +287,9 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
 #decpresets .dp-n{display:block;font-weight:bold}
 #decpresets .dp-v{display:block;font-size:.7rem}
 #decrow b{font-size:13px}
-#moderow #decrow .btnMode.decbtn{width:auto;min-width:40px;padding:0 4px;margin:2px 1px;font-size:.75rem}
+#decrow .decline{display:flex;align-items:center;gap:2px}
+#decrow .decline>b{flex:none;margin-right:2px}
+#moderow #decrow .btnMode.decbtn{flex:1 1 auto;width:auto;min-width:0;padding:0 2px;margin:2px 0;font-size:.7rem;white-space:nowrap}
 .decwin{width:470px;margin:3px auto 4px;box-sizing:border-box;background:#f7f7f7;border:1px solid #bbb;border-radius:6px;
   font:11px/1.3 Arial,sans-serif;color:#222;text-align:left;box-shadow:1px 2px 5px rgba(0,0,0,.15)}
 .decwin .dw-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:3px 6px;background:#dfe6e4;border-radius:6px 6px 0 0}
@@ -312,18 +319,45 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
 .decwin .dw-sqbox input{width:70px;height:12px;vertical-align:middle;margin:0}
 .decwin .dw-sqbox b{display:inline-block;min-width:34px}
 .decwin .dw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd;min-height:13px}
+.aprs-map{min-height:200px;background:#0b1220}
+.aprs-map img{max-width:none!important;max-height:none!important}
+.decwin .hf-map{height:320px;margin:4px 6px 0;border:1px solid #888;border-radius:4px;overflow:hidden}
+.decwin .hf-mapnote{margin:2px 6px 0;font-style:italic;color:#555}
+.decwin .hf-mapnote.err{color:#c00;font-style:normal}
+.decwin .dw-head button.on{background:#7cc7bd}
+.leaflet-tooltip.aprs-label{background:rgba(15,23,42,.85);color:#a7f3d0;border:none;box-shadow:none;padding:0 4px;font:600 11px/1.4 ui-monospace,Menlo,monospace}
+.leaflet-tooltip.aprs-label::before{display:none}
+.leaflet-tooltip.aprs-home{color:#fcd34d}
+.aprs-popup{font-size:12px;line-height:1.4}
+.aprs-popup-call{font-weight:700;font-family:ui-monospace,Menlo,monospace;margin-bottom:2px}
+.aprs-popup-meta{margin-top:4px;color:#6b7280;font-size:11px}
+.aprs-popup-link{display:inline-block;margin-top:4px;font-weight:600;color:#0e7490;text-decoration:underline}
+.hfdl-big{position:fixed;z-index:1000;width:min(1100px,calc(100vw - 16px));height:min(72vh,760px);min-width:420px;min-height:280px;
+  max-width:calc(100vw - 8px);max-height:calc(100vh - 8px);resize:both;overflow:hidden;display:flex;flex-direction:column;
+  border-radius:8px;background:rgba(17,24,39,.97);box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 0 1px rgba(56,189,248,.45);font:13px Arial,sans-serif}
+.hfdl-big-head{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #374151;background:rgba(56,189,248,.10);cursor:grab;user-select:none;touch-action:none}
+.hfdl-big-head.dragging{cursor:grabbing}
+.hfdl-grip{color:rgb(56,189,248);font-size:15px;line-height:1}
+.hfdl-big-title{color:#e0f2fe;font-weight:600;font-size:13px}
+.hfdl-big-btn{padding:2px 8px;border-radius:5px;font-size:12px;font-weight:600;color:rgb(56,189,248);background:rgba(0,0,0,.35);border:1px solid rgba(56,189,248,.55);cursor:pointer}
+.hfdl-big-btn:hover{background:rgba(56,189,248,.18)}
+.hfdl-big-map{flex:1;min-height:0}
+.hfdl-big-note{font-size:11px;color:#9ca3af;font-style:italic;padding:4px 10px}
+.hfdl-big-note.err{color:#f87171;font-style:normal}
 `;
   document.head.appendChild(s);
 })();
 
+const DEC_ROWS = [['ft8', 'ft4', 'ft2', 'js8', 'wspr', 'sstv', 'fax', 'navtex', 'rtty', 'hfdl']];
 function buildRow() {
   const moderow = document.getElementById('moderow');
   const anchor = document.getElementById('radestatus');
   if (!moderow || !anchor || st.row) return false;
   const row = document.createElement('div');
   row.id = 'decrow';
-  row.innerHTML = '<b>Decoder: &nbsp;</b>' + Object.keys(DEC).filter((k) => !DEC[k].family).map((k) =>
-    `<button type="button" class="btnMode decbtn" id="dec-${k}" data-dec="${k}" title="${esc(DEC[k].title)} — press again to stop">${DEC[k].label}</button>`).join('');
+  // One line, the buttons stretched over its width
+  const btn = (k) => `<button type="button" class="btnMode decbtn" id="dec-${k}" data-dec="${k}" title="${esc(DEC[k].title)} — press again to stop">${DEC[k].label}</button>`;
+  row.innerHTML = DEC_ROWS.map((keys, i) => `<span class="decline"><b>Decoder: &nbsp;</b>${keys.map(btn).join('')}</span>`).join('');
   moderow.insertBefore(row, anchor);
   row.addEventListener('click', (e) => {
     const b = e.target.closest('.decbtn'); if (!b) return;
@@ -1041,6 +1075,176 @@ function packetWindow() {
   status('300 Bd HF packet, tones 1600/1800 Hz: click the signal on the waterfall to centre it. Only frames with a correct checksum are printed.');
 }
 
+// ── HFDL (PhantomSDR-Plus hfdl.worker.js: dumphfdl in WebAssembly) ─────────────────
+// The listed frequency is the USB dial; dumphfdl finds the 1440 Hz subcarrier itself.
+// Rows as PhantomSDR-Plus's HfdlPanel (summarize): time, kHz, SNR, ground station,
+// aircraft, kind and the ACARS text; squitters (ground-station beacons) hidden unless asked.
+let hfdl = null, hfdlDial = 0, hfdlSq = 0, hfdlMap = null, hfdlSmallOn = false, hfdlBigEl = null;
+const NO_POS = 'No position received yet: only some messages (position reports, performance data) carry one.';
+function hfdlMapCount(n) {
+  const b = $('.dw-map'); if (b) b.textContent = `🗺 Map (${n})`;
+  if (hfdlBigEl) {
+    hfdlBigEl.querySelector('.hfdl-big-title').textContent = `HFDL — aircraft map (${n})`;
+    const note = hfdlBigEl.querySelector('.hfdl-big-note');
+    if (!note.classList.contains('err')) note.textContent = n ? '' : NO_POS;
+  }
+  const sn = $('.hf-mapnote'); if (sn && !sn.classList.contains('err')) sn.textContent = n ? '' : NO_POS;
+}
+function hfdlSmall(on) {
+  const box = $('.hf-mapbox'), btn = $('.dw-map');
+  if (!box || !hfdlMap) return;
+  hfdlSmallOn = on; box.style.display = on ? '' : 'none'; if (btn) btn.classList.toggle('on', on);
+  if (!on) { hfdlMap.close(); return; }
+  const note = $('.hf-mapnote'); note.classList.remove('err');
+  hfdlMap.open($('.hf-map')).then(() => { hfdlMap.fitAll(); hfdlMapCount(hfdlMap.count); },
+    (e) => { note.classList.add('err'); note.textContent = 'Map unavailable: ' + (e && e.message ? e.message : e); });
+}
+// Large map: a floating window on <body>, dragged by its title bar, resized at its corner
+function hfdlBigOpen() {
+  if (hfdlBigEl || !hfdlMap) return;
+  const w = hfdlBigEl = document.createElement('div');
+  w.className = 'hfdl-big'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'HFDL map');
+  w.style.visibility = 'hidden';
+  w.innerHTML = '<div class="hfdl-big-head" title="Drag to move the window"><span class="hfdl-grip" aria-hidden="true">⠿</span>' +
+    '<span class="hfdl-big-title">HFDL — aircraft map (0)</span><span style="flex:1"></span>' +
+    '<button type="button" class="hfdl-big-btn hb-fit" title="Fit all aircraft">⌖ Fit all</button>' +
+    '<button type="button" class="hfdl-big-btn hb-x" title="Close" aria-label="Close">✕</button></div>' +
+    '<div class="hfdl-big-map aprs-map"></div><div class="hfdl-big-note"></div>';
+  document.body.appendChild(w);
+  const bx = Math.max(8, (window.innerWidth - w.offsetWidth) / 2), by = Math.max(8, (window.innerHeight - w.offsetHeight) / 2);
+  w.style.left = bx + 'px'; w.style.top = by + 'px'; w.style.visibility = '';
+  const head = w.querySelector('.hfdl-big-head');
+  let drag = null;
+  head.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    drag = { x: e.clientX - w.offsetLeft, y: e.clientY - w.offsetTop };
+    head.setPointerCapture(e.pointerId); head.classList.add('dragging');
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    w.style.left = Math.min(Math.max(e.clientX - drag.x, 40 - w.offsetWidth), window.innerWidth - 40) + 'px';
+    w.style.top = Math.min(Math.max(e.clientY - drag.y, 0), window.innerHeight - 36) + 'px';
+  });
+  const up = () => { drag = null; head.classList.remove('dragging'); };
+  head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+  w.querySelector('.hb-fit').onclick = () => hfdlMap.fitAll();
+  w.querySelector('.hb-x').onclick = hfdlBigClose;
+  const note = w.querySelector('.hfdl-big-note');
+  hfdlMap.open(w.querySelector('.hfdl-big-map')).then(() => { hfdlMap.fitAll(); hfdlMapCount(hfdlMap.count); },
+    (e) => { note.classList.add('err'); note.textContent = 'Map unavailable: ' + (e && e.message ? e.message : e); });
+  w._ro = new ResizeObserver(() => hfdlMap && hfdlMap.invalidate());
+  w._ro.observe(w.querySelector('.hfdl-big-map'));
+  const b = $('.dw-big'); if (b) b.classList.add('on');
+}
+function hfdlBigClose() {
+  if (!hfdlBigEl) return;
+  try { hfdlBigEl._ro.disconnect(); } catch (e) {}
+  if (hfdlMap) hfdlMap.close();
+  hfdlBigEl.remove(); hfdlBigEl = null;
+  const b = $('.dw-big'); if (b) b.classList.remove('on');
+}
+document.addEventListener('keydown', (e) => { if (hfdlBigEl && e.key === 'Escape') hfdlBigClose(); });
+const HFDL_BY_ID = new Map(HFDL_STATIONS.map((s) => [s.id, s]));
+const HFDL_SORTED = [...HFDL_STATIONS].sort((a, b) => a.name.localeCompare(b.name));
+function hfdlFind(obj, key, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 8) return undefined;
+  if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+  for (const v of Object.values(obj)) { const r = hfdlFind(v, key, depth + 1); if (r !== undefined) return r; }
+  return undefined;
+}
+function hfdlEntity(e) {
+  if (!e) return '';
+  if (e.type === 'Ground station') { const s = HFDL_BY_ID.get(e.id); return e.name || (s ? s.name : `GS ${e.id}`); }
+  if (e.type === 'Aircraft') return `AC ${e.id}`;
+  return e.name || `${e.type || '?'} ${e.id ?? ''}`.trim();
+}
+function hfdlRow(msg) {
+  const h = (msg && msg.hfdl) || {}, pdu = h.lpdu || h.spdu || {}, squitter = !!h.spdu && !h.lpdu;
+  const t = h.t && h.t.sec ? h.t.sec * 1000 : Date.now();
+  const src = pdu.src, dst = pdu.dst, uplink = src && src.type === 'Ground station';
+  const gs = uplink ? src : dst && dst.type === 'Ground station' ? dst : src;
+  const acars = hfdlFind(pdu, 'acars'), icao = hfdlFind(pdu, 'icao'), flightId = hfdlFind(pdu, 'flight_id');
+  const hfnpdu = pdu.hfnpdu;
+  const kind = squitter ? 'Squitter' : (acars && 'ACARS') || (hfnpdu && hfnpdu.type && hfnpdu.type.name) || (pdu.type && pdu.type.name) || 'LPDU';
+  const reg = acars && acars.reg ? String(acars.reg).replace(/^\.+/, '').trim() : '';
+  const flt = String((acars && acars.flight) || (flightId ? String(flightId) : '')).trim();
+  const ac = [reg, flt, icao ? String(icao).toUpperCase() : ''].filter(Boolean).join(' · ') || (uplink ? hfdlEntity(dst) : hfdlEntity(src));
+  const snr = Number.isFinite(h.sig_level) && Number.isFinite(h.noise_level) ? (h.sig_level - h.noise_level).toFixed(0) : '';
+  const fa = flt ? `https://www.flightaware.com/live/flight/${encodeURIComponent(flt.replace(/[^A-Za-z0-9]/g, '').replace(/^([A-Za-z]{2,3})0+(\d)/, '$1$2'))}` : '';
+  const text = [acars && acars.label ? `[${acars.label}]` : '', acars && acars.msg_text ? String(acars.msg_text).trim() : ''].filter(Boolean).join(' ');
+  const p = hfdlFind(pdu, 'pos');
+  const pos = p && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180 &&
+    !(p.lat === 0 && p.lon === 0) ? { lat: p.lat, lon: p.lon } : null;
+  const acName = uplink ? hfdlEntity(dst) : hfdlEntity(src);
+  const posLink = pos ? ` <a href="https://www.openstreetmap.org/?mlat=${pos.lat.toFixed(4)}&mlon=${pos.lon.toFixed(4)}#map=6/${pos.lat.toFixed(3)}/${pos.lon.toFixed(3)}" target="_blank" rel="noopener" title="Show the aircraft position on a map">📍 ${pos.lat.toFixed(2)}, ${pos.lon.toFixed(2)}</a>` : '';
+  const plane = pos ? { call: [reg, flt, icao ? String(icao).toUpperCase() : ''].filter(Boolean)[0] || acName || 'Aircraft',
+    lat: pos.lat, lon: pos.lon, time: Date.now(), link: fa, linkText: 'FlightAware',
+    text: [utcHM(t) + ' UTC', hfdlEntity(gs), kind, acars && acars.msg_text ? String(acars.msg_text).trim() : ''].filter(Boolean).join(' · ') } : null;
+  return { squitter, plane, html: `<tr class="${squitter ? 'hf-sq' : ''}"${squitter && !hfdlSq ? ' style="display:none"' : ''}><td>${utcHM(t)}</td><td class="n">${h.freq ? (h.freq / 1000).toFixed(1) : ''}</td>` +
+    `<td class="n">${snr}</td><td>${esc((uplink ? '↓ ' : '↑ ') + hfdlEntity(gs))}</td><td class="c">${fa ? `<a href="${fa}" target="_blank" rel="noopener" title="This flight on FlightAware">${esc(ac)}</a>` : esc(ac)}</td>` +
+    `<td>${esc(kind)}</td><td class="m">${esc(text)}${posLink}</td></tr>` };
+}
+function hfdlFreqOptions(id) {
+  const s = HFDL_BY_ID.get(+id); if (!s) return '<option value="">Frequency…</option>';
+  const f = dialKHz(), best = [...s.freqs].sort((a, b) => Math.abs(a - f) - Math.abs(b - f))[0];
+  return [...s.freqs].sort((a, b) => b - a).map((x) => `<option value="${x}"${x === best ? ' selected' : ''}>${x.toFixed(1)} kHz</option>`).join('');
+}
+function hfdlWindow() {
+  const f = dialKHz(), here = HFDL_STATIONS.find((s) => s.freqs.some((x) => Math.abs(x - f) < 0.05));
+  const cur = here ? here.id : +lsGet('ubersdr_hfdl_gs', HFDL_SORTED[0].id) || HFDL_SORTED[0].id;
+  hfdlSq = +lsGet('ubersdr_hfdl_sq', '0') ? 1 : 0;
+  openWindow(`<div class="dw-head"><span class="dw-title">HFDL decoder</span>` +
+    `<select class="dw-gs dec-sel" title="HFDL ground station">${HFDL_SORTED.map((s) => `<option value="${s.id}"${s.id === cur ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` +
+    `<select class="dw-fq dec-sel" title="Its frequencies (the USB dial)">${hfdlFreqOptions(cur)}</select><button type="button" class="dw-go" title="Tune to this frequency (USB)">Tune</button>` +
+    `<label title="Also show the ground stations' squitters (beacons)"><input type="checkbox" class="dw-sq"${hfdlSq ? ' checked' : ''}> Squitters</label>` +
+    `<button type="button" class="dw-map" title="Show the map of aircraft that reported a position">🗺 Map (0)</button>` +
+    `<button type="button" class="dw-big" title="Open the aircraft map in a large draggable, resizable window">⤢ Large map</button>` +
+    `<button type="button" class="dw-save" title="Save the decoded messages (text)">Save</button><button type="button" class="dw-clear">Clear</button></div>` +
+    `<div class="hf-mapbox" style="display:none"><div class="hf-map aprs-map"></div><div class="hf-mapnote"></div></div>` +
+    `<div class="dw-list"><table><thead><tr><th>UTC</th><th>kHz</th><th>SNR</th><th>Ground station</th><th>Aircraft</th><th>Type</th><th>Message</th></tr></thead><tbody></tbody></table></div>`);
+  const texts = [];
+  $('.dw-gs').onchange = (e) => { lsSet('ubersdr_hfdl_gs', e.target.value); $('.dw-fq').innerHTML = hfdlFreqOptions(e.target.value); };
+  $('.dw-go').onclick = () => { const k = +$('.dw-fq').value; if (k) { tuneKHz(k); applyFilter('hfdl'); if (hfdl) { hfdl.setDial(k * 1000); hfdl.reset(); } } };
+  $('.dw-sq').onchange = (e) => {
+    hfdlSq = e.target.checked ? 1 : 0; lsSet('ubersdr_hfdl_sq', String(hfdlSq));
+    st.win.querySelectorAll('tr.hf-sq').forEach((r) => { r.style.display = hfdlSq ? '' : 'none'; });
+  };
+  $('.dw-clear').onclick = () => { $('.dw-list tbody').innerHTML = ''; texts.length = 0; hfdlMap.clear(); };
+  // Aircraft map (PhantomSDR-Plus lib/aprsMap.js with plane icons): positions are kept
+  // even while the map is closed; small map in the window or a large floating one
+  hfdlMap = new AprsMap(W.STATION && W.STATION.locator || '');
+  hfdlMap.planeIcons = true;
+  hfdlMap.onChange = hfdlMapCount;
+  $('.dw-map').onclick = () => { hfdlBigClose(); hfdlSmall(!hfdlSmallOn); };
+  $('.dw-big').onclick = () => { if (hfdlBigEl) hfdlBigClose(); else { hfdlSmall(false); hfdlBigOpen(); } };
+  $('.dw-save').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([texts.join('\n')], { type: 'text/plain;charset=utf-8' }));
+    a.download = `hfdl_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}Z.txt`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+  hfdlDial = Math.round(dialKHz() * 1000);
+  hfdl = new HFDLWorkerProxy({ sampleRate: SR, callback: (ev) => {
+    if (!ev || st.on !== 'hfdl') return;
+    if (ev.type === 'ready') status('Waiting for a frame… (USB, subcarrier at 1440 Hz)');
+    else if (ev.type === 'error') status('HFDL decoder unavailable: ' + (ev.message || 'error'));
+    else if (ev.type === 'stats') status(`${ev.state > 1 ? 'Frame in progress' : 'Waiting for a frame'} · noise ${Number.isFinite(ev.noiseDb) ? ev.noiseDb.toFixed(1) + ' dB' : '–'} · ${ev.frames || 0} frame(s)` +
+      (HFDL_STATIONS.some((s) => s.freqs.some((x) => Math.abs(x - dialKHz()) < 0.05)) ? '' : ' · not on an HFDL frequency'));
+    else if (ev.type === 'msg') {
+      const box = $('.dw-list'), body = $('.dw-list tbody'); if (!body) return;
+      const end = atEnd(box), r = hfdlRow(ev.msg);
+      body.insertAdjacentHTML('beforeend', r.html);
+      while (body.rows.length > 300) body.deleteRow(0);
+      texts.push(ev.text || ''); if (texts.length > 300) texts.shift();
+      if (r.plane && hfdlMap) hfdlMap.add(r.plane);
+      if (end) scrollEnd(box);
+    }
+  } });
+  hfdl.setDial(hfdlDial);
+  hfdl.setEnabled(true);
+  status('Loading the HFDL decoder…');
+}
+
 // ── Start / stop / follow ───────────────────────────────────────────────────────
 // A decoder's sideband and filter: [sb, lo, hi], kHz of audio
 function decFilter(k) {
@@ -1157,6 +1361,7 @@ function start(k, opts) {
   else if (k === 'olivia') oliviaWindow();
   else if (k === 'modem') modemWindow();
   else if (k === 'packet') packetWindow();
+  else if (k === 'hfdl') hfdlWindow();
 }
 function stop(quiet) {
   if (!st.on) return;
@@ -1164,8 +1369,9 @@ function stop(quiet) {
   if (pskAuto) { clearTimeout(pskAuto.timer); pskAuto = null; }
   for (const p of pending.values()) p.reject(new Error('stopped')); pending.clear();
   if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
-  for (const x of [sstv, fax, fsk]) if (x) { try { x.destroy(); } catch (e) {} }
-  sstv = fax = fsk = null; js8.re = null; hellCtx = null;
+  hfdlBigClose(); if (hfdlMap) { hfdlMap.close(); hfdlMap = null; } hfdlSmallOn = false;
+  for (const x of [sstv, fax, fsk, hfdl]) if (x) { try { x.destroy(); } catch (e) {} }
+  sstv = fax = fsk = hfdl = null; js8.re = null; hellCtx = null;
   barStop(); closeWindow(); lightButtons(); pickedDial = 0;
   // As PhantomSDR-Plus: back to the band's usual mode (LSB on 40 m, CW on 30 m…, from the
   // page's band table), with that mode's usual filter (the page's default, or the preset
@@ -1196,7 +1402,7 @@ const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2
   [/\bSITOR(?:-?B)?\b/i, 'navtex'], [/\bPSK-?31\b/i, 'psk31'], [/\bOLIVIA\b/i, 'olivia'], [/\bMFSK ?-?(?:16|32|64)?\b/i, 'modem', 'mfsk'],
   [/\bDOMINO ?EX\b/i, 'modem', 'dominoex'], [/\bTHOR\b/i, 'modem', 'thor'], [/\bTHROB ?X?\b/i, 'modem', 'throb'],
   [/\b(?:FELD ?)?HELL(?:SCHREIBER)?\b/i, 'modem', 'hell'], [/\bMT-?63\b/i, 'modem', 'mt63'],
-  [/\bPACKET\b/i, 'packet', 'packet'], [/\bAPRS\b/i, 'packet', 'aprs']];
+  [/\bPACKET\b/i, 'packet', 'packet'], [/\bAPRS\b/i, 'packet', 'aprs'], [/\bHFDL\b/i, 'hfdl']];
 // A label from a markers.json mode (data-dec, set by ubersdr-compat.js fetchdx) names its
 // decoder outright, as PhantomSDR-Plus's MARKER_DECODERS: [decoder, FLDIGI list entry,
 // MFSK sub-mode]. 'rade' = UberSDR's RADE V1 (RADEL lower, the rest upper sideband).
@@ -1207,7 +1413,7 @@ const MARKER_MODES = { FT8: ['ft8'], FT4: ['ft4'], FT2: ['ft2'], JS8: ['js8'], W
   MFSK16: ['modem', 'mfsk', 'mfsk16'], MFSK32: ['modem', 'mfsk', 'mfsk32'], MFSK64: ['modem', 'mfsk', 'mfsk64'],
   DOMINOEX: ['modem', 'dominoex'], THOR: ['modem', 'thor'], THROB: ['modem', 'throb'], HELL: ['modem', 'hell'],
   FELDHELL: ['modem', 'hell'], MT63: ['modem', 'mt63'], PACKET: ['packet', 'packet'], APRS: ['packet', 'aprs'],
-  RADEL: ['rade', 'lsb'], RADEU: ['rade', 'usb'], RADE: ['rade', 'usb'], FREEDV: ['rade', 'usb'] };
+  HFDL: ['hfdl'], RADEL: ['rade', 'lsb'], RADEU: ['rade', 'usb'], RADE: ['rade', 'usb'], FREEDV: ['rade', 'usb'] };
 let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet, ham/weather RTTY)
 let labelSub = null;                  // its MFSK sub-mode, from a marker mode (MFSK32…)
 function labelMode(html) {
@@ -1289,6 +1495,7 @@ W.ubersdr_dec_tap = function (pcm, sr) {
     else if (kind === 'wspr') wsprFeed(pcm);
     else if (kind === 'sstv' && sstv) sstv.feedPCM(pcm);
     else if (kind === 'fax' && fax) fax.feedPCM(pcm, st.sr);
+    else if (kind === 'hfdl' && hfdl) hfdl.feedPCM(pcm);
     else if (fsk) fsk.feedPCM(pcm);
   } catch (e) { console.error('decoders: feed', e); }
 };
@@ -1309,6 +1516,7 @@ setInterval(() => {
   if (lastBand && bk !== lastBand) applyFilter(st.on);
   lastF = f; lastBand = bk;
   pickedFollow();
+  if (st.on === 'hfdl' && hfdl && Math.round(f * 1000) !== hfdlDial) { hfdlDial = Math.round(f * 1000); hfdl.setDial(hfdlDial); }
 }, 500);
 buildRow();
 buildPresets();

@@ -1,6 +1,8 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-Version 2026-10-28 · by SV1BTL · based on RW3PS's WebSDR template
+websdr_sv1btl version 5.4.0 (2026-10-30) · by SV1BTL · based on RW3PS's WebSDR template
+
+(This is the version of this layout, not of UberSDR, which has its own version numbers.)
 
 - **Repository:** https://github.com/sv1btl/WebSDR-emulation-for-UberSDR
 - **Live example:** http://sv1btlham.no-ip.org:8901/ (SV1BTL's WebSDR, Athens)
@@ -32,8 +34,10 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   7205–7605 AM…; amateur bands from the band table, the rest from the page's band-plan
   table, `modeperfreq` in `websdr-base.js`). A running decoder stops; outside both it
   zooms ±100 kHz as before;
-- **RADE V1** (FreeDV digital voice) with the **RADEL** and **RADEU** mode buttons,
-  decoded by UberSDR's own FreeDV extension;
+- more **Mode buttons** on the one Mode line: **RADE V1** (FreeDV digital voice, **RADEL**
+  and **RADEU**), decoded by UberSDR's own FreeDV extension; **IQ** (the raw I/Q, with
+  PhantomSDR-Plus's IQ demodulators and IQ recording) and **DRM** (decoded by UberSDR,
+  with PhantomSDR-Plus's DRM schedule);
 - the desktop page **fits the browser window**: it is scaled to the window's width, from
   1024 px screens to 4K (add `?nofit` to the address to switch this off);
 - **signal readouts** on the radio display, as in PhantomSDR-Plus: **dBm**, **dBµV**,
@@ -42,7 +46,7 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   brightness; the original light look is the default, each visitor's choice is kept);
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
   PhantomSDR-Plus's CW decoder in the listener's browser;
-- **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, and an FLDIGI
+- **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, HFDL, and an FLDIGI
   window with RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63,
   Packet and APRS) from
   PhantomSDR-Plus, with a Decoder button row under the Mode buttons;
@@ -178,7 +182,7 @@ and the comma at the end of each line.
 | `startKHz` | `7120` | where a **first-time** visitor starts, in kHz (returning visitors start where they left off) |
 | `startMode` | `'LSB'` | mode for that start: `'LSB'`, `'USB'`, `'AM'`, `'CW'` or `'FM'` |
 | `waterfallCalibration` | `12` | must equal `websdr_waterfall_calibration` in UberSDR's `config.yaml`; the installer copies it. It sets the dB scale of the spectrum. |
-| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
+| `mainServer` | `'https://sv1abc.tunnel.ubersdr.org'` | where visitors' browsers reach UberSDR's main web server, for RADE, IQ and DRM; the installer fills in UberSDR's public address; `''` means this host on port 8080 |
 | `diversityRelayPort` | `8902` | port of the WebSDR relay for Receive Diversity, on this page's host (the installer fills it in); forward it on your router |
 | `mwStepKHz` | `9` | medium-wave channel step of the >>> / <<< buttons in AM: 9 kHz in Europe, Africa and Asia, `10` in the Americas |
 | `showListenerCity` | `true` | `true` gives "GR,Athens" in the users list; `false` gives the country only, "GR" |
@@ -233,8 +237,8 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
   `psk31`, `olivia`, `aprs`, `radel`, `radeu`, `morse`, `hfdl`, `drm`. Then the mode alone
   decides what a click does, whatever the text says: `147.3rtty-wx DWD DDH47` starts the
   DWD weather RTTY decoder, `2174.5sitor SITOR MSI` the NAVTEX / SITOR-B decoder,
-  `7087radel FreeDV` RADE on LSB, and `77.5morse DCF77` CW with its decoder. HFDL and DRM
-  have no decoder here, so they take the page's band plan (`2986hfdl` USB, `3205drm` AM).
+  `7087radel FreeDV` RADE on LSB, `77.5morse DCF77` CW with its decoder, and `2986hfdl`
+  the HFDL decoder. DRM takes AM (`3205drm`); the DRM button then decodes it.
   SV1BTL's file has the markers of PhantomSDR-Plus's `frequencylist/mymarkers.json` and
   `decodermarkers.json` in this form, after the station's own labels.
 - Lines starting with `#` are comments.
@@ -348,6 +352,27 @@ Things to know:
 - The decoder reads the sideband when it starts, so switching between RADEL and RADEU
   restarts it. UberSDR allows one restart every 2 seconds; the page waits and retries.
 
+### IQ and DRM
+
+The **IQ** and **DRM** buttons in the Mode row work the same way as RADE (press the lit
+button again, or another mode button, to switch off; the normal audio is silenced
+meanwhile; each uses one more UberSDR session on `mainServer`).
+
+- **IQ** plays the receiver's raw I/Q, ±6 kHz around the frequency (I left, Q right), from
+  an IQ session on `mainServer`; **● Rec IQ** in the status line saves it as a stereo WAV
+  file. An **IQ Demodulators** window opens below, as in PhantomSDR-Plus: up to six
+  receivers inside the 12 kHz around the dial, each with its own mode (USB, LSB, CW, AM,
+  DSB, FM), frequency, width, volume and pan, and a level meter; click the spectrum to move
+  the selected one there, or turn the wheel over it (Shift = 100 Hz). **Demodulators**
+  plays them, **Raw I/Q** the I/Q itself; the settings are kept in the browser.
+- **DRM** decodes Digital Radio Mondiale with UberSDR's DRM extension on such a session:
+  tune to the centre of the channel; the status line shows the progress, station, MER and
+  text. A **DRM schedule** window opens below, as in PhantomSDR-Plus: the DRM Reception
+  Project's broadcasts this receiver can tune (PhantomSDR-Plus's saved copy), grouped as
+  beamed at this station's locator, on air now (nearest first), later (next 24 h) and
+  medium wave, with **Confirmed only** (confirmed on air or HFCC-registered) and
+  **⇒ Tune**.
+
 ### CW decoder
 
 While the mode is **CW** (the CW button, CW narrow or wide, a keyboard key or CAT
@@ -375,7 +400,7 @@ no extra session, no `mainServer`, no `enable_cors`. Things to know:
 ### Digital-mode decoders
 
 A **Decoder** row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in
-the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI**. The FLDIGI
+the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI, HFDL**. The FLDIGI
 window's list picks RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB, Hellschreiber,
 MT63, Packet, APRS or DWD weather RTTY (PhantomSDR-Plus 5.1.0). Its window
 opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW
@@ -387,7 +412,7 @@ audio before squelch, NR and the notch filters, and nothing extra is asked of Ub
 
 While a decoder runs, the **Mode Filters' presets** on the left are replaced by
 **Decoder Filters' presets**: one button per decoder with its filter width (FT8, FT4,
-FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz; FLDIGI
+FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz, HFDL 2.60 kHz; FLDIGI
 follows its list: RTTY 300 Hz, DWD weather 593 Hz, PSK31 200 Hz, the other modes their
 bandwidth plus a margin). A button sets that decoder's sideband and filter;
 the one in use is lit. The Mode presets come back when the decoder stops.
@@ -400,6 +425,7 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 | SSTV | LSB below 10 MHz, USB above; 1.0–2.5 kHz | the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies |
 | FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency, which the display shows |
 | NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations and the ITU SITOR-B channels (2174.5, 4210 … 26100.5 kHz) |
+| HFDL | USB 0.15–2.75 kHz; the dial on the listed frequency (subcarrier at 1440 Hz) | aircraft messages (UTC, kHz, SNR, ground station, aircraft with a FlightAware link, type, ACARS text, 📍 position); ground stations and their frequencies with Tune; Squitters; Save. As in PhantomSDR-Plus, **🗺 Map** shows the aircraft that reported a position in the window and **⤢ Large map** in a large window you can drag and resize (⌖ Fit all, ✕ or Esc to close); positions are kept while the map is closed |
 | FLDIGI | USB, around the mode's audio centre | the window's list: Ham RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB / THROBX, Hellschreiber, MT63, Packet (AX.25), APRS, DWD weather RTTY (the FLDIGI button reopens the last one). RTTY: text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz (DDH47 on 147.3 kHz LF: 85 Hz, set when picked), with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
 | PSK31 (FLDIGI list) | USB 0.9–1.1 kHz, the signal at 1000 Hz | text; calling frequencies; **Auto-tune** finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK31 trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus |
 | Olivia (FLDIGI list) | USB around 1000 Hz, the signal bandwidth + 150 Hz each side | text; mode 8/250, 16/500, 32/1000 or 16/1000 (must match the signal); **Squelch** slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter |
@@ -622,7 +648,8 @@ after one new line, then with every line for the first twelve), then calmly: a c
 ### What listeners' browsers contact
 
 - Your UberSDR (port 8901): the page, audio and waterfall.
-- Your UberSDR's main web server (`mainServer`), only while RADE is on.
+- Your UberSDR's main web server (`mainServer`), only while RADE, IQ or DRM is on.
+- `tile.openstreetmap.org` (map tiles), only while the HFDL map is open.
 - The second receiver chosen in Receive Diversity, only while that runs (for a WebSDR,
   this station's relay on port 8902 instead).
 - `get.geojs.io`, or `ipwho.is` as a fallback, once a day per visitor. This finds the
@@ -757,7 +784,13 @@ editing, raise the `?v=` number (see section 6).
   `sv1btl/decoders.js` are under the **GNU GPL v3**. The FT8/FT4/FT2 engine
   (`ft8_lib.wasm`, from Karlis Goba's ft8_lib, MIT) and the JS8 engine and dictionary
   (`js8.wasm`, built on ft8_lib with tables from JS8Call, and `js8_dict.bin`, from
-  JS8Call, GPL v3) keep their own terms.
+  JS8Call, GPL v3) keep their own terms. The HFDL engine (`hfdl.wasm`: dumphfdl by Tomasz
+  Lemiech, with libacars, GPL v3 or later) and the zstd inflater `sv1btl/fzstd.js` (fzstd
+  by Arjun Barrett, MIT, as UberSDR uses it) keep theirs too.
+- The **HFDL map**: PhantomSDR-Plus's `aprsMap.js` (GPL v3) with **Leaflet 1.9.4**
+  (BSD-2-Clause, the copy UberSDR ships) in `sv1btl/psdr/lib/`; map tiles © OpenStreetMap
+  contributors. The **IQ demodulators** (`iqDemod.js`) and the **DRM schedule**
+  (`drmSchedule.js`) in `sv1btl/psdr/lib/` are PhantomSDR-Plus's too (GPL v3).
 - **Receive Diversity**: the combiner, the receiver connections and the audio module in
   `sv1btl/psdr/` and the WebSDR relay (`relay/websdr_relay.py`) come from PhantomSDR-Plus
   and, with `sv1btl/diversity-ui.js`, are under the **GNU GPL v3**.

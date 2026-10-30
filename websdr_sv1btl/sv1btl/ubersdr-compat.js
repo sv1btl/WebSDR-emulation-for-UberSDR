@@ -1,4 +1,6 @@
 // ubersdr-compat.js — lets the RW3PS WebSDR layout run on UberSDR.
+// SV1BTL WebSDR layout for UberSDR (websdr_sv1btl), version 5.4.0 (2026-10-30) — the version of
+// this layout, not of UberSDR.
 //
 // The RW3PS websdr-base.js was written for PA3FWM's original sound client (with
 // KA7OEI's DSP additions). UberSDR replaces that client with its own Opus player
@@ -588,7 +590,7 @@
       }
       if (this._rec) recPush(this, decoded);
       if (state.nr > 0) syncNRBins(this, false);
-      if (rade.side) return;                 // RADE on: the decoded RADE voice plays instead
+      if (rade.side || xm.kind) return;      // RADE / IQ / DRM on: their own audio plays instead
       origPlay.call(this, decoded);
     };
     }
@@ -968,7 +970,8 @@
   // the filter shown on this page both use that passband
   var RADE_LO_HZ = 700, RADE_HI_HZ = 2200;
   function radeBW(side) { return side === 'usb' ? [RADE_LO_HZ, RADE_HI_HZ] : [-RADE_HI_HZ, -RADE_LO_HZ]; }
-  window.ubersdr_rade_active = function () { return !!rade.side; };
+  // also true for the second Mode row (IQ, DRM): decoders stop for them as for RADE
+  window.ubersdr_rade_active = function () { return !!rade.side || !!xm.kind; };
   window.ubersdr_rade_side = function () { return rade.side || null; };   // 'lsb' | 'usb' | null (station labels, decoders.js)
 
   // ── FreeDV Reporter window (shown while RADE is on) ────────────────────────
@@ -1190,41 +1193,54 @@
     if (window.ubersdr_rade_onstop) window.ubersdr_rade_onstop();
     try { if (typeof window.mode === 'string') document.getElementById('btn-' + window.mode).classList.add('btn-selected'); } catch (e) {}
   }
-  window.ubersdr_rade_stop = radeStop;
+  window.ubersdr_rade_stop = function () { radeStop(); xmStop(); };
 
-  function radePlay(buf) {                 // one Opus frame (ArrayBuffer) → speaker
+  // One decoded-audio frame of an UberSDR audio extension (freedv, drm) → speaker:
+  // 0x02, 1-8 timestamp, 9-12 sample rate (BE), 13 channels, 14… Opus. S holds the
+  // decoder and play-out clock (rade, xm). False if it is not such a frame.
+  function opusPlay(S, buf) {
     var sa = window.soundapplet;
     var ctx = sa && sa._audioCtx;
-    if (!ctx || buf.byteLength < 15) return;
+    if (!ctx || buf.byteLength < 15) return false;
     var v = new DataView(buf);
-    if (v.getUint8(0) !== 0x02) return;
-    var sr = v.getUint32(9, false), ch = v.getUint8(13) || 1, data = new Uint8Array(buf, 14);
-    var gen = rade.gen;
+    if (v.getUint8(0) !== 0x02) return false;
+    var sr = v.getUint32(9, false), ch = v.getUint8(13) || 1, data = new Uint8Array(buf, 14).slice();
+    var gen = S.gen;
     // the Opus decoder is not re-entrant: frames are decoded strictly one after another
-    rade.busy = rade.busy.then(function () {
-      if (gen !== rade.gen) return;
+    S.busy = S.busy.then(function () {
+      if (gen !== S.gen) return;
       var lib = window['opus-decoder'];
       if (!lib || !lib.OpusDecoder) return;
       var ready = Promise.resolve();
-      if (!rade.dec || rade.decSR !== sr || rade.decCh !== ch) {
-        if (rade.dec) try { rade.dec.free(); } catch (e) {}
-        rade.dec = new lib.OpusDecoder({ sampleRate: sr, channels: ch });
-        rade.decSR = sr; rade.decCh = ch;
-        ready = rade.dec.ready;
+      if (!S.dec || S.decSR !== sr || S.decCh !== ch) {
+        if (S.dec) try { S.dec.free(); } catch (e) {}
+        S.dec = new lib.OpusDecoder({ sampleRate: sr, channels: ch });
+        S.decSR = sr; S.decCh = ch;
+        ready = S.dec.ready;
       }
-      return ready.then(function () { return rade.dec.decodeFrame(data); }).then(function (d) {
-        if (gen !== rade.gen || !d || !d.channelData || !d.channelData.length || !d.channelData[0].length) return;
-        var b = ctx.createBuffer(d.channelData.length, d.channelData[0].length, d.sampleRate || sr);
-        for (var c = 0; c < d.channelData.length; c++) b.copyToChannel(d.channelData[c], c);
-        var src = ctx.createBufferSource();
-        src.buffer = b;
-        src.connect(sa._gainNode || ctx.destination);   // volume, Hi-Boost, notch, NR as usual
-        var now = ctx.currentTime;
-        if (rade.next < now) rade.next = now + 0.12;    // (re)start with a small buffer
-        src.start(rade.next);
-        rade.next += b.duration;
+      return ready.then(function () { return S.dec.decodeFrame(data); }).then(function (d) {
+        if (gen !== S.gen || !d || !d.channelData || !d.channelData.length || !d.channelData[0].length) return;
+        pcmPlay(S, d.channelData, d.sampleRate || sr);
       });
     }).catch(function () {});
+    return true;
+  }
+  // Planar float PCM → speaker, chained after the last block (S.next)
+  function pcmPlay(S, planes, sr) {
+    var sa = window.soundapplet, ctx = sa && sa._audioCtx;
+    if (!ctx || !planes[0].length) return;
+    var b = ctx.createBuffer(planes.length, planes[0].length, sr);
+    for (var c = 0; c < planes.length; c++) b.copyToChannel(planes[c], c);
+    var src = ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(sa._gainNode || ctx.destination);   // volume, Hi-Boost, notch, NR as usual
+    var now = ctx.currentTime;
+    if (S.next < now) S.next = now + 0.12;          // (re)start with a small buffer
+    src.start(S.next);
+    S.next += b.duration;
+  }
+  function radePlay(buf) {                 // one Opus frame (ArrayBuffer) → speaker
+    if (!opusPlay(rade, buf)) return;
     rade.frames++;
     if (!rade.sigTimer) { radeStatus('RADE ' + rade.side.toUpperCase() + ': decoding', 'sync'); }
     clearTimeout(rade.sigTimer);
@@ -1323,6 +1339,7 @@
       setTimeout(function () { if (!rade.side) radeStatus(''); }, 5000);
       return;
     }
+    xmStop();
     rade.side = side;
     var bw = radeBW(side);
     rade.switching = true;
@@ -1379,6 +1396,662 @@
     var origFreq = window.setfreq;
     window.setfreq = function () { var r = origFreq.apply(this, arguments); radeFollowTune(); return r; };
   });
+
+  // ── Mode row 2: IQ, DRM (desktop; 2026-10-30) ───────────────────────────────
+  // The IQ and DRM buttons of the second row of Mode buttons (next to RADE V1), done as
+  // PhantomSDR-Plus does them:
+  //   IQ        the receiver's raw I/Q (±6 kHz around the dial, 12 kHz complex): a main-UI
+  //             session (as RADE V1) in mode iq, lossless PCM (format=pcm-zstd, inflated
+  //             with sv1btl/fzstd.js), played I left / Q right; Rec IQ saves it as a
+  //             stereo 16-bit WAV (I left, Q right), as PhantomSDR-Plus's IQ recording.
+  //   DRM       Digital Radio Mondiale, decoded on the server by UberSDR's drm audio
+  //             extension (ubersdr-drm) on an IQ session; Opus frames as freedv's, plus
+  //             JSON status frames (0x03: station, text, SNR) shown in the status line.
+  // Like RADE V1 the page's own WebSDR audio is silenced meanwhile, tuning follows, and
+  // any other Mode button (or a mode change by software) switches it off.
+  var XM = {
+    iq:    { label: 'IQ',      btn: 'btn-IQ',    mode: 'am',  lo: -6,   hi: 6 },
+    drm:   { label: 'DRM',     btn: 'btn-DRM',   mode: 'am',  lo: -5,   hi: 5 }
+  };
+  var XM_SIG_TIMEOUT_MS = 2500;
+  var xm = { kind: null, gen: 0, ws: null, dx: null, dec: null, decSR: 0, decCh: 0, next: 0,
+             busy: Promise.resolve(), sigTimer: null, pingTimer: null, tuneTimer: null, retryTimer: null,
+             switching: false, zstd: null, pcmHdr: null, rec: null, drmStatus: null };
+
+  function xmButtons() {
+    Object.keys(XM).forEach(function (k) {
+      var b = document.getElementById(XM[k].btn);
+      if (!b) return;
+      b.classList.toggle('btn-selected', xm.kind === k);
+      b.classList.toggle('rade-sync', xm.kind === k && !!xm.sigTimer);
+    });
+    if (xm.kind) {                         // the AM / USB button stays unlit meanwhile
+      var m = document.getElementById('btn-' + XM[xm.kind].mode.toUpperCase());
+      if (m) m.classList.remove('btn-selected');
+    }
+  }
+  function xmStatus(text, cls) { radeStatus(text, cls); }
+  function xmSignal() {                    // audio arriving: lamp on until it stops
+    var was = !!xm.sigTimer;
+    clearTimeout(xm.sigTimer);
+    xm.sigTimer = setTimeout(function () { xm.sigTimer = null; xmButtons(); xmIdleStatus(); }, XM_SIG_TIMEOUT_MS);
+    if (!was) { xmButtons(); xmIdleStatus(); }
+  }
+  function xmIdleStatus() {
+    if (xm.kind === 'drm') drmShow();
+  }
+
+  function xmClose() {
+    xm.gen++;
+    clearInterval(xm.pingTimer); clearTimeout(xm.tuneTimer); clearTimeout(xm.retryTimer);
+    clearTimeout(xm.sigTimer); xm.sigTimer = null;
+    if (xm.dx) {
+      try { if (xm.dx.readyState === 1) xm.dx.send(JSON.stringify({ type: 'audio_extension_detach' })); } catch (e) {}
+      try { xm.dx.close(); } catch (e) {}
+    }
+    if (xm.ws) try { xm.ws.close(); } catch (e) {}
+    xm.ws = xm.dx = null;
+    if (xm.dec) { try { xm.dec.free(); } catch (e) {} }
+    xm.dec = null; xm.decSR = xm.decCh = 0; xm.next = 0; xm.pcmHdr = null; xm.drmStatus = null;
+  }
+  function xmStop() {
+    if (!xm.kind) return;
+    var k = xm.kind;
+    if (xm.rec) iqRecStop(true);
+    xmClose();
+    xm.kind = null;
+    xmStatus('');
+    xmButtons();
+    drmWinClose(); iqWinClose();
+    xmBack(k);
+  }
+  // Back to the page's own mode: the band plan's (LSB on 40 m…), else AM
+  function xmBack(k) {
+    try {
+      var bm = window.ubersdr_bandmode ? window.ubersdr_bandmode(window.freq) : null;
+      xm.switching = true;
+      set_mode(String(bm || 'am').toLowerCase());
+    } catch (e) {} finally { xm.switching = false; }
+    try { document.getElementById('btn-' + String(window.mode).toUpperCase()).classList.add('btn-selected'); } catch (e) {}
+  }
+  function xmFail(msg) {
+    var k = xm.kind;
+    if (xm.rec) iqRecStop(true);
+    xmClose();
+    xm.kind = null;
+    xmStatus((k ? XM[k].label : '') + ' unavailable: ' + msg, 'err');
+    xmButtons();
+    drmWinClose(); iqWinClose();
+    if (k) xmBack(k);
+    setTimeout(function () { if (!xm.kind && !rade.side) xmStatus(''); }, 10000);
+  }
+
+  // Button: IQ / DRM. Pressing the lit one again switches it off.
+  window.ubersdr_xmode = function (k) {
+    if (!XM[k]) return;
+    if (xm.kind === k) { xmStop(); return; }
+    if (!window.soundapplet || !window.soundapplet._audioCtx) {
+      xmStatus(XM[k].label + ': start the audio first', 'err');
+      setTimeout(function () { if (!xm.kind && !rade.side) xmStatus(''); }, 5000);
+      return;
+    }
+    xmStop();
+    radeStop();
+    try { if (window.ubersdr_decoders && window.ubersdr_decoders.state().on) window.ubersdr_decoders.stop(true); } catch (e) {}
+    xm.kind = k;
+    var d = XM[k];
+    xm.switching = true;
+    try {
+      if (window.ubersdr_listener_mode) window.ubersdr_listener_mode();
+      if (String(window.mode).toLowerCase() !== d.mode) set_mode(d.mode);
+      setmf(d.mode, d.lo, d.hi);           // shows the passband the mode uses
+    } catch (e) {} finally { xm.switching = false; }
+    xmButtons();
+    xmConnect(k);
+    if (k === 'drm') drmWinOpen();
+    if (k === 'iq') iqWinOpen();
+  };
+
+  // Tuning on this page: the main-UI session follows (throttled; the server rate-limits)
+  function xmFollowTune() {
+    if (!xm.kind || !xm.ws || xm.ws.readyState !== 1) return;
+    clearTimeout(xm.tuneTimer);
+    xm.tuneTimer = setTimeout(function () {
+      if (xm.ws && xm.ws.readyState === 1) xm.ws.send(JSON.stringify({ type: 'tune', frequency: radeFreqHz() }));
+      if (xm.kind === 'drm') { xm.drmStatus = null; drmShow(); drmWinFill(); }
+    }, 300);
+  }
+  // A mode change by software (CAT, labels…) away from the mode's own switches it off
+  function xmFollowMode() {
+    if (!xm.kind || xm.switching) return;
+    if (String(window.mode).toLowerCase() !== XM[xm.kind].mode) xmStop();
+    else xmButtons();
+  }
+  // Any other Mode button (CW … FM, RADE V1): off
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#moderow .btnMode');
+    if (!b || !xm.kind || b.id === XM[xm.kind].btn || /^btn-RADE[LU]$/.test(b.id)) return;
+    if (b.closest('#decrow')) return;      // decoders stop it themselves (ubersdr_rade_stop)
+    xmStop();
+  }, true);
+  window.addEventListener('beforeunload', xmClose);
+
+  // ── IQ and DRM: a main-UI session in mode iq ──
+  function xmConnect(k) {
+    xmClose();
+    var gen = xm.gen, base = radeBase(), uuid = radeUUID(), L = XM[k].label;
+    xmStatus(L + ': connecting…');
+    var go = function () {
+      var x = new XMLHttpRequest();
+      x.open('POST', base + '/connection', true);
+      x.setRequestHeader('Content-Type', 'application/json');
+      x.onerror = function () { if (gen === xm.gen) xmFail('cannot reach ' + base); };
+      x.onload = function () {
+        if (gen !== xm.gen) return;
+        var r = null;
+        try { r = JSON.parse(x.responseText); } catch (e) {}
+        if (x.status !== 200 || !r || !r.allowed) { xmFail((r && r.reason) || ('server answered ' + x.status)); return; }
+        var wsBase = base.replace(/^http/, 'ws');
+        // IQ is heard: lossless PCM. DRM is the decoder's: the session stays muted.
+        var q = 'user_session_id=' + uuid + '&frequency=' + radeFreqHz() + '&mode=iq' +
+                (k === 'iq' ? '&format=pcm-zstd' : '&format=opus&muted=true');
+        var ws = xm.ws = new WebSocket(wsBase + '/ws?' + q);
+        ws.binaryType = 'arraybuffer';
+        ws.onmessage = function (ev) {
+          if (gen !== xm.gen) return;
+          if (ev.data instanceof ArrayBuffer) { if (k === 'iq') iqFrame(ev.data); return; }
+          try { var m = JSON.parse(ev.data); if (m.type === 'error') xmStatus(L + ': ' + (m.error || m.message || 'error'), 'err'); } catch (e) {}
+        };
+        ws.onclose = function () { if (gen === xm.gen && xm.kind) xmFail('connection to the receiver closed'); };
+        ws.onopen = function () {
+          if (gen !== xm.gen) return;
+          xm.pingTimer = setInterval(function () { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 30000);
+          if (k === 'iq') { iqIdle(); return; }
+          var dx = xm.dx = new WebSocket(wsBase + '/ws/dxcluster?user_session_id=' + uuid);
+          dx.binaryType = 'arraybuffer';
+          var attach = function () {
+            if (gen === xm.gen && dx.readyState === 1)
+              dx.send(JSON.stringify({ type: 'audio_extension_attach', extension_name: 'drm', params: {} }));
+          };
+          dx.onopen = function () { setTimeout(attach, 700); };   // let the IQ session settle
+          dx.onmessage = function (ev) {
+            if (gen !== xm.gen) return;
+            if (ev.data instanceof ArrayBuffer) { drmFrame(ev.data); return; }
+            var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+            if (m.type === 'audio_extension_attached') drmShow();
+            else if (m.type === 'audio_extension_error') {
+              var err = m.error || 'decoder error';
+              if (/too quickly|wait|no active audio session|mode/i.test(err) && !xm.retried) {
+                xm.retried = true; xmStatus('DRM: starting…');
+                xm.retryTimer = setTimeout(attach, 2500);
+              } else xmFail(err);
+            }
+          };
+          dx.onclose = function () { if (gen === xm.gen && xm.kind) xmFail('decoder connection closed'); };
+        };
+      };
+      x.send(JSON.stringify({ user_session_id: uuid }));
+    };
+    xm.retried = false;
+    if (k === 'iq' && !xm.zstd) {          // the inflater, loaded on first use
+      import(new URL('sv1btl/fzstd.js?v=20261030', location.href).href).then(function (mod) {
+        xm.zstd = mod.decompress;
+        if (gen === xm.gen) go();
+      }, function () { if (gen === xm.gen) xmFail('could not load sv1btl/fzstd.js'); });
+    } else go();
+  }
+
+  // IQ frame (UberSDR pcm_binary.go, zstd-compressed as a whole): full header
+  // [magic u16 LE 0x5043][version][format][rtp u64][wall ms u64][rate u32][channels u8]
+  // (+ v2/v3: baseband f32, noise f32)[reserved u32] = 29 / 37 bytes, or minimal
+  // [0x504D][version][rtp u64][reserved u16] = 13 bytes ("as before"); then big-endian
+  // int16 samples, interleaved I,Q.
+  function iqFrame(buf) {
+    var b;
+    try { b = new Uint8Array(buf); if (b.length >= 4 && b[0] === 0x28 && b[1] === 0xB5 && b[2] === 0x2F && b[3] === 0xFD) b = xm.zstd(b); }
+    catch (e) { return; }
+    if (b.length < 13) return;
+    var v = new DataView(b.buffer, b.byteOffset, b.byteLength), magic = v.getUint16(0, true), off;
+    if (magic === 0x5043) {
+      var ver = b[2];
+      xm.pcmHdr = { sr: v.getUint32(20, true) || 12000, ch: b[24] || 2 };
+      off = ver >= 2 ? 37 : 29;
+    } else if (magic === 0x504D && xm.pcmHdr) off = 13;
+    else return;
+    var ch = xm.pcmHdr.ch, sr = xm.pcmHdr.sr, n = Math.floor((b.length - off) / 2 / ch);
+    if (n <= 0) return;
+    var planes = [];
+    for (var c = 0; c < ch; c++) planes.push(new Float32Array(n));
+    for (var i = 0, p = off; i < n; i++) for (c = 0; c < ch; c++, p += 2) planes[c][i] = v.getInt16(p, false) / 32768;
+    if (xm.rec) iqRecPush(planes, sr);
+    if (iqw.bank && iqw.el && planes.length === 2) {          // IQ demodulators (PhantomSDR-Plus)
+      iqw.bank.setRate(sr);
+      var iq = new Float32Array(n * 2);
+      for (var k = 0; k < n; k++) { iq[2 * k] = planes[0][k]; iq[2 * k + 1] = planes[1][k]; }
+      var out = iqw.bank.process(iq);
+      if (out !== iq) for (k = 0; k < n; k++) { planes[0][k] = out[2 * k]; planes[1][k] = out[2 * k + 1]; }
+    }
+    pcmPlay(xm, planes.length === 1 ? [planes[0], planes[0]] : planes, sr);
+    var first = !xm.sigTimer;
+    clearTimeout(xm.sigTimer);
+    xm.sigTimer = setTimeout(function () { xm.sigTimer = null; xmButtons(); iqIdle(); }, XM_SIG_TIMEOUT_MS);
+    if (first) iqIdle();
+  }
+  function iqIdle() {
+    if (xm.kind !== 'iq') return;
+    var s = document.getElementById('radestatus');
+    if (!s) return;
+    var h = xm.pcmHdr, txt = !xm.sigTimer ? 'IQ: waiting for the I/Q stream…' :
+      'IQ ' + (h ? '±' + (h.sr / 2000) + ' kHz, ' + (h.sr / 1000) + ' kHz ' +
+        (iqw.el && iqw.bank && iqw.listening && iqw.bank.demods.length ? '· demodulators' : h.ch === 2 ? 'I left / Q right' : 'mono') : '');
+    var rec = xm.rec ? ' ■ Stop IQ rec (' + Math.round(xm.rec.n / xm.rec.sr) + ' s)' : ' ● Rec IQ';
+    s.className = 'radestatus' + (xm.sigTimer ? ' sync' : '');
+    s.innerHTML = '';
+    s.appendChild(document.createTextNode(txt + ' '));
+    var a = document.createElement('a');
+    a.href = 'javascript:void(0)'; a.textContent = rec; a.style.color = 'inherit';
+    a.title = 'Record the I/Q as a stereo 16-bit WAV file (I left, Q right); at most 10 minutes';
+    a.onclick = function () { if (xm.rec) iqRecStop(false); else iqRecStart(); };
+    s.appendChild(a);
+    xmButtons();
+  }
+  var IQ_REC_MAX_S = 600;
+  function iqRecStart() {
+    if (xm.kind !== 'iq') return;
+    xm.rec = { chunks: [], n: 0, sr: (xm.pcmHdr && xm.pcmHdr.sr) || 12000, hz: radeFreqHz(), t0: new Date(), shown: 0 };
+    iqIdle();
+  }
+  function iqRecPush(planes, sr) {
+    var r = xm.rec, n = planes[0].length, q = planes[1] || planes[0];
+    if (sr !== r.sr && r.n) { iqRecStop(false); return; }
+    r.sr = sr;
+    var out = new Int16Array(n * 2);
+    for (var i = 0; i < n; i++) {
+      out[2 * i] = Math.max(-32768, Math.min(32767, Math.round(planes[0][i] * 32768)));
+      out[2 * i + 1] = Math.max(-32768, Math.min(32767, Math.round(q[i] * 32768)));
+    }
+    r.chunks.push(out); r.n += n;
+    if (r.n / r.sr >= IQ_REC_MAX_S) { iqRecStop(false); return; }
+    if (Math.floor(r.n / r.sr) !== r.shown) { r.shown = Math.floor(r.n / r.sr); iqIdle(); }
+  }
+  function iqRecStop(discard) {
+    var r = xm.rec;
+    xm.rec = null;
+    if (!r || discard || !r.n) { iqIdle(); return; }
+    var data = r.n * 4, hdr = new DataView(new ArrayBuffer(44));
+    var str = function (o, t) { for (var i = 0; i < t.length; i++) hdr.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, 'RIFF'); hdr.setUint32(4, 36 + data, true); str(8, 'WAVE'); str(12, 'fmt ');
+    hdr.setUint32(16, 16, true); hdr.setUint16(20, 1, true); hdr.setUint16(22, 2, true);
+    hdr.setUint32(24, r.sr, true); hdr.setUint32(28, r.sr * 4, true); hdr.setUint16(32, 4, true); hdr.setUint16(34, 16, true);
+    str(36, 'data'); hdr.setUint32(40, data, true);
+    var stamp = r.t0.toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([hdr.buffer].concat(r.chunks), { type: 'audio/wav' }));
+    a.download = 'UberSDR_' + stamp + 'Z_' + r.hz + 'Hz_IQ.wav';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    iqIdle();
+  }
+
+  // IQ Demodulators window, as PhantomSDR-Plus's IqDemodPanel.svelte: up to six receivers
+  // inside the 12 kHz I/Q stream (its engine sv1btl/psdr/lib/iqDemod.js, unchanged), each
+  // with its own offset, mode, width, volume and pan; "Demodulators" plays them, "Raw I/Q"
+  // the I/Q itself (I left, Q right). The picture is the 12 kHz around the dial: a click
+  // moves the selected demodulator there, the wheel nudges it (Shift = 100 Hz). Settings
+  // are kept in the browser; the bank stays for the visit, so IQ comes back as it was left.
+  // Rec IQ still records the I/Q itself, not the demodulators.
+  var IQW_STORE = 'phantom.iqdemod.v1', IQW_H = 120, IQW_SPAN = 12000;
+  var iqw = { el: null, mod: null, bank: null, sel: null, listening: true, raf: 0, last: 0, lastW: 0, floor: null };
+  function iqwColor(d) { var ds = iqw.bank.demods; return iqw.mod.DEMOD_COLORS[ds.indexOf(ds.find(function (x) { return x.id === d.id; })) % iqw.mod.DEMOD_COLORS.length]; }
+  function iqwKhz(off) { return ((Number(window.freq) || 0) + off / 1000).toFixed(3); }
+  function iqwPassband(d) {
+    switch (d.mode) {
+      case 'USB': return [d.offset + 50, d.offset + d.bw];
+      case 'LSB': return [d.offset - d.bw, d.offset - 50];
+      default:    return [d.offset - d.bw / 2, d.offset + d.bw / 2];
+    }
+  }
+  function iqwSave() {
+    try { localStorage.setItem(IQW_STORE, JSON.stringify({ listening: iqw.listening, demods: iqw.bank.configs() })); } catch (e) {}
+  }
+  function iqwLoad() {
+    try {
+      var st = JSON.parse(localStorage.getItem(IQW_STORE) || 'null');
+      if (st && Array.isArray(st.demods)) {
+        iqw.bank.load(st.demods.map(function (c) { var o = Object.assign({}, c); delete o.id; return o; }));
+        iqw.listening = st.listening !== false;
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function iqwConfigs() { return iqw.bank.configs(); }
+  function iqwAdd(offset) {
+    var sel = iqwConfigs().find(function (d) { return d.id === iqw.sel; });
+    var id = iqw.bank.add({ mode: sel ? sel.mode : 'AM', offset: offset || 0 });
+    if (id != null) iqw.sel = id;
+    iqwRows();
+  }
+  function iqwSet(id, patch, keepRows) {
+    iqw.bank.update(id, patch);
+    iqwSave();
+    if (!keepRows) iqwRows();
+  }
+  function iqwListen(v) {
+    iqw.listening = v; iqw.bank.listening = v; iqwSave(); iqwHead(); iqIdle();
+  }
+  function iqwHead() {
+    var w = iqw.el; if (!w) return;
+    var n = iqwConfigs().length;
+    w.querySelector('.iq-count').textContent = n + ' of ' + iqw.mod.MAX_DEMODS;
+    w.querySelector('.iq-dem').classList.toggle('on', iqw.listening);
+    w.querySelector('.iq-raw').classList.toggle('on', !iqw.listening);
+    w.querySelector('.iq-add').disabled = n >= iqw.mod.MAX_DEMODS;
+  }
+  function iqwRows() {
+    var w = iqw.el; if (!w) return;
+    var M = iqw.mod, ds = iqwConfigs();
+    if (!ds.some(function (d) { return d.id === iqw.sel; })) iqw.sel = ds.length ? ds[0].id : null;
+    iqwSave(); iqwHead();
+    var box = w.querySelector('.iq-rows');
+    box.innerHTML = ds.map(function (d) {
+      var sel = d.id === iqw.sel, col = iqwColor(d), r = M.BW_RANGE[d.mode];
+      var pan = d.pan === 0 ? 'centre' : d.pan < 0 ? 'left ' + Math.round(-d.pan * 100) + ' %' : 'right ' + Math.round(d.pan * 100) + ' %';
+      return '<div class="iq-row' + (sel ? ' sel' : '') + '" data-id="' + d.id + '"><div class="iq-line">' +
+        '<span class="iq-dot" style="background:' + col + '"></span>' +
+        '<select class="iq-mode" title="Mode">' + M.DEMOD_MODES.map(function (m) { return '<option' + (m === d.mode ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>' +
+        '<button type="button" data-step="-100" title="−100 Hz">«</button><button type="button" data-step="-10" title="−10 Hz">‹</button>' +
+        '<span class="iq-f" title="' + (d.offset >= 0 ? '+' : '') + d.offset + ' Hz from the dial">' + iqwKhz(d.offset) + '</span>' +
+        '<button type="button" data-step="10" title="+10 Hz">›</button><button type="button" data-step="100" title="+100 Hz">»</button>' +
+        '<span class="iq-lvl" title="Level in the passband"><span style="background:' + col + '"></span></span>' +
+        '<button type="button" class="iq-mute' + (d.mute ? ' on' : '') + '" title="' + (d.mute ? 'Unmute' : 'Mute') + '">M</button>' +
+        '<button type="button" class="iq-del" title="Remove">✕</button></div>' +
+        (sel ? '<div class="iq-sliders">' +
+          '<label><span>Width ' + (d.bw / 1000).toFixed(2) + ' kHz</span><input type="range" data-k="bw" min="' + r[0] + '" max="' + r[1] + '" step="50" value="' + d.bw + '"></label>' +
+          '<label><span>Volume ' + Math.round(d.vol * 100) + ' %</span><input type="range" data-k="vol" min="0" max="2" step="0.05" value="' + d.vol + '"></label>' +
+          '<label><span>Pan ' + pan + '</span><input type="range" data-k="pan" min="-1" max="1" step="0.1" value="' + d.pan + '"></label></div>' : '') +
+        '</div>';
+    }).join('');
+  }
+  function iqwSliderLabel(k, v) {
+    if (k === 'bw') return 'Width ' + (v / 1000).toFixed(2) + ' kHz';
+    if (k === 'vol') return 'Volume ' + Math.round(v * 100) + ' %';
+    return 'Pan ' + (v === 0 ? 'centre' : v < 0 ? 'left ' + Math.round(-v * 100) + ' %' : 'right ' + Math.round(v * 100) + ' %');
+  }
+  function iqwOpenUI() {
+    var w = iqw.el;
+    w.innerHTML = '<div class="dw-head"><span class="dw-title"><span class="iq-dot" style="background:#22d3ee"></span> IQ Demodulators ' +
+      '<span class="iq-count" style="font-weight:normal;color:#555"></span></span>' +
+      '<button type="button" class="iq-dem" title="Hear the demodulators below">Demodulators</button>' +
+      '<button type="button" class="iq-raw" title="Hear the raw I/Q: I left, Q right">Raw I/Q</button>' +
+      '<button type="button" class="iq-add" title="Add a demodulator at the dial">+ Add</button></div>' +
+      '<canvas class="iq-cv" style="height:' + IQW_H + 'px" title="Click: move the selected demodulator here · wheel: 10 Hz (Shift 100 Hz)"></canvas>' +
+      '<div class="iq-rows"></div>' +
+      '<div class="dw-status" style="font-style:normal">Each demodulator listens somewhere in the 12 kHz around the dial, in its own mode, without retuning the receiver; they move with the dial. Recording in IQ records the I/Q itself, not these.</div>';
+    w.querySelector('.iq-dem').onclick = function () { iqwListen(true); };
+    w.querySelector('.iq-raw').onclick = function () { iqwListen(false); };
+    w.querySelector('.iq-add').onclick = function () { iqwAdd(0); };
+    var cv = w.querySelector('.iq-cv');
+    var xToHz = function (x, wd) { return Math.round(((x / wd) * IQW_SPAN - IQW_SPAN / 2) / 10) * 10; };
+    cv.onclick = function (e) {
+      var r = cv.getBoundingClientRect(), sx = r.width / cv.offsetWidth || 1;   // the page may be scaled
+      var hz = Math.max(-6000, Math.min(6000, xToHz((e.clientX - r.left) / sx, cv.offsetWidth)));
+      if (iqw.sel == null) iqwAdd(hz); else iqwSet(iqw.sel, { offset: hz });
+    };
+    cv.addEventListener('wheel', function (e) {
+      if (iqw.sel == null) return;
+      e.preventDefault();
+      var d = iqwConfigs().find(function (x) { return x.id === iqw.sel; }), step = e.shiftKey ? 100 : 10;
+      iqwSet(iqw.sel, { offset: Math.round(d.offset / step) * step + (e.deltaY < 0 ? step : -step) });
+    }, { passive: false });
+    var rows = w.querySelector('.iq-rows');
+    rows.addEventListener('click', function (e) {
+      var row = e.target.closest('.iq-row'); if (!row) return;
+      var id = +row.dataset.id, d = iqwConfigs().find(function (x) { return x.id === id; }); if (!d) return;
+      var b = e.target.closest('button');
+      if (b && b.dataset.step) { iqwSet(id, { offset: d.offset + (+b.dataset.step) }); return; }
+      if (b && b.classList.contains('iq-mute')) { iqwSet(id, { mute: !d.mute }); return; }
+      if (b && b.classList.contains('iq-del')) { iqw.bank.remove(id); iqwRows(); return; }
+      if (e.target.closest('select, input')) { if (iqw.sel !== id) { iqw.sel = id; iqwRows(); } return; }
+      if (iqw.sel !== id) { iqw.sel = id; iqwRows(); }
+    });
+    rows.addEventListener('change', function (e) {
+      if (!e.target.classList.contains('iq-mode')) return;
+      iqwSet(+e.target.closest('.iq-row').dataset.id, { mode: e.target.value, bw: null });
+    });
+    rows.addEventListener('input', function (e) {
+      var k = e.target.dataset && e.target.dataset.k; if (!k) return;
+      var v = +e.target.value, patch = {}; patch[k] = v;
+      iqwSet(+e.target.closest('.iq-row').dataset.id, patch, true);     // keep the slider under the mouse
+      e.target.previousElementSibling.textContent = iqwSliderLabel(k, v);
+    });
+    iqwRows();
+    iqw.raf = requestAnimationFrame(iqwDraw);
+  }
+  function iqwDraw(t) {
+    iqw.raf = requestAnimationFrame(iqwDraw);
+    var w = iqw.el; if (!w || !iqw.bank || t - iqw.last < 66) return;    // ~15 frames/s
+    iqw.last = t;
+    var levels = iqw.bank.levels();
+    w.querySelectorAll('.iq-row').forEach(function (row) {
+      var v = levels[+row.dataset.id], pct = v == null ? 0 : Math.max(0, Math.min(100, ((v + 60) / 50) * 100));
+      row.querySelector('.iq-lvl span').style.width = pct + '%';
+    });
+    var cv = w.querySelector('.iq-cv'), sp = iqw.bank.spectrum();
+    var dpr = window.devicePixelRatio || 1, cssW = cv.offsetWidth;
+    if (!cssW) return;
+    var W = Math.round(cssW * dpr), H = Math.round(IQW_H * dpr);
+    if (W !== iqw.lastW) { cv.width = W; cv.height = H; iqw.lastW = W; }
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    var xOf = function (hz) { return ((hz + IQW_SPAN / 2) / IQW_SPAN) * W; };
+    ctx.font = (10 * dpr) + 'px monospace'; ctx.textAlign = 'center';
+    for (var hz = -6000; hz <= 6000; hz += 2000) {                        // grid every 2 kHz, real frequencies
+      var x = xOf(hz);
+      ctx.strokeStyle = hz === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)';
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - 12 * dpr); ctx.stroke();
+      if (hz > -6000 && hz < 6000) { ctx.fillStyle = 'rgba(200,220,255,0.6)'; ctx.fillText(iqwKhz(hz), x, H - 2 * dpr); }
+    }
+    iqwConfigs().forEach(function (d) {                                    // passbands under the trace
+      var pb = iqwPassband(d), col = iqwColor(d), sel = d.id === iqw.sel;
+      ctx.globalAlpha = sel ? 0.28 : 0.14; ctx.fillStyle = col;
+      ctx.fillRect(xOf(pb[0]), 0, Math.max(1, xOf(pb[1]) - xOf(pb[0])), H - 12 * dpr);
+      ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = (sel ? 2 : 1) * dpr;
+      ctx.beginPath(); ctx.moveTo(xOf(d.offset), 0); ctx.lineTo(xOf(d.offset), H - 12 * dpr); ctx.stroke();
+      ctx.lineWidth = 1;
+    });
+    if (sp) {
+      var n = sp.db.length, sorted = Float32Array.from(sp.db).sort(), med = sorted[n >> 1];
+      iqw.floor = iqw.floor === null ? med : iqw.floor + 0.1 * (med - iqw.floor);
+      var lo = iqw.floor - 6, range = 60, top = H - 14 * dpr;
+      ctx.strokeStyle = 'rgba(220,235,255,0.9)'; ctx.beginPath();
+      for (var i = 0; i < n; i++) {
+        var xx = (i / (n - 1)) * W, y = top - Math.max(0, Math.min(1, (sp.db[i] - lo) / range)) * (top - 4 * dpr);
+        if (i === 0) ctx.moveTo(xx, y); else ctx.lineTo(xx, y);
+      }
+      ctx.stroke();
+    }
+  }
+  function iqWinOpen() {
+    iqWinClose();
+    var mr = document.getElementById('moderow');
+    if (!mr || !document.getElementById('wfmode')) return;              // desktop page only
+    if (!document.getElementById('iqwin-style')) {
+      var css = document.createElement('style'); css.id = 'iqwin-style';
+      css.textContent = '#iqwin .dw-head button.on{background:#0e7490;color:#fff}' +
+        '#iqwin .iq-dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px}' +
+        '#iqwin .iq-cv{display:block;width:calc(100% - 12px);margin:4px 6px 0;border:1px solid #555;border-radius:4px;cursor:crosshair}' +
+        '#iqwin .iq-rows{display:flex;flex-direction:column;gap:3px;padding:4px 6px}' +
+        '#iqwin .iq-row{border:1px solid #ddd;border-radius:4px;padding:2px 4px;cursor:pointer}' +
+        '#iqwin .iq-row.sel{border-color:#999;background:#eef3f2}' +
+        '#iqwin .iq-line{display:flex;align-items:center;gap:4px}' +
+        '#iqwin .iq-line button{padding:0 4px}' +
+        '#iqwin .iq-f{font:bold 11px "Courier New",monospace;color:#0e7490;width:72px;text-align:center}' +
+        '#iqwin .iq-lvl{flex:1;min-width:40px;height:6px;border-radius:3px;background:#ccc;overflow:hidden}' +
+        '#iqwin .iq-lvl span{display:block;height:100%;width:0}' +
+        '#iqwin .iq-mute.on{background:#b91c1c;color:#fff}' +
+        '#iqwin .iq-sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:3px;font-size:10px;color:#555}' +
+        '#iqwin .iq-sliders label{display:flex;flex-direction:column}' +
+        '#iqwin .iq-sliders input{width:100%;margin:0}';
+      document.head.appendChild(css);
+    }
+    var w = iqw.el = document.createElement('div');
+    w.className = 'decwin'; w.id = 'iqwin';
+    w.innerHTML = '<div class="dw-head"><span class="dw-title">IQ Demodulators</span></div><div class="dw-status">Loading…</div>';
+    mr.appendChild(w);
+    var go = function (M) {
+      iqw.mod = M;
+      if (iqw.el !== w) return;
+      var sr = (xm.pcmHdr && xm.pcmHdr.sr) || 12000;
+      if (!iqw.bank) iqw.bank = new M.IQDemodBank(sr);
+      else iqw.bank.setRate(sr);
+      if (iqw.bank.demods.length) iqw.listening = iqw.bank.listening;    // back in IQ: as it was left
+      else { if (!iqwLoad()) iqw.bank.add({ mode: 'AM', offset: 0 }); iqw.bank.listening = iqw.listening; }
+      iqwOpenUI();
+    };
+    if (iqw.mod) go(iqw.mod);
+    else import(new URL('sv1btl/psdr/lib/iqDemod.js?v=20261030', location.href).href).then(go, function () {
+      if (iqw.el === w) w.querySelector('.dw-status').textContent = 'IQ demodulators unavailable (sv1btl/psdr/lib/iqDemod.js)';
+    });
+  }
+  function iqWinClose() {
+    cancelAnimationFrame(iqw.raf); iqw.raf = 0; iqw.lastW = 0;
+    if (iqw.el) iqw.el.remove();
+    iqw.el = null;
+  }
+
+  // DRM schedule, as PhantomSDR-Plus's DRM panel (lib/DrmPanel.svelte): a station
+  // selector from the DRM Reception Project's schedule (sv1btl/psdr/lib/drmSchedule.js,
+  // PhantomSDR-Plus's own file and its saved copy of the schedule): broadcasts this
+  // receiver can tune (±5 kHz around the centre must fit), ranked by this station's
+  // locator — beamed here, on air now (nearest first), later (next 24 h), medium wave;
+  // "Confirmed only" (on by default) keeps the ones confirmed on air or HFCC-registered;
+  // ⇒ Tune puts the dial on the channel centre. The dial line says which listed
+  // station is on air there.
+  var drmw = { el: null, mod: null, sel: '', confirmed: true, timer: null };
+  function drmWinOpen() {
+    drmWinClose();
+    drmw.sel = ''; drmw.confirmed = true;              // as the panel when DRM starts
+    var mr = document.getElementById('moderow');
+    if (!mr || !document.getElementById('wfmode')) return;      // desktop page only
+    var w = drmw.el = document.createElement('div');
+    w.className = 'decwin'; w.id = 'drmwin';
+    w.innerHTML = '<div class="dw-head"><span class="dw-title">DRM schedule</span>' +
+      '<span class="drm-dial" title="Dial = centre of the DRM channel"></span></div>' +
+      '<div style="display:flex;gap:4px;padding:4px 6px"><select class="drm-sel dec-sel" style="flex:1;min-width:0;max-width:none" ' +
+      'title="DRM broadcasts this receiver can tune (UTC), from the DRM Reception Project schedule"></select>' +
+      '<button type="button" class="drm-go" title="Tune the receiver to this DRM channel">⇒ Tune</button></div>' +
+      '<div class="dw-status" style="font-style:normal">Schedule: <a href="https://www.drmrx.org/" target="_blank" rel="noopener noreferrer">DRM Reception Project</a> ' +
+      '(saved copy) · ✓ confirmed on air by listeners (KiwiSDR) · HFCC registered by the broadcaster ' +
+      '<label title="Show only broadcasts confirmed on air or registered with HFCC"><input type="checkbox" class="drm-conf"' +
+      (drmw.confirmed ? ' checked' : '') + '> Confirmed only</label></div>';
+    mr.appendChild(w);
+    w.querySelector('.drm-sel').onchange = function (e) { drmw.sel = e.target.value; };
+    w.querySelector('.drm-conf').onchange = function (e) { drmw.confirmed = e.target.checked; drmw.sel = ''; drmWinFill(); };
+    w.querySelector('.drm-go').onclick = function () {
+      var khz = Number(String(drmw.sel).split('|')[0]);
+      if (!(khz > 0) || xm.kind !== 'drm') return;
+      if (window.ubersdr_listener_mode) window.ubersdr_listener_mode();
+      xm.switching = true;
+      try { setfreqif(khz.toFixed(2)); } catch (e) {} finally { xm.switching = false; }   // the box shows 2 decimals
+      drmWinFill();
+    };
+    var go = function (mod) { drmw.mod = mod; if (drmw.el === w) drmWinFill(); };
+    if (drmw.mod) go(drmw.mod);
+    else import(new URL('sv1btl/psdr/lib/drmSchedule.js?v=20261030', location.href).href).then(go, function () {
+      var d = w.querySelector('.drm-dial'); if (d) d.textContent = 'schedule unavailable';
+    });
+    drmw.timer = setInterval(drmWinFill, 30000);
+  }
+  function drmWinClose() {
+    clearInterval(drmw.timer); drmw.timer = null;
+    if (drmw.el) drmw.el.remove();
+    drmw.el = null;
+  }
+  function drmWinFill() {
+    var w = drmw.el, M = drmw.mod;
+    if (!w || !M) return;
+    var e = (window.bi && bi[0]) || null, now = new Date();
+    var minKhz = e ? e.centerfreq - e.samplerate / 2 + 5 : 0, maxKhz = e ? e.centerfreq + e.samplerate / 2 - 5 : Infinity;
+    var allRows = M.scheduleRows(M.DRM_SCHEDULE_SNAPSHOT, now, minKhz, maxKhz);
+    var rows = drmw.confirmed ? allRows.filter(function (r) { return r.verified || r.registered || r.heard; }) : allRows;
+    var locator = (window.STATION && window.STATION.locator) || '';
+    var qth = M.gridToLatLon(locator);
+    var swOnAir = rows.filter(function (r) { return r.onAir && r.region !== 'MW'; })
+      .map(function (r) { return Object.assign({}, r, { far: M.slotRemoteness(r, qth) }); })
+      .sort(function (a, b) { return a.far - b.far || a.khz - b.khz; });
+    var heardNow = swOnAir.filter(function (r) { return r.heardOnly; });
+    var nearNow = qth ? swOnAir.filter(function (r) { return !r.heardOnly && r.far <= M.NEAR_KM; }) : [];
+    var swNow = swOnAir.filter(function (r) { return !r.heardOnly && !(qth && r.far <= M.NEAR_KM); });
+    var swLater = rows.filter(function (r) { return !r.onAir && r.region !== 'MW' && r.wait < 1440; });
+    var mw = rows.filter(function (r) { return r.region === 'MW'; });
+    var dial = Number(window.freq) || 0;
+    var onSchedule = rows.filter(function (r) { return r.onAir && Math.abs(r.khz - dial) < 0.5; });
+    function fmtWait(min) {
+      if (min <= 0) return 'on air';
+      var h = Math.floor(min / 60), m = min % 60;
+      return h ? 'in ' + h + ' h ' + String(m).padStart(2, '0') + ' m' : 'in ' + m + ' m';
+    }
+    function label(r) {
+      return r.khz + ' kHz · ' + r.station + ' · ' + r.start + '–' + r.end + ' UTC' +
+        (r.days && r.days !== '1111111' ? ' (' + M.daysText(r.days) + ')' : '') +
+        (r.target ? ' → ' + r.target : '') +
+        (r.verified ? ' ✓' : '') + (r.registered ? ' · HFCC' : '') + (r.heard ? ' · heard here' : '');
+    }
+    function keyOf(r) { return r.khz + '|' + r.station + '|' + r.start; }
+    if (!drmw.sel && rows.length) {                  // what the dial is on, else the first on air
+      var here = rows.find(function (r) { return Math.abs(r.khz - dial) < 0.5; });
+      var pick = here || nearNow[0] || swNow[0] || swLater[0] || rows[0];
+      if (pick) drmw.sel = keyOf(pick);
+    }
+    var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var html = '';
+    function group(title, list, suffix) {
+      if (!list.length) return;
+      html += '<optgroup label="' + esc(title) + '">' + list.map(function (r) {
+        var k = keyOf(r);
+        return '<option value="' + esc(k) + '"' + (k === drmw.sel ? ' selected' : '') + '>' + esc(label(r) + (suffix ? suffix(r) : '')) + '</option>';
+      }).join('') + '</optgroup>';
+    }
+    group('Heard on this receiver — on air now, in no schedule', heardNow);
+    group('Beamed at this station (' + locator + ') — on air now', nearNow);
+    group(qth ? 'On air now — beamed elsewhere, nearest first' : 'On air now', swNow);
+    group('Later (next 24 h)', swLater, function (r) { return ' — ' + fmtWait(r.wait); });
+    group('Medium wave (India, Asia)', mw, function (r) { return r.onAir ? '' : ' — ' + fmtWait(r.wait); });
+    var sel = w.querySelector('.drm-sel');
+    if (sel.innerHTML !== html) sel.innerHTML = html;
+    var d = w.querySelector('.drm-dial');
+    d.innerHTML = 'Dial: <b>' + dial.toFixed(1) + ' kHz</b>' + (onSchedule.length ? '<span style="color:#0a7d2c"> · ' + esc(onSchedule[0].station) + ' on air</span>' : '');
+  }
+
+  // DRM frames: 0x02 audio (Opus, as freedv) / 0x03 JSON status, about once a second
+  function drmFrame(buf) {
+    var b = new Uint8Array(buf);
+    if (!b.length) return;
+    if (b[0] === 0x03) {
+      try { var st = JSON.parse(new TextDecoder().decode(b.subarray(1))); if (st && st.t === 'status') { xm.drmStatus = st; xm.drmAt = Date.now(); drmShow(); } } catch (e) {}
+      return;
+    }
+    if (opusPlay(xm, buf)) xmSignal();
+  }
+  // Status line, as UberSDR's DRM panel (frame.js progressLabel): searching → synced →
+  // station → decoding, with the station label, its text message and the MER (SNR)
+  function drmShow() {
+    if (xm.kind !== 'drm') return;
+    var st = xm.drmStatus, fresh = st && Date.now() - (xm.drmAt || 0) < 5000, t;
+    if (!fresh) t = 'DRM: waiting for the decoder…';
+    else if (!st.acq) t = 'DRM: searching for a DRM signal…';
+    else if (st.fac !== 3) t = 'DRM: signal found, syncing…';
+    else if (st.sdc !== 3) t = 'DRM: synced, reading station information…';
+    else if (st.audio !== 3) t = 'DRM: station found, audio not decoding yet';
+    else t = 'DRM: decoding';
+    if (fresh) {
+      if (st.service) t += ' · ' + String(st.service).trim() + (st.country ? ' (' + String(st.country).toUpperCase() + ')' : '');
+      if (st.acq && typeof st.wmer === 'number') t += ' · MER ' + st.wmer.toFixed(1) + ' dB';
+      if (st.text) t += ' · ' + String(st.text).trim().slice(0, 80);
+    }
+    xmStatus(t, fresh && st.audio === 3 ? 'sync' : '');
+  }
 
   // ── CW decoder window (desktop page; 2026-10-07) ────────────────────────────
   // While the mode is CW (the CW button, CW narrow/wide, a key or CAT software), a
@@ -1571,7 +2244,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261024mk';
+    s.src = 'sv1btl/decoders.js?v=20261030hfmap';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -1738,7 +2411,7 @@
       origSetfreq.apply(this, arguments);
       var after = hamIndex(nominalfreq());
       // a running decoder (sv1btl/decoders.js) owns the mode and filter: no band-plan mode
-      var decOn = window.ubersdr_dec_label && window.ubersdr_dec_label();
+      var decOn = (window.ubersdr_dec_label && window.ubersdr_dec_label()) || xm.kind;
       if (posReady && !restoring && !decOn && after >= 0 && after !== before) {
         var bm = String(HAM_BANDS[after][4]).toUpperCase();
         if (String(window.mode).toUpperCase() !== bm) {
@@ -1749,7 +2422,7 @@
         }
         bandHold = { until: Date.now() + BAND_MODE_HOLD_MS, mode: bm };
       }
-      savePos(); bandLight(); radeFollowTune();
+      savePos(); bandLight(); radeFollowTune(); xmFollowTune();
     };
     // sv1btl/decoders.js: a decoder's mode and filter are the listener's choice too
     window.ubersdr_listener_mode = function () { lastHuman = Date.now(); };
@@ -1796,7 +2469,7 @@
       if (String(m).toLowerCase() === 'cw' && isFinite(args[1]) && isFinite(args[2])) {   // centred on the CW pitch
         var c = window.ubersdr_cw_pitch_lohi(+args[1], +args[2]); args[1] = c[0]; args[2] = c[1];
       }
-      origSetmf.apply(this, args); savePos(); bandLight(); radeFollowMode();
+      origSetmf.apply(this, args); savePos(); bandLight(); radeFollowMode(); xmFollowMode();
     };
     // Clicking a listener in the users strip: tune to the exact frequency they are on
     // (the RW3PS click also shifted it by this page's own passband offset) and switch to
@@ -3216,7 +3889,7 @@
     var el = document.getElementById('digi_info');
     if (!el) return;
     var t = (window.ubersdr_dec_label && window.ubersdr_dec_label()) ||
-            (window.ubersdr_rade_active && window.ubersdr_rade_active() ? 'RADE' : '');
+            (rade.side ? 'RADE' : '') || (xm.kind ? XM[xm.kind].label : '');
     if (el.textContent !== t) el.textContent = t;
   }
   setInterval(function () { try { digiLabel(); } catch (x) {} }, 400);

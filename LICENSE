@@ -45,6 +45,15 @@ Third-party parts keep their own terms and are NOT relicensed:
     sv1btl/decoders.js: from PhantomSDR-Plus, GNU General Public License v3;
     inside them ft8_lib.wasm (ft8_lib by Karlis Goba, MIT), js8.wasm (built
     on ft8_lib with tables from JS8Call) and js8_dict.bin (JS8Call, GPL v3)
+  - HFDL decoder: sv1btl/psdr/hfdl.worker.js, hfdlWorkerProxy.js,
+    lib/hfdlStations.js (PhantomSDR-Plus, GNU GPL v3) with hfdl.wasm (dumphfdl
+    by Tomasz Lemiech with libacars, GNU GPL v3 or later)
+  - HFDL map: sv1btl/psdr/lib/aprsMap.js (PhantomSDR-Plus, GNU GPL v3) with
+    sv1btl/psdr/lib/leaflet/ (Leaflet 1.9.4, BSD 2-Clause, (c) Vladimir
+    Agafonkin, CloudMade); map data (c) OpenStreetMap contributors
+  - IQ demodulators and DRM schedule: sv1btl/psdr/lib/iqDemod.js and
+    drmSchedule.js (PhantomSDR-Plus, GNU GPL v3)
+  - sv1btl/fzstd.js: fzstd 0.1.1 by Arjun Barrett, MIT licence
   - Receive Diversity: sv1btl/psdr/diversity.js, diversityList.js, uberSource.js,
     kiwiSource.js, remoteSource.js, webSdrSource.js, webSdrCodec.js, clientVersion.js,
     lib/sideService.js and modules/phantomsdrdsp_bg.*, and the WebSDR relay
