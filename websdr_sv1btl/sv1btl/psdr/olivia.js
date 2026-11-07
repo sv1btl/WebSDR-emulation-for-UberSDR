@@ -1,4 +1,4 @@
-// olivia.js — Olivia MFSK decoder (receive only)
+// olivia.js — Olivia and Contestia MFSK decoder (receive only)
 // ============================================================================
 // A port of Pawel Jalocha's MFSK receiver as carried in fldigi
 // (src/include/jalocha/pj_mfsk.h, pj_fht.h, pj_gray.h, pj_lowpass3.h —
@@ -29,22 +29,30 @@
 //   (block phase, frequency offset) is winning. That is why Olivia takes a few
 //   seconds to lock and why this belongs in a worker.
 //
+// Contestia is the same modem with a smaller FEC block: 6-bit characters, so
+// 32-symbol blocks, scrambled against 0xEDB88320 at a 5-bit offset per
+// bit-plane, and a reduced 64-character alphabet (upper case, digits,
+// punctuation). fldigi runs both through the same pj_mfsk.h classes with a
+// bContestia flag; this file does the same with `contestia: true`. The one
+// difference outside the FEC is the tone placement: Contestia backs off a
+// full half bandwidth from the dial frequency, Olivia half a tone less
+// (contestia.cxx vs olivia.cxx rx_process).
+//
 // Deliberate omission: fldigi's MFSK_InputProcessor (an adaptive spectral
 // equaliser / coherent-interference notcher) is NOT ported. It improves
 // robustness against carriers inside the passband but is not needed for
 // correct decoding; the audio goes to the demodulator unprocessed.
 //
 // Interface matches the other engines in this tree:
-//   new OliviaDecoder({sampleRate, centerHz, tones, bandwidth,
+//   new OliviaDecoder({sampleRate, centerHz, tones, bandwidth, contestia,
 //                      onChar, onStatus, onMetrics});
-//   .feed(Float32Array); .setCenter(hz); .setMode(tones, bandwidth); .reset();
+//   .feed(Float32Array); .setCenter(hz); .setMode(tones, bandwidth, contestia);
+//   .reset();
 // ============================================================================
 
 import { transformFlat } from './lib/fftRadix2.js';
 
 const INTERNAL_RATE = 8000;      // fldigi's fixed internal processing rate
-const BITS_PER_CHAR = 7;         // Olivia (Contestia would be 6)
-const SYMBOLS_PER_BLOCK = 64;    // 2^(BITS_PER_CHAR-1)
 const SLICES_PER_SYMBOL = 2;     // FFT slices per symbol period
 const CARRIER_SEPAR = 2;         // tone spacing in FFT bins
 const SYNC_MARGIN = 8;           // +/- this many bins of frequency search
@@ -61,22 +69,44 @@ export const SYNC_THRESHOLD_DEFAULT = 4.0;
 // rather than derived from the squelch, so moving the slider changes what gets
 // through without changing what the meter says about the signal.
 const QUALITY_FLOOR = 3.0;
-const QUALITY_SPAN  = 6.0;
-const CODE_SHIFT = 13;           // scrambling offset per bit-plane (Olivia)
 
-// 0xE257E6D0291574EC — expanded once into per-position signs so the hot path
-// never touches 64-bit arithmetic.
-const SCRAMBLE_HI = 0xE257E6D0 >>> 0;
-const SCRAMBLE_LO = 0x291574EC >>> 0;
-const SCRAMBLE_SIGN = (() => {
-  const s = new Int8Array(SYMBOLS_PER_BLOCK);
-  for (let b = 0; b < SYMBOLS_PER_BLOCK; b++) {
-    const word = b < 32 ? SCRAMBLE_LO : SCRAMBLE_HI;
+// Tail guard. The squelch above looks at the FEC S/N integrated over
+// SYNC_INTEG_LEN blocks, so for a few blocks after a signal stops it is still
+// open and the blocks decoded from noise print as garbage (10-15 characters
+// per over; fldigi does the same). Each character also has its own decode
+// quality — the Walsh peak over the RMS of the other correlations — and a
+// block is only printed if at least one of its characters clears this.
+// Measured 2026-11-05: real characters on the recordings score 163+, weak
+// synthetic ones still copying score 3.2-8, characters decoded from noise
+// 2.5 median and 4.0 at most. Gating the whole block rather than each
+// character keeps the weak-but-real characters of a block that has a good
+// one. Over 12 real recordings x 2 tail-noise levels the garbage went from
+// 244 characters to 8 at 4.0 and 0 at 4.5, with no text lost; at the weakest
+// SNR that still copies, 4.5 cost at most one word in 24 (5.0 cost six).
+const BLOCK_QUALITY_MIN = 4.5;
+const QUALITY_SPAN  = 6.0;
+
+// The two FEC flavours (pj_mfsk.h MFSK_Encoder / MFSK_SoftDecoder::Preset).
+// Scrambling codes are expanded once into per-position signs so the hot path
+// never touches 64-bit arithmetic; a block only ever reads the low
+// SymbolsPerBlock bits of its code (CodeWrap = SymbolsPerBlock - 1).
+function _scrambleSigns(hi, lo, n) {
+  const s = new Int8Array(n);
+  for (let b = 0; b < n; b++) {
+    const word = b < 32 ? lo : hi;
     const bit = b < 32 ? b : b - 32;
     s[b] = ((word >>> bit) & 1) ? -1 : 1;
   }
   return s;
-})();
+}
+const FEC = {
+  // 7-bit characters, 0xE257E6D0291574EC, 13-bit shift per bit-plane
+  olivia:    { bitsPerChar: 7, symbolsPerBlock: 64, codeShift: 13,
+               sign: _scrambleSigns(0xE257E6D0 >>> 0, 0x291574EC >>> 0, 64) },
+  // 6-bit characters, 0xEDB88320, 5-bit shift per bit-plane
+  contestia: { bitsPerChar: 6, symbolsPerBlock: 32, codeShift: 5,
+               sign: _scrambleSigns(0, 0xEDB88320 >>> 0, 32) },
+};
 
 /** The four configurations offered in the UI.  The first is the default. */
 export const OLIVIA_MODES = [
@@ -85,6 +115,36 @@ export const OLIVIA_MODES = [
   { label: '32 / 1000', tones: 32, bandwidth: 1000 },
   { label: '16 / 1000', tones: 16, bandwidth: 1000 },
 ];
+
+/**
+ * Contestia configurations offered in the UI: the ones heard on air (4/250
+ * and 8/250 in contests, 4/125 on weak paths) plus the rest of fldigi's
+ * standard list up to 1000 Hz. The first is the default.
+ */
+export const CONTESTIA_MODES = [
+  { label: '8 / 250',   tones: 8,  bandwidth: 250 },
+  { label: '4 / 125',   tones: 4,  bandwidth: 125 },
+  { label: '4 / 250',   tones: 4,  bandwidth: 250 },
+  { label: '4 / 500',   tones: 4,  bandwidth: 500 },
+  { label: '8 / 500',   tones: 8,  bandwidth: 500 },
+  { label: '8 / 1000',  tones: 8,  bandwidth: 1000 },
+  { label: '16 / 500',  tones: 16, bandwidth: 500 },
+  { label: '16 / 1000', tones: 16, bandwidth: 1000 },
+  { label: '32 / 1000', tones: 32, bandwidth: 1000 },
+  { label: '64 / 1000', tones: 64, bandwidth: 1000 },
+];
+
+/**
+ * Contestia's 6-bit code back to ASCII (MFSK_SoftDecoder::DecodeCharacter):
+ * 59 = space, 60 = CR, 61 = backspace, 1..58 = '!'..'Z', 0 = idle / LF.
+ */
+export function contestiaChar(code) {
+  if (code === 0) return 0;
+  if (code === 59) return 32;
+  if (code === 60) return 13;
+  if (code === 61) return 8;
+  return code + 32;
+}
 
 // ── Fast Hadamard transform (pj_fht.h) ──────────────────────────────────────
 
@@ -144,12 +204,18 @@ function lp3Process(out1, out2, out, i, inp, weight, feedback = 0.1) {
 // worth of soft bits and re-decodes the whole block on every symbol.
 
 class SoftDecoder {
-  constructor(bitsPerSymbol) {
+  constructor(bitsPerSymbol, fec) {
     this.bitsPerSymbol = bitsPerSymbol;
-    this.inputBufferLen = SYMBOLS_PER_BLOCK * bitsPerSymbol;
+    this.N = fec.symbolsPerBlock;
+    this.codeShift = fec.codeShift;
+    this.sign = fec.sign;
+    this.inputBufferLen = this.N * bitsPerSymbol;
     this.inputBuffer = new Float32Array(this.inputBufferLen);
-    this.fht = new Float32Array(SYMBOLS_PER_BLOCK);
+    this.fht = new Float32Array(this.N);
     this.outputBlock = new Uint8Array(bitsPerSymbol);
+    // Per-character decode quality: the Walsh peak over the RMS of the other
+    // N-1 correlations (this one character's own FEC S/N, not integrated).
+    this.outputQuality = new Float32Array(bitsPerSymbol);
     this.inputPtr = 0;
     this.signal = 0;
     this.noiseEnergy = 0;
@@ -170,18 +236,19 @@ class SoftDecoder {
   }
 
   decodeCharacter(freqBit) {
-    const N = SYMBOLS_PER_BLOCK;
+    const N = this.N;
     const bps = this.bitsPerSymbol;
     const buf = this.inputBuffer;
     const fht = this.fht;
+    const sign = this.sign;
 
     let ptr = this.inputPtr;
     let rotate = freqBit;
-    let codeBit = (freqBit * CODE_SHIFT) & (N - 1);
+    let codeBit = (freqBit * this.codeShift) & (N - 1);
 
     for (let t = 0; t < N; t++) {
       const bit = buf[ptr + rotate];
-      fht[t] = SCRAMBLE_SIGN[codeBit] < 0 ? -bit : bit;
+      fht[t] = sign[codeBit] < 0 ? -bit : bit;
       codeBit = (codeBit + 1) & (N - 1);
       if (++rotate >= bps) rotate -= bps;
       ptr += bps;
@@ -202,6 +269,7 @@ class SoftDecoder {
     sqrSum -= peak * peak;
 
     this.outputBlock[freqBit] = char;
+    this.outputQuality[freqBit] = sqrSum > 0 ? Math.abs(peak) / Math.sqrt(sqrSum / (N - 1)) : 0;
     this.noiseEnergy += sqrSum / (N - 1);
     this.signal += Math.abs(peak);
   }
@@ -233,7 +301,9 @@ export class OliviaDecoder {
     this._centerHz = Number(options.centerHz) || 1000;
     this._tones     = Number(options.tones) || OLIVIA_MODES[0].tones;
     this._bandwidth = Number(options.bandwidth) || OLIVIA_MODES[0].bandwidth;
+    this._contestia = !!options.contestia;
     this._syncThreshold = _clampThreshold(options.syncThreshold);
+    this._blockQualityMin = BLOCK_QUALITY_MIN;
 
     this.onChar    = typeof options.onChar    === 'function' ? options.onChar    : null;
     this.onStatus  = typeof options.onStatus  === 'function' ? options.onStatus  : null;
@@ -251,14 +321,17 @@ export class OliviaDecoder {
     this._preset();
   }
 
-  setMode(tones, bandwidth) {
-    const t = Number(tones), b = Number(bandwidth);
+  setMode(tones, bandwidth, contestia = this._contestia) {
+    const t = Number(tones), b = Number(bandwidth), c = !!contestia;
     if (!Number.isFinite(t) || !Number.isFinite(b)) return;
-    if (t === this._tones && b === this._bandwidth) return;
+    if (t === this._tones && b === this._bandwidth && c === this._contestia) return;
     this._tones = t;
     this._bandwidth = b;
+    this._contestia = c;
     this._preset();
   }
+
+  get contestia() { return this._contestia; }
 
   /**
    * Squelch: the FEC signal-to-noise a block must reach before its characters
@@ -301,6 +374,8 @@ export class OliviaDecoder {
   // ── Setup ─────────────────────────────────────────────────────────────────
 
   _preset() {
+    const fec = this._contestia ? FEC.contestia : FEC.olivia;
+    this._fec = fec;
     const bps = Math.max(1, Math.round(Math.log2(this._tones)));
     this._bitsPerSymbol = bps;
     this._carriers = 1 << bps;
@@ -313,15 +388,18 @@ export class OliviaDecoder {
     this._symbolSepar2 = this._symbolSepar >> 1;
 
     // fldigi centres the tone block on the dial frequency by backing off half
-    // the bandwidth (less half a tone), then converts to an FFT bin index.
-    const fcOffset = this._bandwidth * (1 - 0.5 / this._carriers) / 2;
+    // the bandwidth (Olivia: less half a tone), then converts to an FFT bin
+    // index. Contestia backs off the full half bandwidth (contestia.cxx).
+    const fcOffset = this._contestia
+      ? this._bandwidth / 2
+      : this._bandwidth * (1 - 0.5 / this._carriers) / 2;
     const mult = (this._centerHz - fcOffset) / 500.0;
     this._firstCarrier = Math.floor((this._symbolLen / 16) * mult) + 1;
 
     this._decodeMargin = Math.min(SYNC_MARGIN, this._firstCarrier);
     this._decodeWidth = (this._carriers * CARRIER_SEPAR - 1) + 2 * this._decodeMargin;
     this._freqOffsets = 2 * this._decodeMargin + 1;
-    this._blockPhases = SLICES_PER_SYMBOL * SYMBOLS_PER_BLOCK;
+    this._blockPhases = SLICES_PER_SYMBOL * fec.symbolsPerBlock;
 
     // Symbol shape: MFSK_SymbolFreqShape is {1,1}, which works out to a Hann
     // window scaled by 1/SymbolLen.
@@ -346,19 +424,23 @@ export class OliviaDecoder {
     // One decoder per (slice, frequency offset).
     this._decoders = [];
     for (let i = 0; i < SLICES_PER_SYMBOL * this._freqOffsets; i++) {
-      this._decoders.push(new SoftDecoder(bps));
+      this._decoders.push(new SoftDecoder(bps, fec));
     }
 
     // DecodePipe[blockPhase] is a SYNC_INTEG_LEN-deep ring of decoded blocks,
     // one block per frequency offset, each block being bps characters.
+    // _pipeQ mirrors it with each character's own decode quality.
     this._pipe = [];
+    this._pipeQ = [];
     this._pipePtr = new Int32Array(this._blockPhases);
     for (let p = 0; p < this._blockPhases; p++) {
-      const slots = [];
+      const slots = [], qslots = [];
       for (let s = 0; s < SYNC_INTEG_LEN; s++) {
         slots.push(new Uint8Array(this._freqOffsets * bps));
+        qslots.push(new Float32Array(this._freqOffsets * bps));
       }
       this._pipe.push(slots);
+      this._pipeQ.push(qslots);
     }
 
     const filters = this._blockPhases * this._freqOffsets;
@@ -481,6 +563,7 @@ export class OliviaDecoder {
       const phase = this._blockPhase;
       const filterBase = phase * offsets;
       const slot = this._pipe[phase][this._pipePtr[phase]];
+      const qslot = this._pipeQ[phase][this._pipePtr[phase]];
 
       let bestSliceSignal = 0;
       let bestSliceOffset = 0;
@@ -492,6 +575,7 @@ export class OliviaDecoder {
         dec.input(this._symbol);
         dec.process();
         slot.set(dec.outputBlock, off * bps);
+        qslot.set(dec.outputQuality, off * bps);
 
         const fi = filterBase + off;
         lp3Process(this._nseOut1, this._nseOut2, this._nseOut, fi,
@@ -525,10 +609,20 @@ export class OliviaDecoder {
 
         if (this._syncSNR >= this._syncThreshold) {
           this._synced = true;
-          const bestPipe = this._pipe[this._syncBestBlockPhase];
-          const best = bestPipe[this._pipePtr[this._syncBestBlockPhase]];
+          const bp = this._syncBestBlockPhase;
+          const best = this._pipe[bp][this._pipePtr[bp]];
+          const bestQ = this._pipeQ[bp][this._pipePtr[bp]];
           const at = this._syncBestFreqOffset * bps;
-          for (let c = 0; c < bps; c++) this._emit(best[at + c]);
+          let blockQ = 0;
+          for (let c = 0; c < bps; c++) blockQ = Math.max(blockQ, bestQ[at + c]);
+          // Test hook (sdr-shots harnesses): every candidate character with
+          // its quality, printed or not.
+          if (this._onCharQuality) {
+            for (let c = 0; c < bps; c++) this._onCharQuality(best[at + c], bestQ[at + c]);
+          }
+          if (blockQ >= this._blockQualityMin) {
+            for (let c = 0; c < bps; c++) this._emit(best[at + c]);
+          }
         } else {
           this._synced = false;
         }
@@ -543,6 +637,7 @@ export class OliviaDecoder {
 
   _emit(code) {
     if (!this.onChar) return;
+    if (this._contestia) code = contestiaChar(code);
     if (code === 0) return;                    // idle / fill
     if (code === 13) { this.onChar('\n'); return; }
     if (code === 10) { this.onChar('\n'); return; }
@@ -577,7 +672,7 @@ export class OliviaDecoder {
     if (this.onStatus) {
       const off = this.frequencyOffsetHz;
       const text = this._synced
-        ? `Sync ${this._tones}/${this._bandwidth} @ ${off >= 0 ? '+' : ''}${off.toFixed(1)} Hz`
+        ? `Sync ${this._contestia ? 'Contestia ' : ''}${this._tones}/${this._bandwidth} @ ${off >= 0 ? '+' : ''}${off.toFixed(1)} Hz`
         : 'Searching…';
       if (text !== this._statusText) {
         this._statusText = text;

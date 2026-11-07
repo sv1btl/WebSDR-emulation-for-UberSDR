@@ -28,6 +28,8 @@
 //                    onChar, onStatus, onMetrics});
 //   .feed(Float32Array pcm)   .setSquelch(v)   .reset()
 
+import { transformFlat } from './lib/fftRadix2.js';
+
 const INTERNAL_RATE = 8000;       // fldigi runs every MFSK mode at 8 kHz
 const NUM_TONES = 16;
 const SYMBITS = 4;
@@ -40,6 +42,21 @@ const PUNCTURE = 128;
 const SFFT_K1 = 0.99999;          // sliding-DFT damping, as fldigi's sfft
 const BPF_TAPS = 127;
 const CWI_MAXCOUNT = 6;
+
+// Acquisition search (2026-10-24). fldigi's AFC (_afc) pulls a signal in only
+// from within a quarter of a tone spacing — 3.9 Hz on MFSK16 — because there
+// the operator clicks exactly on the trace. Here the centre comes from the
+// dial, and 5-10 Hz off already cost most of the text. The spectrum averaged
+// over the last seconds is searched for the
+// 16-tone block within ±ACQ_RANGE Hz: the most energy inside it against the
+// tone positions just outside (which fix the whole-tone alignment — a block
+// one tone off decodes as garbage). The AFC then trims from there.
+const ACQ_N = 8192;               // FFT at 8 kHz: ~1 Hz bins, ~1 s window
+const ACQ_HOP = 4096;             // a spectrum every 0.5 s
+const ACQ_RANGE = 75;             // search ± this many Hz around the set centre
+const ACQ_MIN_SNR = 2.0;          // block mean over the noise median to act on
+const ACQ_FILL_K = 1.5;          // a tone position "carries energy" above this × noise
+const ACQ_MIN_FILL = 10;         // ... and this many of the 16 must (MFSK64's wide tones reach ~10 on a clean signal)
 
 /**
  * The three sub-modes. symlen / basetone are fldigi's numbers at 8 kHz; the
@@ -311,6 +328,7 @@ export class MfskDecoder {
     this._tonespacing = INTERNAL_RATE / m.symlen;
     this._bandwidth = (NUM_TONES - 1) * this._tonespacing;
     this._freqErr = 0;                  // AFC, Hz, applied on top of _centerHz
+    this._afcBase = 0;                  // centre of the AFC's bound (see _acquire)
 
     // Mixer + complex band-pass. fldigi makes the signal analytic with a
     // Hilbert FIR first; a complex band-pass after the mixer does the same job
@@ -386,6 +404,14 @@ export class MfskDecoder {
     this._b = new Float64Array(SYMBITS);
     this._mag = new Float64Array(NUM_TONES);
 
+    this._acqBuf = new Float64Array(ACQ_N);
+    this._acqPos = 0;
+    this._acqFill = 0;
+    this._acqHop = 0;
+    this._acqSpec = null;
+    this._acqCount = 0;
+    this._acqCand = null;
+
     this._resPhase = 0;
     this._resPrev = 0;
     this._inputRate = 0;
@@ -396,6 +422,7 @@ export class MfskDecoder {
   // ── Per-sample chain (rx_process) ─────────────────────────────────────────
 
   _pushSample(x) {
+    this._acqPush(x);
     // mixer(): shift so the lowest tone sits on bin `basetone`.
     const f = (this._centerHz + this._freqErr) - this._tonespacing * this._basetone - this._bandwidth / 2;
     const c = Math.cos(this._phaseAcc), s = Math.sin(this._phaseAcc);
@@ -579,6 +606,74 @@ export class MfskDecoder {
     this._syncCounter += Math.floor((avg - this._symlen) / NUM_TONES + 0.5);
   }
 
+  // ── Acquisition search (see ACQ_RANGE) ──────────────────────────────────
+  _acqPush(x) {
+    this._acqBuf[this._acqPos] = x;
+    this._acqPos = (this._acqPos + 1) % ACQ_N;
+    if (this._acqFill < ACQ_N) this._acqFill++;
+    if (++this._acqHop < ACQ_HOP || this._acqFill < ACQ_N) return;
+    this._acqHop = 0;
+    const re = new Float64Array(ACQ_N), im = new Float64Array(ACQ_N);
+    for (let i = 0, j = this._acqPos; i < ACQ_N; i++, j = (j + 1) % ACQ_N)
+      re[i] = this._acqBuf[j] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (ACQ_N - 1)));
+    transformFlat(re, im, false);
+    const half = ACQ_N >> 1;
+    if (!this._acqSpec) this._acqSpec = new Float64Array(half);
+    const a = this._acqCount < 2 ? 0.5 : 0.25;
+    for (let k = 0; k < half; k++) this._acqSpec[k] += a * (re[k] * re[k] + im[k] * im[k] - this._acqSpec[k]);
+    // Search every spectrum, whatever the squelch says: a block 25 Hz off is
+    // decoded as confident garbage (the Viterbi metric stays high), so "only
+    // while the squelch is shut" never searched. A correctly tuned signal is
+    // already where the template fits best, so it is never moved.
+    // Not before ~3.5 s of spectra: in its first second a signal has used
+    // only some of its tones, and a shifted template fitted that part (the
+    // first search once jumped 73 Hz, twice in a row).
+    if (++this._acqCount >= 7) this._acquire();
+  }
+
+  _acquire() {
+    const S = this._acqSpec, binHz = INTERNAL_RATE / ACQ_N, d = this._tonespacing;
+    const w = Math.max(1, Math.round(d / 4 / binHz));
+    const P = (f) => { const c = Math.round(f / binHz); let s = 0, n = 0;
+      for (let k = c - w; k <= c + w; k++) if (k > 0 && k < S.length) { s += S[k]; n++; } return n ? s / n : 0; };
+    const lo0 = this._centerHz - this._bandwidth / 2;
+    // The block's EDGES fix its position: at the right offset the first and
+    // last tones carry energy and the tone positions just outside are empty;
+    // a whole tone or more off, one of the four flips. (The mean over all 16
+    // tones barely moves for a shift of a tone or two — it overlaps 14 of
+    // them — and a 50 Hz error was never corrected.)
+    const score = (off) => Math.min(P(lo0 + off), P(lo0 + off + (NUM_TONES - 1) * d)) -
+                           Math.max(P(lo0 + off - d), P(lo0 + off + NUM_TONES * d));
+    // How many of the 16 tone positions clearly carry energy at an offset.
+    const filled = (off) => { let n = 0; for (let k = 0; k < NUM_TONES; k++) if (P(lo0 + off + k * d) > ACQ_FILL_K * noise) n++; return n; };
+    // noise: a low percentile of the searched region (the block itself can
+    // fill most of it — MFSK32's is 465 Hz wide — so its median is signal)
+    const a0 = Math.floor((lo0 - ACQ_RANGE - 2 * d) / binHz), a1 = Math.ceil((lo0 + this._bandwidth + ACQ_RANGE + 2 * d) / binHz);
+    const reg = Array.from(S.subarray(Math.max(1, a0), Math.min(S.length, a1))).sort((x, y) => x - y);
+    const noise = reg.length ? reg[Math.floor(reg.length * 0.1)] : 0;
+    if (!(noise > 0)) return;
+    let best = -Infinity, bestOff = 0;
+    // ties go to the smallest move
+    for (let off = -ACQ_RANGE; off <= ACQ_RANGE; off += 0.5) { const v = score(off);
+      if (v > best * 1.0001 || (v >= best && Math.abs(off - this._freqErr) < Math.abs(bestOff - this._freqErr))) { best = Math.max(best, v); bestOff = off; } }
+    const cur = score(this._freqErr);
+    if (best < ACQ_MIN_SNR * noise) { this._acqCand = null; return; }   // no block worth moving to
+    // Until a signal has used most of its 16 tones (its first second or two)
+    // a few strong tones fit the template almost anywhere — the first search
+    // once jumped 73 Hz to the edge of the range. Act only on a filled block,
+    // and only when two searches in a row agree on where it is.
+    if (filled(bestOff) < ACQ_MIN_FILL) { this._acqCand = null; return; }
+    // Up to 0.4 of a tone the AFC pulls the signal in smoothly, while a jump
+    // costs a character or two (0.3 tone off: under 3 % wrong with the AFC
+    // alone, 6-7 % when the search jumped first); it failed at ~0.45 tone.
+    if (Math.abs(bestOff - this._freqErr) < 0.4 * d) return;
+    if (cur > 0.5 * best) { this._acqCand = null; return; }       // already about as good
+    if (this._acqCand == null || Math.abs(this._acqCand - bestOff) > d / 4) { this._acqCand = bestOff; return; }
+    this._acqCand = null;
+    this._freqErr = bestOff;
+    this._afcBase = bestOff;   // the AFC's ± two-tone bound is measured from here
+  }
+
   // afc(): a tone held over two symbols rotates at its true frequency.
   _afc(base) {
     if (this._staticBurst) return;
@@ -598,8 +693,10 @@ export class MfskDecoder {
       const step = decayavg(0, f1 - f, 32);
       // fldigi moves the dial by the running error; bound the total pull to
       // two tone spacings so a burst of interference cannot walk it away.
-      const lim = 2 * this._tonespacing;
-      this._freqErr = Math.max(-lim, Math.min(lim, this._freqErr - step));
+      // (Measured from where the acquisition search put it: from zero, the
+      // bound dragged a signal found 45 Hz off back to 31 Hz.)
+      const lim = 2 * this._tonespacing, b = this._afcBase || 0;
+      this._freqErr = Math.max(b - lim, Math.min(b + lim, this._freqErr - step));
     }
   }
 

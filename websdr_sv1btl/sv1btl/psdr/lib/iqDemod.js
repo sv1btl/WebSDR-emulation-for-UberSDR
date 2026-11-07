@@ -88,7 +88,8 @@ class Demod {
     const [lo, hi] = BW_RANGE[this.mode];
     const bw = cfg.bw != null ? cfg.bw : (prev.mode === this.mode ? this.bw : DEFAULT_BW[this.mode]);
     this.bw = Math.min(hi, Math.max(lo, Number(bw) || DEFAULT_BW[this.mode]));
-    if (cfg.offset != null) this.offset = Math.max(-6000, Math.min(6000, Number(cfg.offset) || 0));
+    const half = (this.fs || 12000) / 2;   // the stream covers ±fs/2 around the dial
+    if (cfg.offset != null) this.offset = Math.max(-half, Math.min(half, Number(cfg.offset) || 0));
     if (this.offset == null) this.offset = 0;
     if (cfg.vol != null) this.vol = Math.max(0, Math.min(2, Number(cfg.vol)));
     if (this.vol == null) this.vol = 1;

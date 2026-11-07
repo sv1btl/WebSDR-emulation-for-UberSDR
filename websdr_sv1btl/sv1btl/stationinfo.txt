@@ -1,6 +1,7 @@
 # Station labels for the WebSDR page (read by sv1btl/ubersdr-compat.js fetchdx).
 # <freq kHz><mode> <text>   mode: am fm usb lsb cw, or a PhantomSDR-Plus markers.json mode
-# (ft8 ft4 ft2 js8 wspr sstv fax navtex sitor rtty rtty-wx psk31 olivia aprs radel radeu morse:
+# (ft8 ft4 ft2 js8 wspr sstv fax navtex sitor rtty rtty-wx psk31 psk63 psk125 qpsk31 qpsk63 qpsk125
+# olivia contestia aprs radel radeu morse:
 # a click starts that decoder; hfdl drm: no decoder here, the band plan picks the mode).
 
 # Own labels
@@ -61,7 +62,8 @@
 28585usb 28585
 
 # From PhantomSDR-Plus frequencylist/mymarkers.json + decodermarkers.json (2026-10-24;
-# mymarkers wins on the same frequency)
+# mymarkers wins on the same frequency); 2026-11-05: its 18 new DRM and 4 Olivia markers
+# added, and the 472/479 kHz Ham LF band edges from its markers.json
 77.5morse DCF77
 100am LORAN
 129.1morse DCF42 (DE)
@@ -69,7 +71,9 @@
 136wspr WSPR
 139morse DCF42 (DE)
 147.3rtty-wx DWD DDH47
+472usb Ham LF&gt;
 474.2wspr WSPR
+479usb &lt;Ham LF
 490navtex NAVTEX
 518navtex NAVTEX
 1836.6wspr WSPR
@@ -147,7 +151,9 @@
 5830am Radio Mystery (Pirate)
 5895am The Ferry (Pirate)
 5910drm DRM RRI (EU)
+5955drm DRM RRI (EU)
 6030drm DRM CNR-1 (China)
+6110drm DRM RRI (EU)
 6140drm DRM KCBS (Korea)
 6250usb Japanese Slot Machine
 6314sitor SITOR MSI
@@ -178,6 +184,8 @@
 7171sstv SSTV
 7177radel FreeDV
 7197lsb 7197
+7225drm DRM Music 4 Joy (EU)
+7285drm DRM RNZ Pacific (Pacific)
 7425drm DRM RNZ Pacific (Pacific)
 7646rtty-wx DWD DDH7
 7880fax FAX DDH/DDK
@@ -200,9 +208,13 @@
 8942hfdl HFDL Shannon
 8948hfdl HFDL Canarias
 8977hfdl HFDL Reykjavik
+9470drm DRM RRI (China)
+9500drm DRM RRI (S.America)
 9570drm DRM RRI (EU)
 9655drm DRM CNR-1 (China)
+9720drm DRM RRI (EU)
 9780drm DRM RNZ Pacific (Pacific)
+9810drm DRM Music 4 Joy (Africa)
 9996morse RWM
 10000morse WWV
 10030hfdl HFDL Bahrain
@@ -237,6 +249,7 @@
 13312hfdl HFDL Bahrain
 13321hfdl HFDL Johannesburg/Krasnoyarsk
 13419usb Russian RTTY Mazielka (X06)
+13650drm DRM Music 4 Joy (Asia)
 13690drm DRM RRI (EU)
 13730drm DRM Music 4 Joy (Africa)
 13750drm DRM RRI (EU)
@@ -248,7 +261,11 @@
 13882.5fax FAX DDH/DDK
 14060morse CW QRP
 14070.15psk31 PSK31
+14071.5olivia Olivia
+14072olivia Olivia
 14072.5olivia Olivia
+14073olivia Olivia
+14073.5olivia Olivia
 14074ft8 FT8
 14078js8 JS8
 14080ft4 FT4
@@ -262,18 +279,26 @@
 14467.3rtty-wx DWD DDH8
 15025hfdl HFDL Reykjavik
 15180drm DRM CNR-1 (China)
+15250drm DRM RRI (India)
+15290drm DRM CNR-1 (China)
 15777usb Russian RTTY Mazielka (X06)
 15785drm DRM funklust (EU)
 16806.5sitor SITOR MSI
 17575drm DRM BBC WS (India)
 17580drm DRM RRI (S.America)
+17605drm DRM CNR-1 (China)
+17650drm DRM CNR-1 (China)
+17660drm DRM CNR-1 (China)
 17670drm DRM Music 4 Joy (Asia)
 17680drm DRM RRI (India)
+17700drm DRM CNR-1 (China)
+17710drm DRM CNR-1 (China)
 17720drm DRM CNR-1 (China)
 17760drm DRM RRI (China)
 17770drm DRM CNR-1 (China)
 17790drm DRM RRI (India)
 17830drm DRM CNR-1 (China)
+17870drm DRM CNR-1 (China)
 17912hfdl HFDL Krasnoyarsk
 17922hfdl HFDL Johannesburg
 17928hfdl HFDL Canarias
@@ -298,6 +323,7 @@
 21144ft2 FT2
 21313radeu FreeDV
 21340sstv SSTV
+21470drm DRM RRI (India)
 21949hfdl HFDL Johannesburg
 21955hfdl HFDL Canarias
 21982hfdl HFDL Bahrain

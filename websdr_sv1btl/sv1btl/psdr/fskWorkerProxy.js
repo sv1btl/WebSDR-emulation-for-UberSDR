@@ -7,7 +7,9 @@
  * One proxy = one role = one worker.  audio.js builds two: 'navtex' and 'fsk'.
  */
 
-import { KiwiFSKDecoder } from './fsk.js';
+// SV1BTL (websdr_sv1btl): ?v= tags on the imports below so browsers fetch the updated files
+// (UberSDR serves them without cache headers); otherwise unchanged from PhantomSDR-Plus.
+import { KiwiFSKDecoder } from './fsk.js?v=20261106c';
 
 export class FSKWorkerProxy {
 
@@ -35,7 +37,7 @@ export class FSKWorkerProxy {
 
     try {
       this._worker = new Worker(
-        new URL('./fsk.worker.js', import.meta.url),
+        new URL('./fsk.worker.js?v=20261106c', import.meta.url),
         { type: 'module' }
       );
     } catch (e) {

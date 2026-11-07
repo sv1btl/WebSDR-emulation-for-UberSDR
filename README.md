@@ -1,6 +1,6 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-websdr_sv1btl version 5.4.0 (2026-10-30) · by SV1BTL · based on RW3PS's WebSDR template
+websdr_sv1btl version 5.5.0 (2026-11-06) · by SV1BTL · based on RW3PS's WebSDR template
 
 (This is the version of this layout, not of UberSDR, which has its own version numbers.)
 
@@ -45,11 +45,15 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
 - a **dark theme** for the whole page (the **Light GUI / Dark GUI** switch next to Auto
   brightness; the original light look is the default, each visitor's choice is kept);
 - a **CW decoder** window that opens under the Mode buttons while the mode is CW, using
-  PhantomSDR-Plus's CW decoder in the listener's browser;
-- **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, HFDL, and an FLDIGI
-  window with RTTY, PSK31, Olivia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63,
-  Packet and APRS) from
-  PhantomSDR-Plus, with a Decoder button row under the Mode buttons;
+  PhantomSDR-Plus's CW decoder in the listener's browser, with a **CW Browser** that
+  decodes every CW signal in the passband at once;
+- **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, a SERVICES window with
+  HFDL, DSC, time signals and HF Selcall, and an FLDIGI window with RTTY, PSK31·63·125
+  (BPSK/QPSK), Olivia and Contestia, each with a browser for all its signals at once, MFSK,
+  DominoEX, THOR, THROB,
+  Hellschreiber, MT63, Packet, APRS, ALE 2G, FST4W and MSK144) from
+  PhantomSDR-Plus, with a Decoder button row under the Mode buttons, and **Decoder ID**,
+  which tells which mode is in the passband;
 - **Receive Diversity** (desktop and mobile pages), as in PhantomSDR-Plus: a second receiver somewhere
   else (an UberSDR, a KiwiSDR, a PhantomSDR-Plus or a classic WebSDR) follows your tuning,
   and the speaker
@@ -226,7 +230,7 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
 - `mode` is one of `am`, `fm`, `usb`, `lsb` or `cw`. Clicking the label tunes there in
   that mode.
 - A label whose text names a digital mode (FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX,
-  RTTY, PSK31, Olivia, MFSK16/32/64, DominoEX, THOR, THROB, Hell, MT63, Packet, APRS) also starts that decoder, with its own sideband and filter (desktop page). Within
+  RTTY, PSK31/63/125, QPSK31/63/125, Olivia, Contestia, MFSK16/32/64, DominoEX, THOR, THROB, Hell, MT63, Packet, APRS, DSC, Selcall, ALE, FST4W, MSK144) also starts that decoder, with its own sideband and filter (desktop page). Within
   2 kHz of the mode's usual frequency it tunes to that frequency. "FT8<br>JT65" starts
   FT8. Clicking a label without a digital mode stops a running decoder.
   For the decoders that read the signal above the dial (FAX, NAVTEX, RTTY, PSK31, Olivia,
@@ -234,11 +238,12 @@ The labels on the frequency scale (broadcast stations, FT8, beacons…) come fro
   tunes the dial to 517.50 and the display shows 518.00.
 - The mode can also be a **PhantomSDR-Plus `markers.json` mode**, written the same way:
   `ft8`, `ft4`, `ft2`, `js8`, `wspr`, `sstv`, `fax`, `navtex`, `sitor`, `rtty`, `rtty-wx`,
-  `psk31`, `olivia`, `aprs`, `radel`, `radeu`, `morse`, `hfdl`, `drm`. Then the mode alone
+  `psk31`, `psk63`, `psk125`, `qpsk31`, `qpsk63`, `qpsk125`, `olivia`, `contestia`, `aprs`, `radel`, `radeu`, `morse`, `hfdl`, `drm`, `dsc`, `selcall`, `time`, `dcf77`, `msf`, `rwm`, `wwv`, `wwvh`, `ale`, `fst4w`, `msk144`. Then the mode alone
   decides what a click does, whatever the text says: `147.3rtty-wx DWD DDH47` starts the
   DWD weather RTTY decoder, `2174.5sitor SITOR MSI` the NAVTEX / SITOR-B decoder,
-  `7087radel FreeDV` RADE on LSB, `77.5morse DCF77` CW with its decoder, and `2986hfdl`
-  the HFDL decoder. DRM takes AM (`3205drm`); the DRM button then decodes it.
+  `7087radel FreeDV` RADE on LSB, `77.5morse DCF77` CW with its decoder, `2986hfdl`
+  the HFDL decoder, `8414.5dsc` SERVICES on DSC (the label is the DSC frequency, the dial
+  goes 1.7 kHz below) and `77.5dcf77` the time-signal decoder on DCF77. DRM takes AM (`3205drm`); the DRM button then decodes it.
   SV1BTL's file has the markers of PhantomSDR-Plus's `frequencylist/mymarkers.json` and
   `decodermarkers.json` in this form, after the station's own labels.
 - Lines starting with `#` are comments.
@@ -360,13 +365,16 @@ meanwhile; each uses one more UberSDR session on `mainServer`).
 
 - **IQ** plays the receiver's raw I/Q, ±6 kHz around the frequency (I left, Q right), from
   an IQ session on `mainServer`; **● Rec IQ** in the status line saves it as a stereo WAV
-  file. An **IQ Demodulators** window opens below, as in PhantomSDR-Plus: up to six
+  file (up to 60 minutes) that HDSDR, SDR#, SDRuno and SDR++ open already tuned to its
+  frequency. As in PhantomSDR-Plus, IQ is played untouched: Notch, NR, Hi-Boost and
+  Left/Right do not apply to it. An **IQ Demodulators** window opens below, as in PhantomSDR-Plus: up to six
   receivers inside the 12 kHz around the dial, each with its own mode (USB, LSB, CW, AM,
   DSB, FM), frequency, width, volume and pan, and a level meter; click the spectrum to move
   the selected one there, or turn the wheel over it (Shift = 100 Hz). **Demodulators**
   plays them, **Raw I/Q** the I/Q itself; the settings are kept in the browser.
 - **DRM** decodes Digital Radio Mondiale with UberSDR's DRM extension on such a session:
-  tune to the centre of the channel; the status line shows the progress, station, MER and
+  tune to the centre of the channel (the filter shows the DRM channel's 10 kHz and keeps
+  it while tuning); the status line shows the progress, station, MER and
   text. A **DRM schedule** window opens below, as in PhantomSDR-Plus: the DRM Reception
   Project's broadcasts this receiver can tune (PhantomSDR-Plus's saved copy), grouped as
   beamed at this station's locator, on air now (nearest first), later (next 24 h) and
@@ -395,14 +403,17 @@ no extra session, no `mainServer`, no `enable_cors`. Things to know:
   yellow band). With several signals in a wide filter it takes the strongest; narrow
   the filter (CW narrow) to pick one.
 - It needs a few seconds of a signal to lock on to its speed.
+- The **Browser** box in the window (the **CW Browser**, as in PhantomSDR-Plus) decodes every CW signal between 200 and 3000 Hz at once, one line per station: frequency, speed, the callsign picked out (green with CQ) and the text, in a box of about 6 lines with its own scrollbar. Ghost lines (the keying sidebands a strong station makes beside itself) are left out. While it runs the receiver goes to USB 200–3000 Hz and the window stays open; your CW mode and filter come back when it is switched off. A click on a line puts that station in the middle of the CW passband with the normal decoder. **Save** writes the text (in the browser every line, also the stations that went quiet).
 - Desktop page only.
 
 ### Digital-mode decoders
 
 A **Decoder** row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in
-the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI, HFDL**. The FLDIGI
-window's list picks RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB, Hellschreiber,
-MT63, Packet, APRS or DWD weather RTTY (PhantomSDR-Plus 5.1.0). Its window
+the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI, SERVICES**.
+**SERVICES** (the HFDL button before) has a Service list at the start of its window: HFDL,
+DSC, Time Signals and HF Selcall; the button reopens the last one. The FLDIGI
+window's list picks RTTY, PSK31·63·125 (BPSK/QPSK, or the PSK Browser), Olivia / Contestia (or their Browser), MFSK16·32·64, DominoEX, THOR, THROB, Hellschreiber,
+MT63, Packet, APRS, ALE 2G, FST4W, MSK144 or DWD weather RTTY. Its window
 opens above "Waterfall Settings". Pressing the lit button again, or choosing AM, FM, CW
 or RADE, stops it; the page then returns to the band's usual mode (LSB on 40 m, CW on
 30 m…; outside the amateur bands the sideband stays) with that mode's usual filter (or
@@ -412,37 +423,56 @@ audio before squelch, NR and the notch filters, and nothing extra is asked of Ub
 
 While a decoder runs, the **Mode Filters' presets** on the left are replaced by
 **Decoder Filters' presets**: one button per decoder with its filter width (FT8, FT4,
-FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz, HFDL 2.60 kHz; FLDIGI
-follows its list: RTTY 300 Hz, DWD weather 593 Hz, PSK31 200 Hz, the other modes their
+FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz; SERVICES by service: HFDL 2.60 kHz, DSC, Selcall and time signals 600 Hz; FLDIGI
+follows its list: RTTY 300 Hz, DWD weather 593 Hz, PSK 200, 400 or 800 Hz by speed, the other modes their
 bandwidth plus a margin). A button sets that decoder's sideband and filter;
 the one in use is lit. The Mode presets come back when the decoder stops.
 
 | Decoder | What the button does | Window |
 |---|---|---|
-| FT8, FT4, FT2 | USB, filter 0.1–3.0 kHz; FT8/FT4 move to the band's usual frequency if the dial is not on one | UTC, dB, DT, Hz, message, locator and distance from your locator; 15 / 7.5 / 3.75 s slots |
+| FT8, FT4, FT2 | USB, filter 0.1–3.0 kHz; FT8/FT4 move to the band's usual frequency if the dial is not on one | UTC, dB, DT, Hz, message, locator and distance from your locator; 15 / 7.5 / 3.75 s slots. One line per decode: a long message ends with “…”, and a click on it shows it all (another click folds it) |
 | JS8 | USB 0.1–3.0 kHz, the band's JS8 frequency | messages put together from JS8 frames; speed Normal/Fast/Turbo/Slow/Ultra |
 | WSPR | USB 1.3–1.7 kHz, the band's WSPR frequency | spots every 2 minutes (even UTC minutes): call, locator, dBm, kHz, SNR, distance |
 | SSTV | LSB below 10 MHz, USB above; 1.0–2.5 kHz | the picture (VIS auto-detect or a fixed mode), Save as PNG, a list of SSTV frequencies |
 | FAX | USB 1.1–2.7 kHz | the weather chart, LPM/IOC, Invert, Save; the station list tunes 1.9 kHz below the published frequency, which the display shows |
 | NAVTEX | USB 0.25–0.75 kHz | the messages (ZCZC … NNNN); list of NAVTEX stations and the ITU SITOR-B channels (2174.5, 4210 … 26100.5 kHz) |
-| HFDL | USB 0.15–2.75 kHz; the dial on the listed frequency (subcarrier at 1440 Hz) | aircraft messages (UTC, kHz, SNR, ground station, aircraft with a FlightAware link, type, ACARS text, 📍 position); ground stations and their frequencies with Tune; Squitters; Save. As in PhantomSDR-Plus, **🗺 Map** shows the aircraft that reported a position in the window and **⤢ Large map** in a large window you can drag and resize (⌖ Fit all, ✕ or Esc to close); positions are kept while the map is closed |
-| FLDIGI | USB, around the mode's audio centre | the window's list: Ham RTTY, PSK31, Olivia, MFSK16·32·64, DominoEX, THOR, THROB / THROBX, Hellschreiber, MT63, Packet (AX.25), APRS, DWD weather RTTY (the FLDIGI button reopens the last one). RTTY: text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz (DDH47 on 147.3 kHz LF: 85 Hz, set when picked), with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
-| PSK31 (FLDIGI list) | USB 0.9–1.1 kHz, the signal at 1000 Hz | text; calling frequencies; **Auto-tune** finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK31 trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus |
-| Olivia (FLDIGI list) | USB around 1000 Hz, the signal bandwidth + 150 Hz each side | text; mode 8/250, 16/500, 32/1000 or 16/1000 (must match the signal); **Squelch** slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter |
+| HFDL (SERVICES) | USB 0.15–2.75 kHz; the dial on the listed frequency (subcarrier at 1440 Hz) | aircraft messages (UTC, kHz, SNR, ground station, aircraft with a FlightAware link, type, ACARS text, 📍 position); ground stations and their frequencies with Tune; Squitters; Save. As in PhantomSDR-Plus, **🗺 Map** shows the aircraft that reported a position in the window and **⤢ Large map** in a large window you can drag and resize (⌖ Fit all, ✕ or Esc to close); positions are kept while the map is closed |
+| DSC (SERVICES) | USB 1.4–2.0 kHz; the dial 1.7 kHz below the DSC frequency | GMDSS calls (100 Bd FSK): time, frequency, category in colour (DISTRESS, URGENCY, SAFETY, ROUTINE), format, the decoded fields (who calls whom, telecommands, position with a 📍 map link), error check; S/N and tuning offset; the distress & safety, coast → ship and ship → coast frequencies with Tune; Save |
+| Time Signals (SERVICES) | USB 0.7–1.3 kHz; the dial 1 kHz below the carrier | DCF77, MSF, RWM, WWV/WWVH with their frequencies: the decoded UTC time and date, the time in this station's own time zone (from its locator), when the minute mark arrived against your clock, DUT1; the seconds of the minute as a bar; Save. A full clean minute is needed first |
+| HF Selcall (SERVICES) | USB 1.4–2.0 kHz; the dial 1.7 kHz below the channel | CCIR 493-4 Selcall calls (Codan, Barrett …) as DSC; the 7 and 8 MHz channels (KiwiSDR's list) |
+| FLDIGI | USB, around the mode's audio centre | the window's list: Ham RTTY, PSK31·63·125 (BPSK/QPSK), Olivia / Contestia, MFSK16·32·64, DominoEX, THOR, THROB / THROBX, Hellschreiber, MT63, Packet (AX.25), APRS, ALE 2G, FST4W, MSK144, DWD weather RTTY (the FLDIGI button reopens the last one). RTTY: text; ham 45.45 Bd / 170 Hz or DWD weather 50 Bd / 450 Hz (DDH47 on 147.3 kHz LF: 85 Hz, set when picked), with frequency lists; **Squelch** slider in dB SNR (Off … +10, ham −5, weather −8) keeps noise from printing |
+| PSK31·63·125 (FLDIGI list) | USB around 1000 Hz (the signal there): ±100 Hz at 31 Bd, ±200 Hz at 63, ±400 Hz at 125 | text; a **Mode** list: BPSK31, BPSK63, BPSK125, QPSK31, QPSK63, QPSK125 (must match the signal; QPSK with fldigi's error correction), or **PSK Browser**: every BPSK31 signal between 0.3 and 2.7 kHz on a line of its own (frequency, lock and the text in a box of about 6 lines that follows what comes in (its own scrollbar scrolls back; a click on the scrollbar does not pick the line); the number of signals above), a click on a line decodes that one; **Save** saves the text (in the browser one line per signal, also the ones that went quiet); calling frequencies; **Auto-tune** finds the strongest carrier within 0.3–2.7 kHz and moves it to 1000 Hz. A click on a PSK trace on the waterfall puts it in the filter. Its squelch is built in (it prints only once locked on a carrier), as in PhantomSDR-Plus |
+| Olivia / Contestia (FLDIGI list) | USB around 1000 Hz, the signal bandwidth + 150 Hz each side | text; mode Olivia 8/250, 16/500, 32/1000 or 16/1000, or **Contestia** (the same modem with a smaller error-correction block, upper case only) 8/250, 4/125, 4/250, 4/500, 8/500, 8/1000, 16/500, 16/1000, 32/1000 or 64/1000 (must match the signal); the **Browser** box decodes every signal of that set-up between 0.3 and 2.7 kHz at once, one line each, as in the PSK Browser (filter 0.2–2.8 kHz; a click on a line decodes that one); **Save**; **Squelch** slider (FEC S/N 3–15, default 4); calling frequencies (they set the mode too). A click on a trace puts it in the filter |
 | MFSK16·32·64, DominoEX, THOR, THROB / THROBX, MT63 (FLDIGI list) | USB around 1500 Hz (MT63: its lowest carrier at 500 Hz), the signal bandwidth plus a margin | text; a Mode list (speed or bandwidth, must match the signal: MFSK16/32/64, DominoEX Micro–88, THOR Micro–100, THROB/THROBX 1/2/4, MT63 500/1000/2000 short or long) and its own **Squelch** scale as in PhantomSDR-Plus (MFSK 0–60, default 22; DominoEX and THOR 0–80, default 25; THROB 0–20 dB, default 4; MT63 0–15, default 4; far left = off); **Auto-tune** finds the strongest signal within 0.3–2.7 kHz and moves the dial onto it — THROB must be within ±3 Hz. A click on a trace puts it in the filter. MFSK and MT63 text comes a few seconds behind the signal |
 | Hellschreiber (FLDIGI list) | USB around 1500 Hz | a picture of the received text, as on paper (no squelch, as fldigi); Feld Hell, Slow Hell, Hell X5/X9, FSK Hell 245/105, Hell 80; **Reverse** for FSK Hell sent the other way round; **Save** as PNG; Auto-tune |
 | Packet (AX.25), APRS (FLDIGI list) | USB 1.3–2.1 kHz, tones 1600/1800 Hz | 300 Bd HF packet: every frame like a TNC monitor, or APRS decoded into plain text (positions, weather, messages…). Only frames with a correct checksum are printed. List: the 30 m HF APRS dial, 10147.6 kHz. 1200 Bd VHF packet needs FM above 30 MHz, which this receiver does not cover; there is no APRS map |
+| ALE 2G (FLDIGI list) | USB 0.5–2.75 kHz (LSB for the few LSB networks); the dial on the channel | MIL-STD-188-141 link set-up: soundings, calls and links with who calls whom, commands and bit errors (repeats counted, not listed again); about 50 networks (KiwiSDR's list) and their channels with Tune; Save |
+| FST4W (FLDIGI list) | USB around 1500 Hz, ± the search width + 150 Hz | WSJT-X's LF/MF beacon mode: one decode per T/R period (120, 300, 900 or 1800 s, on the UTC clock) with a recording bar; UTC, dB, DT, MHz, message; F Tol ±50/100/150 Hz; the 136, 474.2 and 1836.6 kHz dials; Save as WSJT-X lists them |
+| MSK144 (FLDIGI list) | USB around 1500 Hz, tones 1000/2000 Hz | WSJT-X's meteor-scatter mode: UTC, dB, T, MHz, message; F Tol, T/R period 15/30 s, Decode Fast/Normal/Deep. It lives on 6 m and 2 m, above this receiver; only 10 m (28.145 MHz) is listed |
 
 - JS8 and WSPR show a bar under the window title: it fills over the
   current slot (teal while capturing, grey while waiting for the first slot) with the
   time to the next decode.
+- FT8, FT4, FT2, JS8 and WSPR show a small **audio spectrum** under the title, as in
+  PhantomSDR-Plus: the peak of each frequency over the slot being captured, with yellow
+  marks where the last slot's spots were decoded (WSPR zoomed to 1390–1610 Hz).
+- FAX, NAVTEX and DWD weather RTTY show a **schedule** (UTC) of the station picked or
+  tuned, as in PhantomSDR-Plus: the next charts of a FAX station, the NAVTEX stations of
+  the channel with their letters, the items of the DWD programme. A transmission on the
+  air stays at the top as **ON AIR**; amber 3 minutes before, red 30 s before.
+- **Decoder ID**, the line under the Decoder buttons, as in PhantomSDR-Plus: switched
+  **On**, it measures the signal in the passband (width, shift, speed, timing, SNR) for
+  about 20 s and names the mode it is, with how sure it is and the runners-up; 📻 marks a
+  known calling frequency of that mode. **Use …** starts that decoder; **Recentre &
+  retry** moves a signal near the passband edge to 1500 Hz. Off by default (it costs CPU
+  only while on); starting a decoder switches it off, retuning starts over.
 - FT8, FT4, FT2 and JS8 start each capture a little after the UTC slot boundary, to
   allow for the time the audio takes to arrive. The page learns this "time shift" from
   the decoded DT values (shown in the window) and keeps it in the listener's browser.
   The listener's PC clock must be right (within about a second).
 - While a decoder runs, the frequency display shows the **signal's** frequency, as in
   PhantomSDR-Plus: the dial plus the audio centre the decoder reads (FAX 1.9 kHz, NAVTEX
-  0.5 kHz, RTTY 1.0 kHz; PSK31, Olivia, the FLDIGI modems and Packet their centre). So
+  0.5 kHz, RTTY 1.0 kHz, DSC and Selcall 1.7 kHz, time signals 1.0 kHz; PSK31, Olivia, the FLDIGI modems and Packet their centre). So
   NAVTEX on 518 kHz reads 518.00 with the dial on 517.50, and a frequency typed in while it
   runs is taken as the signal's. The dial frequency (shown when the decoder stops) is what
   the waterfall, memories, links and CAT use. FT8, FT4, FT2, JS8, WSPR and SSTV show the
@@ -452,9 +482,12 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   30 m) nor a typed frequency changes them.
 - The distance column needs the station locator in `station.js` (`locator`).
 - The decoder files are in `sv1btl/psdr/` (PhantomSDR-Plus's own files, as of
-  2026-10-24: WSPR decodes in up to three passes, taking out each decoded station so
+  2026-11-06: WSPR decodes in up to three passes, taking out each decoded station so
   weaker ones under it show up; SSTV keeps drawing weak pictures and no longer mistakes
-  Robot 36 for Robot 72) and `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
+  Robot 36 for Robot 72; NAVTEX holds weak signals much better; MFSK finds a signal up to
+  75 Hz off the dial; DominoEX and Olivia print less noise after a transmission ends; PSK63, PSK125, QPSK and
+  Contestia added; then ALE 2G, FST4W, MSK144, the PSK Browser, DSC, time signals and
+  HF Selcall, and the Olivia / Contestia Browser) and `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
   downloaded when JS8 is used.
 - Desktop page only.
 
@@ -787,6 +820,10 @@ editing, raise the `?v=` number (see section 6).
   JS8Call, GPL v3) keep their own terms. The HFDL engine (`hfdl.wasm`: dumphfdl by Tomasz
   Lemiech, with libacars, GPL v3 or later) and the zstd inflater `sv1btl/fzstd.js` (fzstd
   by Arjun Barrett, MIT, as UberSDR uses it) keep theirs too.
+- **SERVICES** and the newer FLDIGI modes are PhantomSDR-Plus's too (GPL v3): DSC and HF
+  Selcall, time signals, ALE 2G (a port of gr-ale as carried in KiwiSDR's ALE_2G
+  extension, GPL v3, with its network list), FST4W and MSK144 (ports of the WSJT-X
+  decoders, GPL v3); the time-zone table `tzLookup.js` (tz-lookup, CC0).
 - The **HFDL map**: PhantomSDR-Plus's `aprsMap.js` (GPL v3) with **Leaflet 1.9.4**
   (BSD-2-Clause, the copy UberSDR ships) in `sv1btl/psdr/lib/`; map tiles © OpenStreetMap
   contributors. The **IQ demodulators** (`iqDemod.js`) and the **DRM schedule**

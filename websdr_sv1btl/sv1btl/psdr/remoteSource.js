@@ -431,7 +431,7 @@ export class RemoteSource {
     if (demod === 'CW') demod = 'USB'
     else if (demod === 'CWL' || demod === 'CW-L') demod = 'LSB'
 
-    this._send({ cmd: 'demodulation', demodulation: demod })
+    this._sendDemod(demod)
     this._send({
       cmd: 'window',
       l: Math.floor(this.frequencyToFFTOffset(lHz)),
@@ -439,6 +439,25 @@ export class RemoteSource {
       r: Math.ceil(this.frequencyToFFTOffset(rHz))
     })
     return true
+  }
+
+  // The partner server drops a demodulation command within 100 ms of the
+  // previous one (same debounce as ours), so a mode change right after
+  // another would be lost. Hold it and send the latest once that has passed.
+  _sendDemod (demod) {
+    this._demod = demod
+    const wait = (this._demodSentAt || 0) + 120 - Date.now()
+    if (wait > 0) {
+      if (!this._demodTimer) {
+        this._demodTimer = setTimeout(() => {
+          this._demodTimer = null
+          this._sendDemod(this._demod)
+        }, wait)
+      }
+      return
+    }
+    this._demodSentAt = Date.now()
+    this._send({ cmd: 'demodulation', demodulation: demod })
   }
 }
 

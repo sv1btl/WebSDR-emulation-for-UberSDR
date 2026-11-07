@@ -32,7 +32,10 @@
 //   .feed(Float32Array pcm)   .setSquelch(v)   .reset()
 
 import { Viterbi, MovAvg, decayavg, complexBandpass, LinearResampler, PUNCTURE } from './fldigiFec.js';
-import { Interleaver, MFSK_VARICODE } from './mfsk.js';
+
+const IFK_LOW = 1.6;       // a symbol is "noise-like" below this × the other bins' level
+const IFK_LOW_RUN = 4;     // ... and this many in a row close the squelch (see _evalS2n)
+import { Interleaver, MFSK_VARICODE } from './mfsk.js?v=20261105';
 
 const NUMTONES = 18;
 const PATHS = 3;                  // fldigi slowcpu = true (its default)
@@ -233,6 +236,7 @@ export class IfkDecoder {
     this._sig = this._noise = 0;
     this._s2n = 0;
     this._metric = 0;
+    this._lowRun = 0;
 
     // DominoEX varicode assembler.
     this._symbolbuf = [0, 0, 0];
@@ -421,6 +425,13 @@ export class IfkDecoder {
     const nz = n ? 2 * sum / n : 0;
     this._sig = decayavg(this._sig, s, 8);
     this._noise = decayavg(this._noise, nz, 8);
+    // Fast close. The 8-symbol average above needs a dozen symbols to sink
+    // after a transmission ends, and DominoEX printed 7-9 characters of noise
+    // in that time. A symbol whose strongest tone hardly stands above the
+    // others is noise; IFK_LOW_RUN of them in a row end the transmission.
+    if (nz > 0 && s < IFK_LOW * nz) {
+      if (++this._lowRun >= IFK_LOW_RUN) this._sig = this._noise;
+    } else this._lowRun = 0;
     this._s2n = this._noise > 0 ? 20 * Math.log10(this._sig / this._noise) : 0;
     const met = 6 * this._s2n;
     this._metric = met < 0 ? 0 : met > 100 ? 100 : met;

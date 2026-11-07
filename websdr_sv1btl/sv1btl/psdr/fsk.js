@@ -32,12 +32,19 @@
  */
 
 import { transformFlat } from './lib/fftRadix2.js';
-import { PSK31Demodulator } from './psk31.js';
-import { OliviaDecoder, OLIVIA_MODES, SYNC_THRESHOLD_DEFAULT } from './olivia.js';
-import { MfskDecoder, MFSK_MODES, MFSK_SQUELCH_DEFAULT, mfskBandwidth } from './mfsk.js';
+// SV1BTL (websdr_sv1btl): ?v= tags on the imports below so browsers fetch the updated files
+// (UberSDR serves them without cache headers); otherwise unchanged from PhantomSDR-Plus.
+import { PSK31Demodulator, PSK_MODE_DEFAULT, pskModeCfg } from './psk31.js?v=20261106';
+import { PskBrowser } from './pskBrowser.js?v=20261106c';
+import { OliviaBrowser } from './oliviaBrowser.js?v=20261106c';
+import { Fst4wDecoder } from './fst4w.js?v=20261106';
+import { Msk144Decoder } from './msk144.js?v=20261106';
+import { AleDecoder } from './ale.js?v=20261106';
+import { OliviaDecoder, OLIVIA_MODES, CONTESTIA_MODES, SYNC_THRESHOLD_DEFAULT } from './olivia.js?v=20261105';
+import { MfskDecoder, MFSK_MODES, MFSK_SQUELCH_DEFAULT, mfskBandwidth } from './mfsk.js?v=20261105';
 import { PacketDecoder } from './ax25.js';
 import { IfkDecoder, DOMINOEX_MODES, THOR_MODES, ifkBandwidth,
-  DOMINOEX_SQUELCH_DEFAULT, THOR_SQUELCH_DEFAULT } from './ifk.js';
+  DOMINOEX_SQUELCH_DEFAULT, THOR_SQUELCH_DEFAULT } from './ifk.js?v=20261105';
 import { ThrobDecoder, THROB_MODES, throbBandwidth, THROB_SQUELCH_DEFAULT } from './throb.js';
 import { HellDecoder, HELL_MODES, hellBandwidth } from './hell.js';
 import { Mt63Decoder, MT63_MODES, mt63Bandwidth, MT63_SQUELCH_DEFAULT } from './mt63.js';
@@ -80,6 +87,7 @@ const _isModemVariant = (v) => Object.prototype.hasOwnProperty.call(FLDIGI_MODEM
 
 // The tones/bandwidth pairs the UI offers, as [tones, bandwidth] for lookup.
 const OLIVIA_PAIRS = OLIVIA_MODES.map((m) => [m.tones, m.bandwidth]);
+const CONTESTIA_PAIRS = CONTESTIA_MODES.map((m) => [m.tones, m.bandwidth]);
 
 // NAVTEX: a message whose ZCZC was missed opens after this many characters in
 // a row whose two FEC copies (DX and RX) agree.
@@ -102,6 +110,12 @@ function _onlyDiffersBy(a, b, key) {
     if (a[k] !== b[k]) return false;
   }
   return a[key] !== b[key];
+}
+
+function _sameConfig(a, b) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
 }
 
 export class KiwiFSKDecoder {
@@ -143,6 +157,8 @@ export class KiwiFSKDecoder {
     this._fskRecentPCM = [];
     this._psk = null;
     this._olivia = null;
+    this._oliviaBrowser = null;
+    this._pskBrowser = null;
     this._modem = null;
     this._packet = null;
   }
@@ -168,6 +184,9 @@ export class KiwiFSKDecoder {
     // + varicode, and MFSK + Walsh FEC), so they bypass the discriminator chain.
     if (this._variant === 'psk31')  { this._pskFeed(pcm); return; }
     if (this._variant === 'olivia') { this._oliviaFeed(pcm); return; }
+    if (this._variant === 'fst4w')  { if (this._fst4w) this._fst4w.feed(pcm); return; }
+    if (this._variant === 'msk144') { if (this._msk144) this._msk144.feed(pcm); return; }
+    if (this._variant === 'ale')    { if (this._ale) this._ale.feed(pcm); return; }
     if (_isModemVariant(this._variant)) { this._modemFeed(pcm); return; }
     if (_isPacketVariant(this._variant)) { this._packetFeed(pcm); return; }
 
@@ -177,6 +196,7 @@ export class KiwiFSKDecoder {
   // ── PSK31 (see psk31.js) ──────────────────────────────────────────────────
 
   _pskFeed(pcm) {
+    if (this._pskBrowser) { this._fskAutoCenterPending = false; this._pskBrowser.feed(pcm); return; }
     if (!this._psk) return;
     if (this._fskAutoCenterPending) {
       this._fskAutoCenterPending = false;
@@ -241,6 +261,7 @@ export class KiwiFSKDecoder {
   // ── Olivia (see olivia.js) ────────────────────────────────────────────────
 
   _oliviaFeed(pcm) {
+    if (this._oliviaBrowser) { this._fskAutoCenterPending = false; this._oliviaBrowser.feed(pcm); return; }
     const dec = this._olivia;
     if (!dec) return;
     if (this._fskAutoCenterPending) {
@@ -347,10 +368,11 @@ export class KiwiFSKDecoder {
   }
 
   /**
-   * One-shot "Auto-tune Center" for PSK31. The FSK version sweeps Goertzels
-   * looking for a balanced tone PAIR, which a single-carrier mode never has, so
-   * this looks for the strongest peak in the voice passband instead. The
-   * demodulator's own +/-25 Hz acquisition then takes it from there.
+   * One-shot "Auto-tune Center" for PSK31/63/125 (BPSK or QPSK). The FSK
+   * version sweeps Goertzels looking for a balanced tone PAIR, which a
+   * single-carrier mode never has, so this looks for the strongest peak in the
+   * voice passband instead. The demodulator's own +/-0.8 baud acquisition then
+   * takes it from there.
    */
   _pskAutoCenter() {
     const spec = this._fskSpectrum();
@@ -371,11 +393,13 @@ export class KiwiFSKDecoder {
       return;
     }
 
-    // The peak bin is NOT the carrier: an idle PSK31 signal is two lines at
-    // +/-15.625 Hz and a loaded one is a hump a full baud wide, so the peak sits
+    // The peak bin is NOT the carrier: an idle PSK signal is two lines at
+    // +/-baud/2 and a loaded one is a hump a full baud wide, so the peak sits
     // on a sideband. Both shapes are symmetric about the carrier, so take the
-    // power-weighted centroid over the signal's own width instead.
-    const span = Math.ceil(40 / binHz);
+    // power-weighted centroid over the signal's own width instead (40 Hz
+    // either side at 31.25 baud, scaled for the faster modes).
+    const baud = pskModeCfg(this._fskResolveConfig('psk31').pskMode).baud;
+    const span = Math.ceil(40 * (baud / 31.25) / binHz);
     let num = 0, den = 0;
     for (let k = Math.max(lo, bestK - span); k <= Math.min(hi, bestK + span); k++) {
       const pw = mag[k] - mean;
@@ -490,7 +514,7 @@ export class KiwiFSKDecoder {
   setVariant(variant = 'maritime') {
     const v = String(variant || 'maritime').toLowerCase();
     if (v !== 'weather' && v !== 'maritime' && v !== 'ham' &&
-        v !== 'psk31' && v !== 'olivia' && !_isPacketVariant(v) && !_isModemVariant(v)) {
+        v !== 'psk31' && v !== 'olivia' && v !== 'fst4w' && v !== 'msk144' && v !== 'ale' && !_isPacketVariant(v) && !_isModemVariant(v)) {
       console.warn('[FSK] unknown variant:', variant, '— using maritime');
       this._variant = 'maritime';
     } else {
@@ -510,10 +534,10 @@ export class KiwiFSKDecoder {
     // The Olivia squelch is a live control: rebuilding the decoder for it would
     // throw away a sync that took seconds to acquire, every time the operator
     // nudges the slider. If nothing else changed, just retune it in place.
-    if (this._variant === 'olivia' && this._olivia && this._customConfig &&
+    if (this._variant === 'olivia' && (this._olivia || this._oliviaBrowser) && this._customConfig &&
         _onlyDiffersBy(this._customConfig, cfg, 'syncThreshold')) {
       this._customConfig = { ...cfg };
-      this._olivia.setSyncThreshold(cfg.syncThreshold);
+      (this._olivia || this._oliviaBrowser).setSyncThreshold(cfg.syncThreshold);
       return;
     }
     // Same for the fldigi-family squelch: their interleavers, FEC and timing
@@ -547,6 +571,30 @@ export class KiwiFSKDecoder {
       if (this._nvPreset) this._nvPreset.squelch = Number(cfg.squelch);
       this._fskSquelchDb = Number.isFinite(Number(cfg.squelch)) ? Number(cfg.squelch) : FSK_SQUELCH_DEFAULT;
       return;
+    }
+
+    // FST4W records a whole T/R period (up to 30 min) before it decodes:
+    // re-applying the same settings must not throw that away, and the search
+    // width can change in place.
+    // ALE 2G has no settings: the same config again must not reset it.
+    if (this._variant === 'ale' && this._ale && this._customConfig && _sameConfig(this._customConfig, cfg)) return;
+    // MSK144: search width, T/R period and depth all change in place.
+    if (this._variant === 'msk144' && this._msk144 && this._customConfig) {
+      if (_sameConfig(this._customConfig, cfg)) return;
+      const keep = ['tol', 'period', 'depth'];
+      if (Object.keys({ ...this._customConfig, ...cfg }).every((k) => keep.includes(k) || this._customConfig[k] === cfg[k])) {
+        this._customConfig = { ...cfg };
+        this._msk144.setTolerance(cfg.tol); this._msk144.setPeriod(cfg.period); this._msk144.setDepth(cfg.depth);
+        return;
+      }
+    }
+    if (this._variant === 'fst4w' && this._fst4w && this._customConfig) {
+      if (_sameConfig(this._customConfig, cfg)) return;
+      if (_onlyDiffersBy(this._customConfig, cfg, 'tol')) {
+        this._customConfig = { ...cfg };
+        this._fst4w.setTolerance(cfg.tol);
+        return;
+      }
     }
 
     this._customConfig = { ...cfg };
@@ -631,6 +679,7 @@ export class KiwiFSKDecoder {
         // something to carry. psk31.js ignores all of them.
         return {
           name: 'psk31', center: 1000.0, shift: 0, baud: 31.25,
+          pskMode: PSK_MODE_DEFAULT,
           lowpass: 100.0, audioMinimum: 0, protocol: 'varicode', encoding: 'varicode',
           framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
         };
@@ -640,9 +689,42 @@ export class KiwiFSKDecoder {
         return {
           name: 'olivia', center: 1000.0,
           tones: OLIVIA_MODES[0].tones, bandwidth: OLIVIA_MODES[0].bandwidth,
+          contestia: false,
           syncThreshold: SYNC_THRESHOLD_DEFAULT,
           shift: 0, baud: 31.25, lowpass: 100.0, audioMinimum: 0,
           protocol: 'olivia', encoding: 'olivia',
+          framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
+        };
+
+      case 'fst4w':
+        // WSJT-X FST4W: one decode per T/R period; centre and search width
+        // as WSJT-X's Rx frequency and F Tol.
+        return {
+          name: 'fst4w', center: 1500.0, period: 120, tol: 100,
+          // carried for the shared RTTY plumbing (baud 0 would size its bit
+          // buffers to infinity), not used
+          shift: 0, baud: 31.25, lowpass: 100.0, audioMinimum: 0,
+          protocol: 'fst4w', encoding: 'fst4w',
+          framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
+        };
+
+      case 'ale':
+        // ALE 2G (MIL-STD-188-141): 8 tones 750-2500 Hz, 125 Bd; ale.js
+        // searches ±1 kHz by itself, so there is nothing to set. Shift/baud
+        // only feed the shared RTTY plumbing.
+        return {
+          name: 'ale', center: 1625.0, shift: 0, baud: 125, lowpass: 100.0, audioMinimum: 0,
+          protocol: 'ale', encoding: 'ale',
+          framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
+        };
+
+      case 'msk144':
+        // WSJT-X MSK144: centre 1500 Hz (tones 1000 / 2000), F Tol, T/R
+        // period (only for grouping repeats) and decoding depth.
+        return {
+          name: 'msk144', center: 1500.0, tol: 100, period: 15, depth: 3,
+          shift: 1000, baud: 2000, lowpass: 100.0, audioMinimum: 0,
+          protocol: 'msk144', encoding: 'msk144',
           framing: '—', dataBits: 0, parity: 'N', stopBits: 0, inverted: 0,
         };
 
@@ -678,7 +760,9 @@ export class KiwiFSKDecoder {
         return {
           name: 'weather', center: 1000.0, shift: 450.0, baud: 50.0,
           lowpass: 65.0, audioMinimum: 96.0, protocol: 'ita2', encoding: 'ita2', framing: '5N1.5',
-          dataBits: 5, parity: 'N', stopBits: 1.5, squelch: FSK_SQUELCH_DEFAULT,
+          // −7 dB, not the general −8: on pure noise −8 let 54 characters through
+          // in 20 minutes, −7 dB 10, for a little copy at the edge (−4 dB: 69 → 63 %).
+          dataBits: 5, parity: 'N', stopBits: 1.5, squelch: -7,
           // The DWD circuits arrive with mark (idle/1) on the LOWER audio tone
           // in USB. The discriminator reads positive for the HIGHER frequency,
           // so without inversion markState=1 would map to space and every bit
@@ -736,6 +820,26 @@ export class KiwiFSKDecoder {
       out.showRaw = cfg.showRaw !== false;
       return out;
     }
+    if (variant === 'ale') {
+      out.encoding = out.protocol = 'ale';
+      out.center = 1625;
+      return out;
+    }
+    if (variant === 'msk144') {
+      out.encoding = out.protocol = 'msk144';
+      out.center = Math.max(1000, Math.min(2000, num(cfg.center, out.center)));
+      out.tol = Math.max(10, Math.min(300, num(cfg.tol, out.tol)));
+      out.period = num(cfg.period, 15) === 30 ? 30 : 15;
+      out.depth = [1, 2, 3].includes(num(cfg.depth, 3)) ? num(cfg.depth, 3) : 3;
+      return out;
+    }
+    if (variant === 'fst4w') {
+      out.encoding = out.protocol = 'fst4w';
+      out.center = Math.max(300, Math.min(4000, num(cfg.center, out.center)));
+      out.period = [120, 300, 900, 1800].includes(num(cfg.period, 0)) ? num(cfg.period, 120) : out.period;
+      out.tol = Math.max(10, Math.min(150, num(cfg.tol, out.tol)));
+      return out;
+    }
     if (_isModemVariant(variant)) {
       // fldigi-family modem: the sub-mode must be one of its own, or nothing
       // at all would decode — clamp to the default rather than guess.
@@ -751,15 +855,26 @@ export class KiwiFSKDecoder {
     if (wantedEnc === 'varicode' || wantedEnc === 'olivia') {
       out.encoding = out.protocol = wantedEnc;
       out.center = Math.max(100, num(cfg.center, out.center));
+      if (wantedEnc === 'varicode') {
+        // PSK31/63/125, BPSK or QPSK: an unknown key falls back to BPSK31.
+        out.pskMode = pskModeCfg(cfg.pskMode || out.pskMode).key;
+        out.baud = pskModeCfg(out.pskMode).baud;
+      }
       if (wantedEnc === 'olivia') {
-        // Clamp to the pairs the decoder is built for; anything else silently
-        // decodes nothing, which is far harder to diagnose than a clamp.
+        // Olivia or Contestia (same modem, smaller FEC block). Clamp to the
+        // pairs the UI offers for that family; anything else silently decodes
+        // nothing, which is far harder to diagnose than a clamp.
+        out.contestia = !!cfg.contestia;
+        const modes = out.contestia ? CONTESTIA_MODES : OLIVIA_MODES;
+        const pairs = out.contestia ? CONTESTIA_PAIRS : OLIVIA_PAIRS;
         const t = Math.round(num(cfg.tones, out.tones || 32));
         const b = Math.round(num(cfg.bandwidth, out.bandwidth || 1000));
-        const ok = OLIVIA_PAIRS.some((p) => p[0] === t && p[1] === b);
-        out.tones     = ok ? t : OLIVIA_MODES[0].tones;
-        out.bandwidth = ok ? b : OLIVIA_MODES[0].bandwidth;
+        const ok = pairs.some((p) => p[0] === t && p[1] === b);
+        out.tones     = ok ? t : modes[0].tones;
+        out.bandwidth = ok ? b : modes[0].bandwidth;
         out.syncThreshold = num(cfg.syncThreshold, out.syncThreshold);
+        // Olivia Browser: every signal of this configuration in the passband.
+        out.browse = !!cfg.browse;
       }
       return out;
     }
@@ -823,12 +938,22 @@ export class KiwiFSKDecoder {
     const preset = this._fskResolveConfig(this._variant || 'maritime');
     this._nvApplyPreset(preset);
 
-    if (this._variant === 'psk31') {
+    this._pskBrowser = null;
+    if (this._variant === 'psk31' && preset.pskMode === 'browser') {
+      // PSK Browser: every BPSK31 signal in the passband, one line each.
+      this._psk = null;
+      this._pskBrowser = new PskBrowser({
+        sampleRate: this._sampleRateFn,
+        onUpdate: (channels) => { if (this._fskCb) this._fskCb({ type: 'browser', variant: 'psk31', channels }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'psk31', text }); },
+      });
+    } else if (this._variant === 'psk31') {
       // The engine reports through the same event shapes as the FSK path, so
       // audio.js, the proxy and the UI need no knowledge of PSK31 at all.
       this._psk = new PSK31Demodulator({
         sampleRate: this._sampleRateFn,
         centerHz:   preset.center,
+        mode:       preset.pskMode,
         onChar:   (ch) => { if (this._fskCb) this._fskCb({ type: 'char', variant: 'psk31', char: ch }); },
         onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'psk31', text }); },
         onMetrics: (m) => {
@@ -874,12 +999,63 @@ export class KiwiFSKDecoder {
       this._modem = null;
     }
 
-    if (this._variant === 'olivia') {
+    if (this._variant === 'ale') {
+      this._ale = new AleDecoder({
+        sampleRate: this._sampleRateFn,
+        onMessage: (msg) => { if (this._fskCb) this._fskCb({ type: 'ale', variant: 'ale', msg }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'ale', text }); },
+        onMetrics: (m) => { if (this._fskCb) this._fskCb({ type: 'alemetrics', variant: 'ale', ...m }); },
+      });
+    } else {
+      this._ale = null;
+    }
+
+    if (this._variant === 'msk144') {
+      this._msk144 = new Msk144Decoder({
+        sampleRate: this._sampleRateFn,
+        centerHz: preset.center,
+        tolHz:    preset.tol,
+        period:   preset.period,
+        depth:    preset.depth,
+        onDecode: (d) => { if (this._fskCb) this._fskCb({ type: 'msk144', variant: 'msk144', decode: d }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'msk144', text }); },
+        onMetrics: (m) => { if (this._fskCb) this._fskCb({ type: 'metrics', variant: 'msk144', ...m }); },
+      });
+    } else {
+      this._msk144 = null;
+    }
+
+    if (this._variant === 'fst4w') {
+      this._fst4w = new Fst4wDecoder({
+        sampleRate: this._sampleRateFn,
+        period:   preset.period,
+        centerHz: preset.center,
+        tolHz:    preset.tol,
+        onDecode: (d) => { if (this._fskCb) this._fskCb({ type: 'fst4w', variant: 'fst4w', decode: d }); },
+        onStatus: (text, progress) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'fst4w', text, progress: progress || null }); },
+      });
+    } else {
+      this._fst4w = null;
+    }
+
+    this._oliviaBrowser = null;
+    if (this._variant === 'olivia' && preset.browse) {
+      // Olivia Browser: the passband tiled with decoders, one line per signal.
+      this._olivia = null;
+      this._oliviaBrowser = new OliviaBrowser({
+        sampleRate: this._sampleRateFn,
+        tones: preset.tones, bandwidth: preset.bandwidth, contestia: !!preset.contestia,
+        syncThreshold: preset.syncThreshold,
+        onUpdate: (channels) => { if (this._fskCb) this._fskCb({ type: 'browser', variant: 'olivia', channels }); },
+        onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'olivia', text }); },
+      });
+    } else if (this._variant === 'olivia') {
       this._olivia = new OliviaDecoder({
         sampleRate: this._sampleRateFn,
         centerHz:   preset.center,
         tones:      preset.tones,
         bandwidth:  preset.bandwidth,
+        contestia:  !!preset.contestia,
         syncThreshold: preset.syncThreshold,
         onChar:   (ch) => { if (this._fskCb) this._fskCb({ type: 'char', variant: 'olivia', char: ch }); },
         onStatus: (text) => { if (this._fskCb) this._fskCb({ type: 'status', variant: 'olivia', text }); },
@@ -1052,6 +1228,7 @@ export class KiwiFSKDecoder {
     this._nvBitCount = 0;
     this._nvCodeBits = 0;
     this._nvErrorCount = 0;
+    this._nvErrRate = 0;
     this._nvValidCount = 0;
     this._nvSyncChars = [];
     this._nvWaiting = false;
@@ -1186,6 +1363,7 @@ export class KiwiFSKDecoder {
     this._nvBitCount = 0;
     this._nvCodeBits = 0;
     this._nvErrorCount = 0;
+    this._nvErrRate = 0;
     this._nvValidCount = 0;
     this._nvWaiting = false;
     this._nvShift = false;
@@ -1487,6 +1665,8 @@ export class KiwiFSKDecoder {
                 if (rv.tally === 1) this._nvSucceedTally++;
                 else if (rv.tally === -1) this._nvFailTally++;
               }
+              this._nvErrRate = 0;
+              this._nvFrameScore = null;
               this._nvSetState(NV._NV_STATE_READ_DATA);
               if (this._navtexCb) this._navtexCb({ type: 'status', text: 'Phasing — sync acquired' });
               if (this._isFsk() && this._variant === 'maritime' && this._fskCb) {
@@ -1502,20 +1682,57 @@ export class KiwiFSKDecoder {
         }
         break;
 
-      case NV._NV_STATE_READ_DATA:
+      case NV._NV_STATE_READ_DATA: {
         this._nvWaiting = false;
         this._nvCodeBits = (this._nvCodeBits >> 1) | (bit ? this._nvMsb : 0);
         this._nvBitCount++;
-        if (this._nvBitCount === this._nvNbits) {
+        // Framing tracker. Sync acquisition can lock one or two bits off the
+        // true character boundary, and such a framing still passes ~60 % of
+        // the 4-of-7 checks (it inherits most of the FEC repeat structure),
+        // against ~77 % for the true framing at −6 dB and 100 % when strong.
+        // Rather than wait for that lock to fail — which needed a sync-loss
+        // rule hair-trigger enough to drop real weak signals — every bit
+        // offset keeps a validity score, and the framing moves to an offset
+        // that clearly beats the current one, without closing the message.
+        const N7 = this._nvNbits;
+        this._nvShiftReg = ((this._nvShiftReg || 0) >> 1) | (bit ? this._nvMsb : 0);
+        const fs = this._nvFrameScore || (this._nvFrameScore = new Float32Array(N7).fill(0.5));
+        const o = this._nvBitCount % N7;
+        fs[o] += ((this._nvCheckBits(this._nvShiftReg) ? 1 : 0) - fs[o]) / 32;
+        if (this._nvBitCount === N7) {
+          let best = 0;
+          for (let k = 1; k < N7; k++) if (fs[k] > fs[best]) best = k;
+          if (best !== 0 && fs[best] > fs[0] + 0.12 && fs[best] > 0.55) {
+            // The next boundary becomes the one `best` bits from now: the
+            // code register already holds the sliding window, so only the
+            // count moves; the scores rotate with the boundary.
+            const r = Float32Array.from(fs);
+            for (let k = 0; k < N7; k++) fs[k] = r[(k + best) % N7];
+            this._nvBitCount = N7 - best;
+            break;
+          }
+        }
+        if (this._nvBitCount === N7) {
           const rv = this._nvProcessCode(this._nvCodeBits);
           if (rv.tally === 1) this._nvSucceedTally++;
           else if (rv.tally === -1) this._nvFailTally++;
 
+          // Sync is lost on a sequential test, not on three failed slots
+          // close together. Every SITOR-B character is sent twice, so a weak
+          // signal loses single slots all the time and the copy covers them:
+          // at −6 dB about 30 % of slots fail, and the old rule dropped sync
+          // ~9 times per message, each re-acquisition costing characters.
+          // Wrong bit framing (a false lock, or the signal gone) fails ~73 %
+          // (35 of 128 codes are valid). The score adds the log-likelihood
+          // ratio of those two per slot, floored so a long clean stretch
+          // cannot bank credit: a false lock or the end of a signal is let go
+          // within ~10–20 slots, a real weak signal practically never.
+          this._nvErrRate = Math.max(-3, this._nvErrRate + (rv.success ? -0.95 : 0.89));
           if (rv.success) {
             if (this._nvErrorCount > 0) this._nvErrorCount--;
           } else {
             this._nvErrorCount++;
-            if (this._nvErrorCount > 2) {
+            if (this._nvErrRate > 4) {
               this._nvSyncSetup = 1;
               this._nvCloseHeaderless('lost');
               if (this._navtexCb) this._navtexCb({ type: 'status', text: 'Sync lost — scanning…' });
@@ -1529,6 +1746,7 @@ export class KiwiFSKDecoder {
           this._nvWaiting = true;
         }
         break;
+      }
     }
   }
 

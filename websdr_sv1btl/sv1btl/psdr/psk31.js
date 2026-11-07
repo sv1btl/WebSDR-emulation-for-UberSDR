@@ -1,54 +1,107 @@
-// psk31.js — BPSK31 demodulator (receive only)
+// psk31.js — PSK31 / PSK63 / PSK125 demodulator, BPSK and QPSK (receive only)
 // ============================================================================
 // PSK31 is differential BPSK at 31.25 baud: a phase reversal carries a 0, no
 // reversal carries a 1, and the bit stream is cut into characters by the
 // varicode alphabet, whose codewords never contain "00" — so a "00" pair is
 // itself the character delimiter and no framing/UART layer is needed.
+// PSK63 and PSK125 are the same thing at 62.5 and 125 baud.
+//
+// QPSK31/63/125 run the same varicode bit stream through fldigi's rate-1/2
+// K=5 convolutional code (polynomials 0x17, 0x19) and send each pair of coded
+// bits as one of four phase steps. The receiver here measures the phase step,
+// turns it into two soft bits and lets the shared Viterbi decoder
+// (fldigiFec.js) recover the varicode bits — see _symbolQpsk() for the exact
+// mapping, derived from fldigi's psk.cxx tx_carriers()/rx_qpsk().
 //
 // Pipeline
 // --------
 //   1. Complex baseband — an incremental rotator NCO (no Math.cos per sample,
 //        renormalised every 1024 samples) mixes the carrier to DC; two cascaded
 //        biquad low-passes per arm form the anti-alias filter.
-//   2. Decimation to 8 samples/symbol (250 Hz) through a fractional phase
+//   2. Decimation to 8 samples/symbol (8 x baud) through a fractional phase
 //        accumulator, so any input rate works, not just 12 kHz.
 //   3. Matched filter — a Hann-weighted FIR two symbols long.
-//   4. Symbol timing — BPSK31's raised-cosine envelope peaks mid-symbol and
-//        dips at every reversal, so an 8-bin envelope histogram indexed by the
+//   4. Symbol timing — the raised-cosine envelope peaks mid-symbol and dips at
+//        every reversal, so an 8-bin envelope histogram indexed by the
 //        free-running sample counter has its maximum at the symbol centre. The
 //        sampling phase slews one bin at a time towards that maximum, which
 //        keeps it from chattering on noise.
-//   5. Differential detection — d = z[k]·conj(z[k-1]); Re(d) >= 0 is a 1. No
-//        absolute carrier recovery is needed, which is what makes DBPSK cheap
-//        and robust; the residual frequency error shows up as a rotation of d
-//        and drives the AFC back into the NCO.
+//   5. Differential detection — d = z[k]·conj(z[k-1]); for BPSK Re(d) >= 0 is
+//        a 1. No absolute carrier recovery is needed, which is what makes DPSK
+//        cheap and robust; the residual frequency error shows up as a rotation
+//        of d and drives the AFC back into the NCO.
 //   6. Varicode decode — bits shift into a register; when the low two bits are
 //        00 the register above them IS the codeword, read as a binary number.
 //
+// Everything that depends on the symbol rate (filter corner, AFC range, coarse
+// FFT length, IMD probes, SNR reference) is derived from the mode's baud rate,
+// so the 31.25 baud numbers below are the reference the others scale from.
+//
 // Interface mirrors cwDecoder.js / the other engines in this tree:
-//   new PSK31Demodulator({sampleRate, centerHz, afc, onChar, onStatus, onMetrics});
-//   .feed(Float32Array); .setCenter(hz); .setAfc(on); .setSampleRate(hz); .reset();
+//   new PSK31Demodulator({sampleRate, centerHz, mode, afc, onChar, onStatus, onMetrics});
+//   .feed(Float32Array); .setCenter(hz); .setMode(key); .setAfc(on);
+//   .setSampleRate(hz); .reset();
 // ============================================================================
 
 import { transformFlat } from './lib/fftRadix2.js';
+import { Viterbi } from './fldigiFec.js';
 
-const SYMBOL_RATE = 31.25;          // baud
-const SPS         = 8;              // baseband samples per symbol
-const BB_RATE     = SYMBOL_RATE * SPS;   // 250 Hz
-const MF_TAPS     = 2 * SPS;        // matched filter length (two symbols)
+/** The six sub-modes offered in the UI. The first is the default. */
+export const PSK_MODES = [
+  { key: 'bpsk31',  label: 'BPSK31',  baud: 31.25, qpsk: false },
+  { key: 'bpsk63',  label: 'BPSK63',  baud: 62.5,  qpsk: false },
+  { key: 'bpsk125', label: 'BPSK125', baud: 125,   qpsk: false },
+  { key: 'qpsk31',  label: 'QPSK31',  baud: 31.25, qpsk: true  },
+  { key: 'qpsk63',  label: 'QPSK63',  baud: 62.5,  qpsk: true  },
+  { key: 'qpsk125', label: 'QPSK125', baud: 125,   qpsk: true  },
+  // Not a demodulator mode: fsk.js runs pskBrowser.js (one BPSK31
+  // demodulator per signal found in the passband) for it.
+  { key: 'browser', label: 'PSK Browser (BPSK31)', baud: 31.25, qpsk: false, browser: true },
+];
+export const PSK_MODE_DEFAULT = 'bpsk31';
 
-// AFC pull-in range around the user's centre, and the loop gain per symbol.
-// The differential detector on its own can only track +/-baud/4 (~7.8 Hz), so
+export function pskModeCfg(key) {
+  return PSK_MODES.find((m) => m.key === key) || PSK_MODES[0];
+}
+
+const REF_BAUD = 31.25;             // the rate every scaled constant refers to
+const SPS      = 8;                 // baseband samples per symbol
+const MF_TAPS  = 2 * SPS;           // matched filter length (two symbols)
+// QPSK: one symbol. fldigi's pulse is a Hann two symbols long, which is
+// ISI-free when sampled at its peak; filtering it with another two-symbol
+// Hann smears each symbol into its neighbours. BPSK does not mind (every
+// point is on one axis, ISI only changes the length), but QPSK neighbours sit
+// 90° apart and the smear rotates the decision vector.
+const MF_TAPS_QPSK = SPS;
+
+// AFC pull-in range around the user's centre, as a fraction of the baud rate
+// (25 Hz at 31.25 baud), and the loop gain per symbol. The differential
+// detector on its own can only track +/-baud/4 (BPSK) or +/-baud/8 (QPSK), so
 // a coarse spectral acquisition covers the rest of this range first.
-const AFC_LIMIT_HZ = 25;
-const AFC_GAIN     = 0.02;
+const AFC_LIMIT_BAUDS = 0.8;
+const AFC_GAIN        = 0.02;
 
-// Coarse acquisition FFT length over the 250 Hz baseband (~1 s, ~1 Hz bins).
-const COARSE_N = 256;
+// Anti-alias corner, as a multiple of the baud rate (100 Hz at 31.25 baud).
+const LPF_BAUDS = 3.2;
 
-// Characters are only emitted above this decision coherence, so an empty band
-// stays silent instead of spraying varicode noise into the text pane.
+// Coarse acquisition FFT length at 31.25 baud (~1 s, ~1 Hz bins); the faster
+// modes double it per step so the window stays ~1 s and the bins ~1 Hz.
+const COARSE_N_REF = 256;
+
+// QPSK: fldigi's K=5 rate-1/2 code (psk.cxx: K 5, POLY1 0x17, POLY2 0x19).
+const QPSK_K = 5, QPSK_POLY1 = 0x17, QPSK_POLY2 = 0x19;
+const QPSK_TRACEBACK = 5 * 8;
+
+// Characters are only emitted above this lock quality, so an empty band stays
+// silent instead of spraying varicode noise into the text pane. Measured over
+// 10 min of noise per mode (2026-11-05): BPSK peaks at 32; QPSK (cos 4φ, which
+// is 0 on noise rather than 0.64) peaks at 19 with the slower average below.
 const SQUELCH_LOCK = 45;
+const SQUELCH_LOCK_QPSK = 27;
+// QPSK lock average: half BPSK's 0.02 per symbol (~3 s at 31 baud, <1 s at
+// 125), because cos 4φ is noisier than |cos φ|: at 0.02 the noise peaks
+// reached 27 and the squelch had to sit ~2 dB above what the decoder copies.
+const QPSK_LOCK_ALPHA = 0.01;
 
 // SNR display: the 3 kHz reference the RTTY panel uses. SNR_RAW_TABLE maps the
 // raw symbol-bandwidth figure to it where the two stop being a fixed offset;
@@ -57,7 +110,10 @@ const SNR_FLOOR_DB  = -25;
 const SNR_OFFSET_DB = 20.2;
 const SNR_RAW_TABLE = [[-12.0, -25], [-5.8, -20], [1.1, -15], [8.4, -10], [15.0, -5]];
 
-function _rawSnrTo3k(raw) {
+// The table is for 31.25 baud; a faster mode spreads the same power over a
+// wider symbol bandwidth, so its raw figure is first shifted onto that scale.
+function _rawSnrTo3k(raw, baud = REF_BAUD) {
+  raw += 10 * Math.log10(baud / REF_BAUD);
   const t = SNR_RAW_TABLE;
   if (raw >= t[t.length - 1][0]) return Math.min(40, raw - SNR_OFFSET_DB);
   if (raw <= t[0][0]) return SNR_FLOOR_DB;
@@ -144,12 +200,12 @@ export class PSK31Demodulator {
 
     this._baseCenter = Number(options.centerHz) || 1000;
     this._afcOn      = options.afc !== false;
+    this._applyMode(options.mode);
 
     this.onChar    = typeof options.onChar    === 'function' ? options.onChar    : null;
     this.onStatus  = typeof options.onStatus  === 'function' ? options.onStatus  : null;
     this.onMetrics = typeof options.onMetrics === 'function' ? options.onMetrics : null;
 
-    this._buildMatchedFilter();
     this.reset();
   }
 
@@ -162,6 +218,16 @@ export class PSK31Demodulator {
     this._afcHz = 0;
     this._configure();
   }
+
+  /** Switch sub-mode (a PSK_MODES key). Everything is rebuilt for the new rate. */
+  setMode(key) {
+    const m = pskModeCfg(key);
+    if (m.key === this._mode) return;
+    this._applyMode(m.key);
+    this.reset();
+  }
+
+  get mode() { return this._mode; }
 
   setAfc(on) {
     this._afcOn = !!on;
@@ -188,8 +254,8 @@ export class PSK31Demodulator {
     this._decPhase = 0;
 
     // Matched filter delay lines
-    this._mfI = new Float32Array(MF_TAPS);
-    this._mfQ = new Float32Array(MF_TAPS);
+    this._mfI = new Float32Array(this._mfLen);
+    this._mfQ = new Float32Array(this._mfLen);
     this._mfPos = 0;
 
     // Symbol timing
@@ -205,9 +271,14 @@ export class PSK31Demodulator {
     // Varicode shift register
     this._shreg = 0;
 
+    // QPSK: the K=5 Viterbi decoder between the phase steps and the varicode.
+    this._viterbi = this._qpsk
+      ? new Viterbi(QPSK_K, QPSK_POLY1, QPSK_POLY2, QPSK_TRACEBACK)
+      : null;
+
     // Coarse acquisition ring over the complex baseband
-    this._acqRe  = new Float64Array(COARSE_N);
-    this._acqIm  = new Float64Array(COARSE_N);
+    this._acqRe  = new Float64Array(this._coarseN);
+    this._acqIm  = new Float64Array(this._coarseN);
     this._acqPos = 0;
     this._acqFilled = 0;
     this._lastAcqAt = 0;
@@ -236,7 +307,7 @@ export class PSK31Demodulator {
     const sr = this._sampleRateFn() || 12000;
     if (sr !== this._sr) this._configure();
 
-    const decStep = BB_RATE / this._sr;
+    const decStep = this._bbRate / this._sr;
 
     for (let n = 0; n < pcm.length; n++) {
       const x = pcm[n];
@@ -275,9 +346,17 @@ export class PSK31Demodulator {
     // The interval is counted in samples, not wall-clock: the decoder must
     // behave identically whether audio arrives in real time or is pushed
     // through as fast as a test can feed it.
-    if (this._sampleCnt - this._lastAcqAt >= BB_RATE) {
+    //
+    // The character count alone stops working above 31.25 baud: random bits
+    // make valid varicode codewords at a rate proportional to the baud rate
+    // (measured 0.11 per bit), so at 63/125 baud garbage always clears it. So
+    // the spectral estimate runs every second regardless and is applied either
+    // when nothing is decoding or when it puts the carrier beyond what the fine
+    // loop can pull in by itself (baud/4 BPSK, baud/8 QPSK) — at that offset
+    // whatever is coming out cannot be the real text.
+    if (this._sampleCnt - this._lastAcqAt >= this._bbRate) {
       this._lastAcqAt = this._sampleCnt;
-      if (this._charsSinceAcq < 2) this._coarseAcquire();
+      this._coarseAcquire(this._charsSinceAcq < 2);
       this._charsSinceAcq = 0;
     }
 
@@ -286,14 +365,30 @@ export class PSK31Demodulator {
 
   // ── Internals ─────────────────────────────────────────────────────────────
 
+  /** Rate-dependent constants for a sub-mode; reset() then sizes the state. */
+  _applyMode(key) {
+    const m = pskModeCfg(key);
+    this._mode     = m.key;
+    this._label    = m.label;
+    this._baud     = m.baud;
+    this._qpsk     = m.qpsk;
+    this._bbRate   = m.baud * SPS;                       // 250 Hz at 31.25 baud
+    this._afcLimit = AFC_LIMIT_BAUDS * m.baud;           // 25 Hz at 31.25 baud
+    this._coarseN  = COARSE_N_REF * Math.round(m.baud / REF_BAUD);
+    this._squelch  = m.qpsk ? SQUELCH_LOCK_QPSK : SQUELCH_LOCK;
+    this._mfLen    = m.qpsk ? MF_TAPS_QPSK : MF_TAPS;
+    this._buildMatchedFilter();
+  }
+
   _configure() {
     this._sr = this._sampleRateFn() || 12000;
 
-    // ~100 Hz corner: wide enough to pass the 31.25 baud BPSK main lobe whole
-    // plus the AFC search range, narrow enough that decimating to 250 Hz does
-    // not alias.
-    for (const f of this._lpI) _biquadLowpass(f, 100, this._sr, 0.707);
-    for (const f of this._lpQ) _biquadLowpass(f, 100, this._sr, 0.707);
+    // 3.2 x baud corner (100 Hz at 31.25 baud): wide enough to pass the main
+    // lobe whole plus the AFC search range, narrow enough that decimating to
+    // 8 samples per symbol does not alias.
+    const corner = Math.min(LPF_BAUDS * this._baud, 0.45 * this._sr);
+    for (const f of this._lpI) _biquadLowpass(f, corner, this._sr, 0.707);
+    for (const f of this._lpQ) _biquadLowpass(f, corner, this._sr, 0.707);
 
     this._retune();
     this._imdConfigure();
@@ -311,33 +406,35 @@ export class PSK31Demodulator {
   }
 
   _buildMatchedFilter() {
-    // Hann over two symbols, normalised to unit sum.
-    this._mfTaps = new Float32Array(MF_TAPS);
+    // Hann over _mfLen samples, normalised to unit sum.
+    const L = this._mfLen;
+    this._mfTaps = new Float32Array(L);
     let sum = 0;
-    for (let k = 0; k < MF_TAPS; k++) {
-      const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * (k + 0.5) / MF_TAPS);
+    for (let k = 0; k < L; k++) {
+      const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * (k + 0.5) / L);
       this._mfTaps[k] = w;
       sum += w;
     }
-    for (let k = 0; k < MF_TAPS; k++) this._mfTaps[k] /= sum;
+    for (let k = 0; k < L; k++) this._mfTaps[k] /= sum;
   }
 
   _basebandSample(i, q) {
     // Keep the raw (pre matched-filter) baseband for coarse acquisition.
     this._acqRe[this._acqPos] = i;
     this._acqIm[this._acqPos] = q;
-    this._acqPos = (this._acqPos + 1) % COARSE_N;
-    if (this._acqFilled < COARSE_N) this._acqFilled++;
+    this._acqPos = (this._acqPos + 1) % this._coarseN;
+    if (this._acqFilled < this._coarseN) this._acqFilled++;
 
     // 3. Matched filter.
     this._mfI[this._mfPos] = i;
     this._mfQ[this._mfPos] = q;
-    this._mfPos = (this._mfPos + 1) % MF_TAPS;
+    const L = this._mfLen;
+    this._mfPos = (this._mfPos + 1) % L;
 
     let fi = 0, fq = 0;
-    for (let k = 0; k < MF_TAPS; k++) {
+    for (let k = 0; k < L; k++) {
       const t = this._mfTaps[k];
-      const p = (this._mfPos + k) % MF_TAPS;
+      const p = (this._mfPos + k) % L;
       fi += this._mfI[p] * t;
       fq += this._mfQ[p] * t;
     }
@@ -385,6 +482,8 @@ export class PSK31Demodulator {
     const mag = Math.sqrt(dr * dr + di * di);
     if (mag < 1e-12) return;
 
+    if (this._qpsk) { this._symbolQpsk(dr, di, mag); return; }
+
     // Coherence: how close the decision vector is to the real axis. Random noise
     // averages to 2/pi (~0.64) here, a clean signal to nearly 1.
     this._coherence += 0.02 * (Math.abs(dr) / mag - this._coherence);
@@ -400,13 +499,54 @@ export class PSK31Demodulator {
     // deadlock, since the quality is what the correction is meant to restore.
     if (this._afcOn && this._timingLocked) {
       const err = (dr >= 0) ? Math.atan2(di, dr) : Math.atan2(-di, -dr);
-      const errHz = err * SYMBOL_RATE / (2 * Math.PI);
-      const next = this._afcHz + AFC_GAIN * errHz;
-      this._afcHz = Math.max(-AFC_LIMIT_HZ, Math.min(AFC_LIMIT_HZ, next));
-      this._retune();
+      this._afcStep(err);
     }
 
     this._bit(dr >= 0 ? 1 : 0);
+  }
+
+  _afcStep(errRad) {
+    const errHz = errRad * this._baud / (2 * Math.PI);
+    const next = this._afcHz + AFC_GAIN * errHz;
+    this._afcHz = Math.max(-this._afcLimit, Math.min(this._afcLimit, next));
+    this._retune();
+  }
+
+  /**
+   * QPSK phase step -> two soft bits -> Viterbi -> one varicode bit.
+   *
+   * fldigi sends coded pair s (bit 0 = POLY1 parity, bit 1 = POLY2) as the
+   * vector sym_vec_pos[4 * ((4 - s) & 3)], i.e. a step of 180° - 90°·s, and
+   * puts it on the air as I·cos + Q·sin — which is the complex conjugate of
+   * the usual I·cos - Q·sin. This receiver mixes with e^{-jwt}, so it sees
+   * the conjugate: a step of 180° + 90°·s, USB. (The panel always receives
+   * these modes in USB, so fldigi's "reverse" LSB case does not arise.)
+   *   s = 0 → 180°   s = 1 → 270°   s = 2 → 0°   s = 3 → 90°
+   * Bit 0 is set on the vertical axis (90°/270°) and clear on the horizontal,
+   * bit 1 is set at 0°/90° and clear at 180°/270°: two soft projections.
+   */
+  _symbolQpsk(dr, di, mag) {
+    const c = dr / mag, s = di / mag;
+
+    // Coherence on the 4-fold folded angle: cos(4φ) averages to 0 on noise
+    // and to 1 on a clean constellation. Signal and noise powers come from
+    // rotating d onto the nearest constellation axis.
+    const c2 = c * c - s * s, s2 = 2 * c * s;
+    const c4 = c2 * c2 - s2 * s2;
+    this._coherence += QPSK_LOCK_ALPHA * (c4 - this._coherence);
+
+    let ar, ai;                                  // d rotated onto the real axis
+    if (Math.abs(dr) >= Math.abs(di)) { ar = Math.abs(dr); ai = dr >= 0 ? di : -di; }
+    else                              { ar = Math.abs(di); ai = di >= 0 ? -dr : dr; }
+    this._sigPow   += 0.02 * (ar * ar - this._sigPow);
+    this._noisePow += 0.02 * (ai * ai - this._noisePow);
+
+    if (this._afcOn && this._timingLocked) this._afcStep(Math.atan2(ai, ar));
+
+    const soft = (x) => Math.max(0, Math.min(255, Math.round(128 + 127 * x)));
+    const b0 = soft(Math.max(-1, Math.min(1, Math.abs(s) - Math.abs(c))));
+    const b1 = soft(Math.max(-1, Math.min(1, c + s)));
+    this._bit(this._viterbi.decode(b0, b1));
   }
 
   _bit(bit) {
@@ -426,15 +566,16 @@ export class PSK31Demodulator {
     // counts towards suppressing re-acquisition even when squelched.
     this._charsSinceAcq++;
 
-    if (this.lockQuality < SQUELCH_LOCK) return;
+    if (this.lockQuality < this._squelch) return;
     if (!this.onChar) return;
 
     this.onChar(String.fromCharCode(ascii));
   }
 
   get lockQuality() {
-    // Map the 0.64 (noise) .. 1.0 (clean) coherence range onto 0..100.
-    const q = (this._coherence - 0.64) / 0.34;
+    // BPSK: map the 0.64 (noise) .. 1.0 (clean) coherence range onto 0..100.
+    // QPSK: cos(4φ) is already 0 on noise and 1 on a clean signal.
+    const q = this._qpsk ? this._coherence : (this._coherence - 0.64) / 0.34;
     return Math.max(0, Math.min(100, Math.round(q * 100)));
   }
 
@@ -448,7 +589,7 @@ export class PSK31Demodulator {
     if (this._noisePow <= 0) return SNR_FLOOR_DB;
     const ratio = this._sigPow / this._noisePow - 1;
     if (!(ratio > 0)) return SNR_FLOOR_DB;
-    return _rawSnrTo3k(10 * Math.log10(ratio));
+    return _rawSnrTo3k(10 * Math.log10(ratio), this._baud);
   }
 
   /**
@@ -462,7 +603,8 @@ export class PSK31Demodulator {
    * offset either way. The correction is additive on top of whatever the fine
    * AFC has already done, since the spectrum is measured after the NCO.
    */
-  _coarseAcquire() {
+  _coarseAcquire(idle = true) {
+    const COARSE_N = this._coarseN;
     if (this._acqFilled < COARSE_N) return;
 
     const re = new Float64Array(COARSE_N);
@@ -475,8 +617,8 @@ export class PSK31Demodulator {
     }
     transformFlat(re, im, false);
 
-    // Bin k maps to k·BB_RATE/N for the lower half, (k−N)·BB_RATE/N above it.
-    const binHz = BB_RATE / COARSE_N;
+    // Bin k maps to k·bbRate/N for the lower half, (k−N)·bbRate/N above it.
+    const binHz = this._bbRate / COARSE_N;
     const pow = new Float64Array(COARSE_N);
     let total = 0;
     for (let k = 0; k < COARSE_N; k++) {
@@ -487,7 +629,7 @@ export class PSK31Demodulator {
 
     // Noise floor: the mean over everything outside the search window, so the
     // signal itself does not raise the floor that is subtracted from it.
-    const SEARCH_HZ = AFC_LIMIT_HZ + SYMBOL_RATE;   // signal is one baud wide
+    const SEARCH_HZ = this._afcLimit + this._baud;   // signal is one baud wide
     let floorSum = 0, floorCnt = 0;
     for (let k = 0; k < COARSE_N; k++) {
       const hz = (k < COARSE_N / 2) ? k * binHz : (k - COARSE_N) * binHz;
@@ -510,15 +652,17 @@ export class PSK31Demodulator {
     const offset = num / den;
     // Leave a good lock alone; only step in when the error is real.
     if (Math.abs(offset) < 1) return;
+    if (!idle && Math.abs(offset) < this._baud / (this._qpsk ? 8 : 4)) return;
 
     const next = this._afcHz + offset;
-    this._afcHz = Math.max(-AFC_LIMIT_HZ, Math.min(AFC_LIMIT_HZ, next));
+    this._afcHz = Math.max(-this._afcLimit, Math.min(this._afcLimit, next));
     this._retune();
   }
 
   // ── IMD: Goertzel probes on the input audio ──────────────────────────────
-  // A clean BPSK31 signal has its two primary lobes at carrier +/- 15.625 Hz;
-  // an overdriven transmitter throws third-order products out at +/- 46.875 Hz.
+  // A clean BPSK31 signal has its two primary lobes at carrier +/- 15.625 Hz
+  // (half the baud rate); an overdriven transmitter throws third-order
+  // products out at +/- 46.875 Hz (1.5 x baud). The faster modes scale.
   // IMD is the ratio between them, which is what the on-air convention reports.
 
   _imdConfigure() {
@@ -527,8 +671,8 @@ export class PSK31Demodulator {
       return { coeff: 2 * Math.cos(w), s1: 0, s2: 0 };
     };
     this._imdProbes = {
-      sig: [mk(-15.625), mk(+15.625)],
-      imd: [mk(-46.875), mk(+46.875)],
+      sig: [mk(-0.5 * this._baud), mk(+0.5 * this._baud)],
+      imd: [mk(-1.5 * this._baud), mk(+1.5 * this._baud)],
     };
     this._imdWin = 0;
     this._imdLen = Math.max(256, Math.round(this._sr * 0.5));
@@ -567,8 +711,8 @@ export class PSK31Demodulator {
 
     if (this.onStatus) {
       const text = !this._timingLocked ? 'Searching…'
-                 : lock < SQUELCH_LOCK  ? 'Weak signal'
-                 : 'Locked';
+                 : lock < this._squelch ? 'Weak signal'
+                 : `Locked ${this._label}`;
       if (text !== this._statusText) {
         this._statusText = text;
         this.onStatus(text);
@@ -582,6 +726,7 @@ export class PSK31Demodulator {
         centerHz:     this._baseCenter + this._afcHz,
         imdDb:        this._imdDb,
         timingLocked: this._timingLocked,
+        mode:         this._mode,
       });
     }
   }

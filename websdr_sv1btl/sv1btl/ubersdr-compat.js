@@ -1,5 +1,5 @@
 // ubersdr-compat.js — lets the RW3PS WebSDR layout run on UberSDR.
-// SV1BTL WebSDR layout for UberSDR (websdr_sv1btl), version 5.4.0 (2026-10-30) — the version of
+// SV1BTL WebSDR layout for UberSDR (websdr_sv1btl), version 5.5.0 (2026-11-04) — the version of
 // this layout, not of UberSDR.
 //
 // The RW3PS websdr-base.js was written for PA3FWM's original sound client (with
@@ -1226,14 +1226,24 @@
     return true;
   }
   // Planar float PCM → speaker, chained after the last block (S.next)
-  function pcmPlay(S, planes, sr) {
+  function pcmPlay(S, planes, sr, raw) {
     var sa = window.soundapplet, ctx = sa && sa._audioCtx;
     if (!ctx || !planes[0].length) return;
     var b = ctx.createBuffer(planes.length, planes[0].length, sr);
     for (var c = 0; c < planes.length; c++) b.copyToChannel(planes[c], c);
     var src = ctx.createBufferSource();
     src.buffer = b;
-    src.connect(sa._gainNode || ctx.destination);   // volume, Hi-Boost, notch, NR as usual
+    if (raw) {
+      // IQ, as PhantomSDR-Plus plays it: the stereo goes out as it came in, only the
+      // page volume (and mute) applied. Notch and NR work on one channel and would
+      // mix I and Q (or two panned demodulators) into one; Hi-Boost / Left-Right too.
+      if (!S.rawOut || S.rawOut.context !== ctx) {
+        S.rawOut = ctx.createGain();
+        S.rawOut.connect(ctx.destination);
+      }
+      S.rawOut.gain.value = sa._gainNode ? sa._gainNode.gain.value : 1;
+      src.connect(S.rawOut);
+    } else src.connect(sa._gainNode || ctx.destination);   // volume, Hi-Boost, notch, NR as usual
     var now = ctx.currentTime;
     if (S.next < now) S.next = now + 0.12;          // (re)start with a small buffer
     src.start(S.next);
@@ -1411,7 +1421,7 @@
   // any other Mode button (or a mode change by software) switches it off.
   var XM = {
     iq:    { label: 'IQ',      btn: 'btn-IQ',    mode: 'am',  lo: -6,   hi: 6 },
-    drm:   { label: 'DRM',     btn: 'btn-DRM',   mode: 'am',  lo: -5,   hi: 5 }
+    drm:   { label: 'DRM',     btn: 'btn-DRM',   mode: 'am',  lo: -4.955, hi: 4.955 }   // shown as 10.00 (-6 dB), as AM Wide
   };
   var XM_SIG_TIMEOUT_MS = 2500;
   var xm = { kind: null, gen: 0, ws: null, dx: null, dec: null, decSR: 0, decCh: 0, next: 0,
@@ -1524,8 +1534,14 @@
   // A mode change by software (CAT, labels…) away from the mode's own switches it off
   function xmFollowMode() {
     if (!xm.kind || xm.switching) return;
-    if (String(window.mode).toLowerCase() !== XM[xm.kind].mode) xmStop();
-    else xmButtons();
+    var d = XM[xm.kind];
+    if (String(window.mode).toLowerCase() !== d.mode) { xmStop(); return; }
+    // same mode, other width (the band plan's AM ±4.455 kHz on tuning): back to the mode's own
+    if (Math.abs(window.lo - d.lo) > 0.01 || Math.abs(window.hi - d.hi) > 0.01) {
+      xm.switching = true;
+      try { setmf(d.mode, d.lo, d.hi); } catch (e) {} finally { xm.switching = false; }
+    }
+    xmButtons();
   }
   // Any other Mode button (CW … FM, RADE V1): off
   document.addEventListener('click', function (e) {
@@ -1631,7 +1647,7 @@
       var out = iqw.bank.process(iq);
       if (out !== iq) for (k = 0; k < n; k++) { planes[0][k] = out[2 * k]; planes[1][k] = out[2 * k + 1]; }
     }
-    pcmPlay(xm, planes.length === 1 ? [planes[0], planes[0]] : planes, sr);
+    pcmPlay(xm, planes.length === 1 ? [planes[0], planes[0]] : planes, sr, true);
     var first = !xm.sigTimer;
     clearTimeout(xm.sigTimer);
     xm.sigTimer = setTimeout(function () { xm.sigTimer = null; xmButtons(); iqIdle(); }, XM_SIG_TIMEOUT_MS);
@@ -1650,12 +1666,12 @@
     s.appendChild(document.createTextNode(txt + ' '));
     var a = document.createElement('a');
     a.href = 'javascript:void(0)'; a.textContent = rec; a.style.color = 'inherit';
-    a.title = 'Record the I/Q as a stereo 16-bit WAV file (I left, Q right); at most 10 minutes';
+    a.title = 'Record the I/Q as a WAV file for HDSDR, SDR#, SDR++ or SDRuno (stereo 16-bit, I left, Q right, centre frequency stored); at most 60 minutes';
     a.onclick = function () { if (xm.rec) iqRecStop(false); else iqRecStart(); };
     s.appendChild(a);
     xmButtons();
   }
-  var IQ_REC_MAX_S = 600;
+  var IQ_REC_MAX_S = 3600;            // as PhantomSDR-Plus (maxRecordingDuration)
   function iqRecStart() {
     if (xm.kind !== 'iq') return;
     xm.rec = { chunks: [], n: 0, sr: (xm.pcmHdr && xm.pcmHdr.sr) || 12000, hz: radeFreqHz(), t0: new Date(), shown: 0 };
@@ -1667,23 +1683,40 @@
     r.sr = sr;
     var out = new Int16Array(n * 2);
     for (var i = 0; i < n; i++) {
-      out[2 * i] = Math.max(-32768, Math.min(32767, Math.round(planes[0][i] * 32768)));
-      out[2 * i + 1] = Math.max(-32768, Math.min(32767, Math.round(q[i] * 32768)));
+      out[2 * i] = Math.max(-32768, Math.min(32767, Math.round(planes[0][i] * 32767)));
+      out[2 * i + 1] = Math.max(-32768, Math.min(32767, Math.round(q[i] * 32767)));
     }
     r.chunks.push(out); r.n += n;
     if (r.n / r.sr >= IQ_REC_MAX_S) { iqRecStop(false); return; }
     if (Math.floor(r.n / r.sr) !== r.shown) { r.shown = Math.floor(r.n / r.sr); iqIdle(); }
   }
+  // The WAV as PhantomSDR-Plus writes it (audio.js _iqWavBlob): PCM, 2 channels (I left,
+  // Q right), 16 bit, plus the "auxi" chunk SpectraVue introduced and HDSDR, SDR# and
+  // SDRuno read for the centre frequency, sample rate and start/stop time. SDR++ takes
+  // the frequency from the file name instead (the first "<digits>Hz" in it).
   function iqRecStop(discard) {
     var r = xm.rec;
     xm.rec = null;
     if (!r || discard || !r.n) { iqIdle(); return; }
-    var data = r.n * 4, hdr = new DataView(new ArrayBuffer(44));
-    var str = function (o, t) { for (var i = 0; i < t.length; i++) hdr.setUint8(o + i, t.charCodeAt(i)); };
-    str(0, 'RIFF'); hdr.setUint32(4, 36 + data, true); str(8, 'WAVE'); str(12, 'fmt ');
-    hdr.setUint32(16, 16, true); hdr.setUint16(20, 1, true); hdr.setUint16(22, 2, true);
-    hdr.setUint32(24, r.sr, true); hdr.setUint32(28, r.sr * 4, true); hdr.setUint16(32, 4, true); hdr.setUint16(34, 16, true);
-    str(36, 'data'); hdr.setUint32(40, data, true);
+    var data = r.n * 4, AUXI = 164, hdr = new DataView(new ArrayBuffer(12 + 24 + 8 + AUXI + 8)), o = 0;
+    var tag = function (t) { for (var i = 0; i < 4; i++) hdr.setUint8(o++, t.charCodeAt(i)); };
+    var u32 = function (x) { hdr.setUint32(o, x >>> 0, true); o += 4; };
+    var u16 = function (x) { hdr.setUint16(o, x, true); o += 2; };
+    var systime = function (d) {         // SYSTEMTIME, UTC
+      u16(d.getUTCFullYear()); u16(d.getUTCMonth() + 1); u16(d.getUTCDay()); u16(d.getUTCDate());
+      u16(d.getUTCHours()); u16(d.getUTCMinutes()); u16(d.getUTCSeconds()); u16(d.getUTCMilliseconds());
+    };
+    tag('RIFF'); u32(hdr.byteLength - 8 + data); tag('WAVE');
+    tag('fmt '); u32(16); u16(1); u16(2); u32(r.sr); u32(r.sr * 4); u16(4); u16(16);
+    tag('auxi'); u32(AUXI);
+    systime(r.t0); systime(new Date());
+    u32(r.hz);                            // CenterFreq
+    u32(r.sr);                            // ADFrequency
+    u32(0);                               // IFFrequency
+    u32(r.sr);                            // Bandwidth
+    u32(0);                               // IQOffset
+    o += 4 * 4 + 96;                      // Unused2..5, next file name: zero
+    tag('data'); u32(data);
     var stamp = r.t0.toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([hdr.buffer].concat(r.chunks), { type: 'audio/wav' }));
@@ -1958,7 +1991,7 @@
     };
     var go = function (mod) { drmw.mod = mod; if (drmw.el === w) drmWinFill(); };
     if (drmw.mod) go(drmw.mod);
-    else import(new URL('sv1btl/psdr/lib/drmSchedule.js?v=20261030', location.href).href).then(go, function () {
+    else import(new URL('sv1btl/psdr/lib/drmSchedule.js?v=20261106', location.href).href).then(go, function () {
       var d = w.querySelector('.drm-dial'); if (d) d.textContent = 'schedule unavailable';
     });
     drmw.timer = setInterval(drmWinFill, 30000);
@@ -2062,8 +2095,9 @@
   // Like PhantomSDR-Plus it gets the raw received audio, before squelch, AGC boost,
   // notch and NR, so muting or squelch do not stop it. Nothing is sent to the server.
   var CW_MAX_CHARS = 3000;
-  var CW_JS = 'sv1btl/cw-decoder.js?v=20261024a';
-  var cwd = { on: false, worker: null, local: null, sr: 0, loading: false, tuned: '', fed: 0 };
+  var CW_JS = 'sv1btl/cw-decoder.js?v=20261107gh';
+  var cwd = { on: false, worker: null, local: null, sr: 0, loading: false, tuned: '', fed: 0,
+              browse: false, saved: null, localBr: null, rows: {}, ch: [], archive: [] };
   // CW pitch, as PhantomSDR-Plus's CW window: the audio tone of the CW signal on the shown
   // frequency, 500-800 Hz in 50 Hz steps, default 600, remembered (ubersdr_cwpitch). On
   // this page the tone is the middle of the CW passband, so every CW filter (the CW, CW-N
@@ -2101,7 +2135,20 @@
       '.cwdec .cw-text{height:64px;overflow-y:auto;padding:3px 6px;background:#f7f7f7;color:#000;' +
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
       '.cwdec .cw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd}' +
-      '.cwdec .cw-status.err{color:#c00;font-style:normal}';
+      '.cwdec .cw-status.err{color:#c00;font-style:normal}' +
+      '.cwdec .cw-pb{max-height:210px;overflow-y:auto;background:#f7f7f7;font:11px/14px "Courier New",monospace}' +
+      '.cwdec .br-row{display:flex;align-items:flex-start;gap:6px;padding:1px 4px;border-bottom:1px solid #ddd;cursor:pointer}' +
+      '.cwdec .br-row:hover{background:#e3f1ee}.cwdec .br-row .f{flex:none;color:#06305a;font-weight:bold}' +
+      '.cwdec .br-row .w{flex:none;width:44px;text-align:right;color:#666}.cwdec .br-row .c{flex:none;width:84px;font-weight:bold;color:#8a6d00}' +
+      '.cwdec .br-row .c.cq{color:#0a7a2a}' +
+      '.cwdec .br-row .x{flex:1 1 0;min-width:0;max-height:84px;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#000}' +
+      '.cwdec .br-row .ud{flex:none;display:flex;flex-direction:column;line-height:1}' +
+      '.cwdec .br-row .ud button{height:12px;padding:0 2px;font-size:9px;border:0;background:none;color:#777;cursor:pointer}' +
+      '.cwdec .br-row .ud button:hover{color:#000}.cwdec .br-note{padding:3px 6px;color:#555;font-style:italic}' +
+      'html.ubersdr-dark #mainpanel .cwdec .cw-pb{background:#22262a}html.ubersdr-dark #mainpanel .cwdec .br-row{border-color:#3a4046}' +
+      'html.ubersdr-dark #mainpanel .cwdec .br-row:hover{background:#2f3d52}html.ubersdr-dark #mainpanel .cwdec .br-row .x{color:#fff}' +
+      'html.ubersdr-dark #mainpanel .cwdec .br-row .f{color:#8cc4ff}html.ubersdr-dark #mainpanel .cwdec .br-row .c{color:#f0d060}' +
+      'html.ubersdr-dark #mainpanel .cwdec .br-row .c.cq{color:#7fe0a0}html.ubersdr-dark #mainpanel .cwdec .br-note{color:#9aa1a8}';
     (document.head || document.documentElement).appendChild(st);
   })();
   function cwPanel(create) {
@@ -2113,15 +2160,23 @@
     p.id = 'cwdecoder'; p.className = 'cwdec'; p.hidden = true;
     p.innerHTML =
       '<div class="cw-head"><span class="cw-title">CW decoder</span>' +
-      '<span class="cw-stat" title="Tone of the CW signal found">≈ <b class="cw-pitch">---</b> Hz</span>' +
-      '<span class="cw-stat"><b class="cw-wpm">---</b> WPM</span>' +
-      '<label class="cw-stat" title="Audio pitch of the CW tone (frequency offset from the dial)">Pitch ' +
+      '<span class="cw-stat cw-one" title="Tone of the CW signal found">≈ <b class="cw-pitch">---</b> Hz</span>' +
+      '<span class="cw-stat cw-one"><b class="cw-wpm">---</b> WPM</span>' +
+      '<label class="cw-stat cw-one" title="Audio pitch of the CW tone (frequency offset from the dial)">Pitch ' +
         '<input type="range" class="cw-ps" min="500" max="800" step="50"> <b class="cw-pv"></b> Hz</label>' +
+      '<label class="cw-stat" title="CW Browser: decode every CW signal between 200 and 3000 Hz at once, one line each (the receiver goes to USB 200-3000 Hz while it runs; your CW mode and filter come back after)">' +
+        '<input type="checkbox" class="cw-br"> Browser</label>' +
+      '<button type="button" class="cw-save" title="Save the decoded text (CW Browser: every line, also the ones that went quiet)">Save</button>' +
       '<button type="button" class="cw-clear">Clear</button></div>' +
-      '<div class="cw-text"></div><div class="cw-status"></div>';
+      '<div class="cw-text"></div><div class="cw-pb" hidden></div><div class="cw-status"></div>';
     var rp = document.getElementById('radereporter');
     (rp || anchor).parentNode.insertBefore(p, (rp || anchor).nextSibling);
-    p.querySelector('.cw-clear').onclick = function () { p.querySelector('.cw-text').textContent = ''; };
+    p.querySelector('.cw-clear').onclick = function () {
+      p.querySelector('.cw-text').textContent = ''; cwd.archive = [];
+      if (cwd.browse) cwBrowseRestart();
+    };
+    p.querySelector('.cw-save').onclick = cwSave;
+    p.querySelector('.cw-br').onchange = function (e) { cwBrowse(e.target.checked); };
     var ps = p.querySelector('.cw-ps');
     ps.value = String(cwPitch()); p.querySelector('.cw-pv').textContent = cwPitch();
     ps.oninput = function () { cwSetPitch(Number(ps.value)); };
@@ -2149,6 +2204,9 @@
   // The decoder's events, handled as in PhantomSDR-Plus (App.svelte)
   function cwEvent(ev) {
     if (!ev || !cwd.on) return;
+    if (ev.type === 'browser') { if (cwd.browse) cwBrowserRows(ev.channels || []); return; }
+    if (ev.type === 'browserStatus') { if (cwd.browse) cwStatus(ev.text || ''); return; }
+    if (cwd.browse) return;
     if (ev.type === 'char') { cwText(ev.char); cwStatus(''); }
     else if (ev.type === 'word') { var e = cwTail(); if (e && e !== ' ' && e !== '\n') cwText(' '); }
     else if (ev.type === 'freq') { cwStats(ev.hz, ev.wpm); cwStatus(''); }
@@ -2186,7 +2244,7 @@
   }
   function cwStop() {
     if (cwd.worker) { try { cwd.worker.postMessage({ t: 'destroy' }); cwd.worker.terminate(); } catch (e) {} }
-    cwd.worker = null; cwd.local = null;
+    cwd.worker = null; cwd.local = null; cwd.localBr = null;
   }
   function cwReset() {
     if (cwd.worker) cwd.worker.postMessage({ t: 'reset', sampleRate: cwd.sr || 12000 });
@@ -2206,13 +2264,134 @@
       var copy = new Float32Array(pcm);           // the player still needs its own buffer
       try { cwd.worker.postMessage({ t: 'pcm', pcm: copy, sampleRate: cwd.sr }, [copy.buffer]); } catch (e) {}
     } else if (cwd.local) {
-      try { cwd.local.feed(pcm); } catch (e) { console.error('ubersdr-compat: CW decode', e); }
+      try { (cwd.localBr || cwd.local).feed(pcm); } catch (e) { console.error('ubersdr-compat: CW decode', e); }
     }
+  }
+  // ── CW Browser (PhantomSDR-Plus 5.5.0, cwBrowser.js in sv1btl/cw-decoder.js) ──
+  // Every CW signal between 200 and 3000 Hz at once, one line each: frequency, speed, the
+  // callsign picked out (green with CQ), and the text in a box of about 6 lines that follows
+  // new text (its own scrollbar scrolls back; ghost lines, a strong station's keying
+  // sidebands, are left out). The receiver goes to USB 200-3000 Hz while it runs; the CW
+  // mode and filter come back when it is switched off. A click on a line: that station
+  // alone, in CW, with the normal decoder. Save writes every line, also the ones dropped.
+  function cwBrowseUI() {
+    var p = cwPanel(false); if (!p) return;
+    var on = cwd.browse;
+    p.querySelector('.cw-br').checked = on;
+    p.querySelector('.cw-text').hidden = on;
+    p.querySelector('.cw-pb').hidden = !on;
+    Array.prototype.forEach.call(p.querySelectorAll('.cw-one'), function (e) { e.style.display = on ? 'none' : ''; });
+    p.querySelector('.cw-title').textContent = on ? 'CW Browser · ' + cwd.ch.length + ' signal' + (cwd.ch.length === 1 ? '' : 's') : 'CW decoder';
+    if (on && !cwd.ch.length) p.querySelector('.cw-pb').innerHTML = '<div class="br-note">Looking for CW signals between 200 and 3000 Hz… A station appears once its first letters are decoded, a few seconds after it starts.</div>';
+  }
+  function cwBrowsePost(on) {
+    if (cwd.worker) cwd.worker.postMessage({ t: 'browse', on: on });
+    else if (cwd.local) {
+      cwd.localBr = on && window.CwBrowser ? new window.CwBrowser({ sampleRate: function () { return cwd.sr || 12000; },
+        onUpdate: function (ch) { cwEvent({ type: 'browser', channels: ch }); }, onStatus: function (t) { cwEvent({ type: 'browserStatus', text: t }); } }) : null;
+      if (!on) cwd.local.reset();
+    }
+  }
+  function cwEntry(c, at) {
+    return { at: at, khz: (Number(window.freq) || 0) + c.hz / 1000, wpm: c.wpm, call: c.call, cq: c.cq, text: String(c.text || '').trim() };
+  }
+  function cwArchiveAll() {
+    var at = new Date().toISOString().slice(11, 19);
+    cwd.ch.forEach(function (c) { if (c.text && c.text.trim()) cwd.archive.push(cwEntry(c, at)); });
+    cwd.archive = cwd.archive.slice(-500);
+    cwd.ch = []; cwd.rows = {};
+  }
+  function cwBrowse(on) {
+    on = !!on;
+    if (on === cwd.browse || !cwd.on) { cwBrowseUI(); return; }
+    try { if (window.ubersdr_listener_mode) window.ubersdr_listener_mode(); } catch (e) {}
+    if (on) {
+      cwd.saved = { mode: String(window.mode || 'cw').toLowerCase(), lo: Number(window.lo), hi: Number(window.hi) };
+      cwd.browse = true; cwd.ch = []; cwd.rows = {};
+      cwBrowsePost(true);
+      try { set_mode('usb'); setmf('usb', 0.2, 3.0); } catch (e) {}
+      cwStatus('');
+    } else {
+      cwBrowsePost(false);
+      cwArchiveAll();
+      cwd.browse = false;
+      var sv = cwd.saved; cwd.saved = null;
+      if (sv) try { set_mode(sv.mode); if (isFinite(sv.lo) && isFinite(sv.hi)) setmf(sv.mode, sv.lo, sv.hi); } catch (e) {}
+      cwd.tuned = String(window.freq); cwReset(); cwStatus('Listening for CW…');
+    }
+    cwBrowseUI();
+  }
+  function cwBrowseRestart() {
+    cwArchiveAll();
+    cwBrowsePost(false); cwBrowsePost(true);
+    var p = cwPanel(false); if (p) p.querySelector('.cw-pb').innerHTML = '';
+    cwBrowseUI();
+  }
+  // Lines are kept (not rebuilt), so each text box keeps its scroll position
+  function cwBrowserRows(ch) {
+    var p = cwPanel(false); if (!p) return;
+    var box = p.querySelector('.cw-pb'), keep = {}, at = new Date().toISOString().slice(11, 19);
+    ch.forEach(function (c) { keep[c.id] = 1; });
+    cwd.ch.forEach(function (c) {                    // stations gone quiet: kept for Save
+      if (!keep[c.id] && c.text && c.text.trim()) cwd.archive.push(cwEntry(c, at));
+      if (!keep[c.id] && cwd.rows[c.id]) { cwd.rows[c.id].remove(); delete cwd.rows[c.id]; }
+    });
+    cwd.archive = cwd.archive.slice(-500);
+    if (!cwd.ch.length && ch.length) box.innerHTML = '';
+    cwd.ch = ch;
+    ch.forEach(function (c) {
+      var r = cwd.rows[c.id];
+      if (!r) {
+        r = document.createElement('div'); r.className = 'br-row';
+        r.innerHTML = '<span class="f"></span><span class="w"></span><span class="c"></span><div class="x"></div>';
+        r.dataset.hz = c.hz; cwd.rows[c.id] = r;
+      }
+      box.appendChild(r);                            // in the browser's order
+      var khz = (Number(window.freq) || 0) + c.hz / 1000;
+      r.dataset.hz = c.hz;
+      r.title = 'Click: decode only this station (CW on ' + khz.toFixed(3) + ' kHz)';
+      r.querySelector('.f').textContent = khz.toFixed(3);
+      r.querySelector('.w').textContent = c.wpm ? c.wpm + ' wpm' : '';
+      var cc = r.querySelector('.c'); cc.textContent = (c.cq && c.call ? 'CQ ' : '') + (c.call || ''); cc.className = 'c' + (c.cq ? ' cq' : '');
+      var x = r.querySelector('.x'), t = String(c.text || '').replace(/^\s+/, '');
+      if (x.textContent !== t) {
+        var end = x.scrollTop + x.clientHeight >= x.scrollHeight - 4;
+        x.textContent = t;
+        if (end) x.scrollTop = x.scrollHeight;
+      }
+    });
+    if (!ch.length) cwBrowseUI();
+    var tt = p.querySelector('.cw-title'); if (tt) tt.textContent = 'CW Browser · ' + ch.length + ' signal' + (ch.length === 1 ? '' : 's');
+    // A line's own scrollbar (over six lines of text): a click or drag on it scrolls, it does not
+    // pick the station (PhantomSDR-Plus noScrollbarPick)
+    box.onmousedown = function (e) { var x = e.target.closest && e.target.closest('.x'); box._onBar = !!(x && e.offsetX >= x.clientWidth); };
+    box.onclick = function (e) {
+      if (box._onBar) { box._onBar = false; return; }
+      var r = e.target.closest('.br-row'); if (!r) return;
+      var khz = (Number(window.freq) || 0) + Number(r.dataset.hz) / 1000;
+      cwBrowse(false);                               // back to CW, the station on the passband centre
+      try { if (window.ubersdr_listener_mode) window.ubersdr_listener_mode(); setfreqif(khz.toFixed(3)); } catch (x) {}
+    };
+  }
+  function cwSave() {
+    var lines;
+    if (cwd.browse || cwd.archive.length) {
+      var at = new Date().toISOString().slice(11, 19);
+      lines = cwd.archive.concat(cwd.browse ? cwd.ch.filter(function (c) { return c.text && c.text.trim(); }).map(function (c) { return cwEntry(c, at); }) : [])
+        .map(function (e) { return e.at + ' UTC  ' + e.khz.toFixed(3) + ' kHz' + (e.wpm ? '  ' + e.wpm + ' wpm' : '') + (e.call ? '  ' + (e.cq ? 'CQ ' : '') + e.call : '') + '  ' + e.text; });
+    } else { var p = cwPanel(false); lines = [p ? p.querySelector('.cw-text').textContent : '']; }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/plain' }));
+    a.download = (cwd.browse || cwd.archive.length ? 'cw-browser-' : 'cw-') + new Date().toISOString().slice(0, 19).replace(/[:T-]/g, '') + '.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
   // Follows this page: opens with CW, closes when another mode is chosen; a new
   // frequency starts the decoder afresh (no left-over timing from the last signal)
   function cwFollow() {
-    var want = String(window.mode || '').toUpperCase() === 'CW' && !(window.ubersdr_rade_active && window.ubersdr_rade_active());
+    var md = String(window.mode || '').toUpperCase();
+    var want = (md === 'CW' || (cwd.browse && md === 'USB')) && !(window.ubersdr_rade_active && window.ubersdr_rade_active());
+    if (!want && cwd.browse) { cwArchiveAll(); cwd.browse = false; cwd.saved = null; cwBrowseUI(); }   // another mode chosen: the browser ends
     if (want && !cwd.on) {
       var p = cwPanel(true);
       if (!p) return;
@@ -2222,11 +2401,13 @@
       cwStatus('Listening for CW…');
     } else if (!want && cwd.on) {
       cwd.on = false; cwStop(); cwStatus('');
-      var q = cwPanel(false); if (q) q.hidden = true;
+      var q = cwPanel(false); if (q) { q.hidden = true; cwBrowseUI(); }
     } else if (cwd.on) {
       var f = String(window.freq);
       if (f !== cwd.tuned) {
-        cwd.tuned = f; cwReset();
+        cwd.tuned = f;
+        if (cwd.browse) { cwBrowseRestart(); return; }     // new frequency: the browser starts over
+        cwReset();
         var t = cwTail(); if (t && t !== '\n') cwText('\n');
         cwStatus('Listening for CW…');
       }
@@ -2244,7 +2425,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261030hfmap';
+    s.src = 'sv1btl/decoders.js?v=20261107gh';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -2523,6 +2704,9 @@
     // is re-read on each band/zoom change, so edits show after a page reload.
     var LABEL_MODES = { ft8: 'usb', ft4: 'usb', ft2: 'usb', js8: 'usb', wspr: 'usb', fax: 'usb', wefax: 'usb',
       navtex: 'usb', sitor: 'usb', rtty: 'usb', 'rtty-wx': 'usb', psk31: 'usb', olivia: 'usb', mfsk: 'usb',
+      bpsk31: 'usb', psk63: 'usb', bpsk63: 'usb', psk125: 'usb', bpsk125: 'usb', qpsk31: 'usb', qpsk63: 'usb',
+      qpsk125: 'usb', contestia: 'usb', dsc: 'usb', selcall: 'usb', time: 'usb', dcf77: 'usb', msf: 'usb', rwm: 'usb',
+      wwv: 'usb', wwvh: 'usb', fst4w: 'usb', msk144: 'usb', ale: 'usb',
       mfsk16: 'usb', mfsk32: 'usb', mfsk64: 'usb', dominoex: 'usb', thor: 'usb', throb: 'usb', hell: 'usb',
       feldhell: 'usb', mt63: 'usb', packet: 'usb', aprs: 'usb', radeu: 'usb', rade: 'usb', freedv: 'usb',
       radel: 'lsb', morse: 'cw', sstv: 'sb', hfdl: 'bp', drm: 'bp' };
