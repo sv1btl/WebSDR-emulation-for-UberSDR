@@ -17,6 +17,10 @@
 // 2026-11-06 (PhantomSDR-Plus 5.5.0): SERVICES (HFDL, DSC, Time Signals, HF Selcall), ALE 2G,
 // FST4W, MSK144 and the PSK Browser.
 //
+// 2026-11-08 (PhantomSDR-Plus 5.5.0): FLDIGI and SERVICES lists in PhantomSDR-Plus's order.
+// Weather RTTY and Maritime FSK / SITOR moved from FLDIGI to SERVICES; ALE 2G is split:
+// FLDIGI "ALE 2G HAM" (the amateur HFLINK net), SERVICES "ALE 2G" (every other net).
+//
 // Licence: GNU GPL v3, as PhantomSDR-Plus.
 
 import { SSTVWorkerProxy } from './psdr/sstvWorkerProxy.js';
@@ -37,7 +41,7 @@ import { AprsMap, locatorToLatLon } from './psdr/lib/aprsMap.js';
 // in services.worker.js), and ALE 2G's list of networks
 import { ServicesWorkerProxy } from './psdr/servicesWorkerProxy.js?v=20261106';
 import { TIME_STATIONS } from './psdr/timesig.js?v=20261106';
-import { ALE_NETS } from './psdr/lib/aleNets.js?v=20261106';
+import { ALE_NETS } from './psdr/lib/aleNets.js?v=20261108';
 // PhantomSDR-Plus 5.5.0 (copied unchanged): FAX / NAVTEX / DWD RTTY timetables, the
 // Decoder ID engine with its band-plan layer, and the FFT for the FT8/WSPR spectrum strip
 import { FAX_SCHEDULE, NAVTEX_DB, RTTY_SCHEDULE, RTTY_PROGRAMME_BY_KHZ, parseSlots, navtexSlots, scheduleRows } from './psdr/broadcastSchedules.js';
@@ -181,6 +185,12 @@ const NAVTEX_STATIONS = [
   ['HF NAVTEX 4209.5 kHz', 4209.5], ['HF SITOR 4210 kHz', 4210], ['HF 6314 kHz', 6314], ['HF 8416.5 kHz', 8416.5],
   ['HF 12579 kHz', 12579], ['HF 16806.5 kHz', 16806.5], ['HF 19680.5 kHz', 19680.5], ['HF 22376 kHz', 22376],
   ['HF 26100.5 kHz', 26100.5]];   // HF: ITU Appendix 15 NBDP/SITOR-B (PhantomSDR-Plus maritime list)
+// SERVICES Maritime FSK / SITOR: signal frequencies, kHz (PhantomSDR-Plus FSK_KNOWN_FREQUENCIES.maritime)
+const MARITIME_FREQS = [
+  ['2174.50 kHz — MF NBDP (ITU working)', 2174.5], ['518.00 kHz — International NAVTEX', 518], ['490.00 kHz — National NAVTEX', 490],
+  ['4209.50 kHz — HF NAVTEX', 4209.5], ['4210.00 kHz — HF SITOR (MSI)', 4210], ['6314.00 kHz — HF SITOR (MSI)', 6314],
+  ['8416.50 kHz — HF SITOR (MSI)', 8416.5], ['12579.00 kHz — HF SITOR (MSI)', 12579], ['16806.50 kHz — HF SITOR (MSI)', 16806.5],
+  ['19680.50 kHz — HF SITOR (MSI)', 19680.5], ['22376.00 kHz — HF SITOR (MSI)', 22376], ['26100.50 kHz — HF SITOR (MSI)', 26100.5]];
 const RTTY_FREQS = {          // signal centre, kHz (PhantomSDR-Plus FSK_KNOWN_FREQUENCIES)
   ham: [['80m RTTY 3590', 3590], ['40m RTTY 7043', 7043], ['30m RTTY 10143', 10143], ['20m RTTY 14083', 14083],
         ['15m RTTY 21083', 21083], ['10m RTTY 28083', 28083]],
@@ -220,24 +230,30 @@ const DEC = {
   sstv:   { label: 'SSTV',   title: 'SSTV pictures',         kind: 'sstv',                lo: 1.0, hi: 2.5 },
   fax:    { label: 'FAX',    title: 'HF weather fax',        kind: 'fax',                 lo: 1.1, hi: 2.7 },
   navtex: { label: 'NAVTEX', title: 'NAVTEX / SITOR-B',      kind: 'navtex',              lo: 0.25, hi: 0.75 },
-  rtty:   { label: 'FLDIGI', title: 'FLDIGI modes: RTTY, PSK31·63·125 (BPSK/QPSK), Olivia, Contestia, MFSK, DominoEX, THOR, THROB, Hellschreiber, MT63, Packet, APRS (chosen in the window)', kind: 'rtty' },
-  // SERVICES (PhantomSDR-Plus 5.5.0, ex-HFDL button): HFDL, DSC, Time Signals, HF Selcall,
-  // chosen in the window's Service list
-  services: { label: 'SERVICES', title: 'SERVICES — HFDL (aircraft), DSC (maritime calls), Time Signals, HF Selcall (chosen in the window)', kind: 'services' },
+  rtty:   { label: 'FLDIGI', title: 'FLDIGI modes: Amateur RTTY, PSK31·63·125 (BPSK/QPSK), Olivia / Contestia, FST4W, MFSK, MSK144, DominoEX, THOR, THROB, Hellschreiber, MT63, ALE 2G HAM, Packet, APRS (chosen in the window)', kind: 'rtty' },
+  // SERVICES (PhantomSDR-Plus 5.5.0, ex-HFDL button): HFDL, Maritime FSK / SITOR, Weather
+  // RTTY, DSC, Time Signals, HF Selcall, ALE 2G, chosen in the window's Service list
+  services: { label: 'SERVICES', title: 'SERVICES — HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G (chosen in the window)', kind: 'services' },
   // PhantomSDR-Plus's HFDL: USB, the dial on the listed frequency, subcarrier at 1440 Hz
   hfdl:   { label: 'HFDL',   title: 'HFDL — HF Data Link: aircraft ACARS messages on shortwave', kind: 'hfdl', lo: 0.15, hi: 2.75, family: 'services' },
+  // Maritime FSK / SITOR (fsk.js 'maritime': 100 Bd, 170 Hz, centre 500 Hz above the dial) and
+  // DWD Weather RTTY (the RTTY window, 50 Bd, 450 Hz): in FLDIGI until 2026-11-08
+  maritime: { label: 'SITOR',   title: 'Maritime FSK / SITOR — SITOR-B / NBDP maritime safety broadcasts (100 Bd, 170 Hz)', kind: 'maritime', lo: 0.25, hi: 0.75, family: 'services' },
+  weather:  { label: 'RTTY-WX', title: 'Weather RTTY — DWD Pinneberg and similar (50 Bd, 450 Hz)', kind: 'rtty', family: 'services' },
   // DSC and Selcall: FSK centre 1700 Hz above the USB dial; time signals: carrier at 1000 Hz
   dsc:     { label: 'DSC',     title: 'DSC — Digital Selective Calling: MF/HF maritime calls (GMDSS)', kind: 'svc', lo: 1.4, hi: 2.0, family: 'services' },
   time:    { label: 'TIME',    title: 'Time Signals — DCF77, MSF, RWM, WWV/WWVH: decoded date and time', kind: 'svc', lo: 0.7, hi: 1.3, family: 'services' },
   selcall: { label: 'SELCALL', title: 'HF Selcall — CCIR 493-4 (Codan, Barrett …): who calls whom', kind: 'svc', lo: 1.4, hi: 2.0, family: 'services' },
+  // ALE 2G of every net but the amateur one (that is FLDIGI's ALE 2G HAM)
+  aleu:    { label: 'ALE',     title: 'ALE 2G (MIL-STD-188-141): government, military, MARS and utility networks', kind: 'ale', family: 'services' },
   // No buttons of their own: chosen in the RTTY window's list (family 'rtty')
   psk31:  { label: 'PSK',    title: 'PSK31·63·125 (BPSK / QPSK)', kind: 'psk31', centred: true, family: 'rtty' },
   olivia: { label: 'OLIVIA', title: 'Olivia / Contestia (MFSK)', kind: 'olivia', centred: true, family: 'rtty' },
   // PhantomSDR-Plus 5.1.0 fldigi modems (fsk.js FLDIGI_MODEMS) and AX.25 packet, one window each
   modem:  { label: 'MODEM',  title: 'fldigi modems',          kind: 'modem', centred: true, family: 'rtty' },
   packet: { label: 'PACKET', title: 'Packet / APRS (300 Bd)', kind: 'packet', centred: true, family: 'rtty' },
-  // PhantomSDR-Plus 5.5.0 (2026-11-06): ALE 2G, FST4W and MSK144 in the FLDIGI list
-  ale:    { label: 'ALE',    title: 'ALE 2G (MIL-STD-188-141)', kind: 'ale', family: 'rtty' },
+  // PhantomSDR-Plus 5.5.0 (2026-11-06): ALE 2G HAM (amateur nets only), FST4W and MSK144 in the FLDIGI list
+  ale:    { label: 'ALE',    title: 'ALE 2G HAM (MIL-STD-188-141): the amateur (HFLINK) channels', kind: 'ale', family: 'rtty' },
   fst4w:  { label: 'FST4W',  title: 'FST4W (WSJT-X)',         kind: 'fst4w', family: 'rtty' },
   msk144: { label: 'MSK144', title: 'MSK144 (WSJT-X meteor scatter)', kind: 'msk144', family: 'rtty' }
 };
@@ -268,8 +284,8 @@ W.iscw = function () { return st.on && !DEC[st.on].centred ? false : pageIscw();
 // already show the passband middle, which is their centre. Packet shows as before.
 W.ubersdr_dec_offset = function () {
   if (st.on === 'fax') return 1.9;
-  if (st.on === 'navtex') return 0.5;
-  if (st.on === 'rtty') return RTTY[rttyVariant()].center / 1000;
+  if (st.on === 'navtex' || st.on === 'maritime') return 0.5;
+  if (st.on === 'rtty' || st.on === 'weather') return RTTY[rttyVariant()].center / 1000;
   if (pageIscw()) return 0;
   if (st.on === 'dsc' || st.on === 'selcall') return 1.7;         // the DSC / Selcall frequency
   if (st.on === 'time') return 1;                                   // the time-signal carrier
@@ -488,11 +504,11 @@ function rttyKey() {
   if (v === 'ale' || v === 'fst4w' || v === 'msk144') return v;
   return 'rtty';
 }
-const FAMILY_OPTS = [['ham', 'Ham RTTY 45.45 Bd / 170 Hz'], ['psk31', 'PSK31·63·125 (BPSK/QPSK)'], ['olivia', 'Olivia / Contestia'],
-                     ['mfsk', 'MFSK16·32·64'], ['dominoex', 'DominoEX'], ['thor', 'THOR'], ['throb', 'THROB / THROBX'],
-                     ['hell', 'Hellschreiber'], ['mt63', 'MT63'], ['packet', 'Packet (AX.25, 300 Bd)'], ['aprs', 'APRS (300 Bd)'],
-                     ['ale', 'ALE 2G (MIL-STD-188-141)'], ['fst4w', 'FST4W (WSJT-X)'], ['msk144', 'MSK144 (WSJT-X)'],
-                     ['weather', 'DWD weather RTTY 50 Bd / 450 Hz']];
+// In PhantomSDR-Plus's order (App.svelte FLDIGI list); DWD weather RTTY is in SERVICES now
+const FAMILY_OPTS = [['ham', 'Amateur RTTY'], ['psk31', 'PSK31·63·125 (BPSK/QPSK)'], ['olivia', 'Olivia / Contestia'],
+                     ['fst4w', 'FST4W (WSJT-X)'], ['mfsk', 'MFSK16·32·64'], ['msk144', 'MSK144 (WSJT-X)'],
+                     ['dominoex', 'DominoEX'], ['thor', 'THOR'], ['throb', 'THROB / THROBX'], ['hell', 'Hellschreiber'],
+                     ['mt63', 'MT63'], ['ale', 'ALE 2G HAM'], ['packet', 'Packet (AX.25)'], ['aprs', 'APRS']];
 function familySelect(cur) {
   return `<select class="dw-var dec-sel" title="FLDIGI mode">${FAMILY_OPTS.map(([v, n]) =>
     `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
@@ -501,7 +517,7 @@ function familySelect(cur) {
 function familyChange(v) {
   lsSet('ubersdr_rtty', v);
   const k = rttyKey();
-  if (k === st.on && k === 'rtty') return false;      // ham ↔ weather: the RTTY window handles it
+  if (k === st.on && k === 'rtty') return false;      // Amateur RTTY already running
   start(k); return true;
 }
 function openWindow(html) {
@@ -920,9 +936,27 @@ function navtexWindow() {
   schedStart('navtex');
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
+// SERVICES Maritime FSK / SITOR (PhantomSDR-Plus FSK_VARIANT_PRESETS.maritime): the raw
+// SITOR-B text, no NAVTEX framing; the NAVTEX timetable of the channel when there is one
+function maritimeWindow() {
+  textWindow('Maritime FSK / SITOR', `${serviceSelect('maritime')}<select class="dw-tune dec-sel"><option value="">Frequency…</option>${MARITIME_FREQS.map(([n, f]) => `<option value="${f}">${n}</option>`).join('')}</select>`, SCHED_HTML);
+  fsk = new FSKWorkerProxy({ role: 'fsk', variant: 'maritime', sampleRate: SR, callback: (ev) => {
+    if (!ev || st.on !== 'maritime') return;
+    if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
+    else if (ev.type === 'status') status(ev.text || '');
+  } });
+  fsk.setVariant('maritime');
+  fsk.setConfig({ center: 500, shift: 170, baud: 100, framing: '7N1', encoding: 'ccir476', inverted: false });
+  fsk.setEnabled(true);
+  svcWire();
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('maritime'); picked(f - 0.5); schedTick(); } };
+  schedStart('navtex');
+  status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
+}
 const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 } };
 let rttyShift = 0;            // a listed frequency's own shift, Hz (DDH47); 0 = the mode's
-function rttyVariant() { return lsGet('ubersdr_rtty', 'ham') === 'weather' ? 'weather' : 'ham'; }
+// Amateur RTTY is FLDIGI's 'rtty', DWD Weather RTTY SERVICES' 'weather' (same window)
+function rttyVariant() { return st.on === 'weather' ? 'weather' : 'ham'; }
 function rttyFreqOptions(v) { return `<option value="">Frequency…</option>` + RTTY_FREQS[v].map(([n, f]) => `<option value="${f}">${n}</option>`).join(''); }
 // RTTY squelch as PhantomSDR-Plus: dB SNR (3 kHz reference), FSK_SQ_OFF and below = off;
 // ham −5 dB, DWD weather −8 dB to start. Sent with the variant's settings, the way
@@ -943,32 +977,28 @@ function rttySend() {
   fsk.setConfig({ center: r.center, shift: rttyShift || r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
                   inverted: v === 'weather', squelch: rttySquelch() });
 }
-function rttyWindow() {
-  const v = rttyVariant();
+function rttyWindow(k) {
+  const v = k === 'weather' ? 'weather' : 'ham';
   rttyShift = 0;
-  textWindow('RTTY decoder', `${familySelect(v)}
+  textWindow(v === 'weather' ? 'Weather RTTY decoder' : 'RTTY decoder', `${v === 'weather' ? serviceSelect('weather') : familySelect(v)}
     <select class="dw-tune dec-sel">${rttyFreqOptions(v)}</select>
     <label class="dw-sqbox" title="Squelch (SNR): print only while the signal is at least this far above the noise. Noise reads −12 to −15 dB; RTTY stays readable down to about −4 dB. Far left turns it off.">Squelch
       <input type="range" class="dw-sq" min="${FSK_SQ_OFF}" max="10" step="1"> <b class="dw-sqv"></b></label><span class="dw-met"></span>`, SCHED_HTML);
-  const vs = $('.dw-var'); vs.value = v;
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
-    if (!ev || st.on !== 'rtty') return;
+    if (!ev || st.on !== k) return;
     if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
     else if (ev.type === 'status') status(ev.text || '');
     else if (ev.type === 'metrics') { const m = $('.dw-met'); if (m) m.textContent = Number.isFinite(ev.snrDb) ? `SNR ${ev.snrDb.toFixed(0)} dB` : ''; }
   } });
   fsk.setVariant(v); rttySquelchShow(); rttySend(); fsk.setEnabled(true);
-  vs.onchange = () => {
-    if (familyChange(vs.value)) return;
-    rttyShift = 0; fsk.setVariant(vs.value); rttySquelchShow(); rttySend();
-    $('.dw-tune').innerHTML = rttyFreqOptions(vs.value); picked(0); applyFilter('rtty'); schedTick();
-  };
+  if (v === 'weather') svcWire();
+  else { const vs = $('.dw-var'); vs.onchange = () => familyChange(vs.value); }
   $('.dw-sq').oninput = () => { lsSet('ubersdr_rttysq_' + rttyVariant(), $('.dw-sq').value); rttySquelchShow(); rttySend(); };
   $('.dw-tune').onchange = (e) => {
     const f = +e.target.value; if (!f) return;
     const it = RTTY_FREQS[rttyVariant()].find((x) => x[1] === f);
     rttyShift = (it && it[2]) || 0; rttySend();
-    const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter('rtty'); picked(d);
+    const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter(k); picked(d);
     schedTick();
   };
   schedStart('rtty');
@@ -1407,10 +1437,13 @@ function hfdlWindow() {
 function decFilter(k) {
   const d = DEC[k];
   if (k === 'rtty' && rttyKey() !== 'rtty') return decFilter(rttyKey());
-  if (k === 'rtty') { const r = RTTY[rttyVariant()], hw = (rttyShift || r.shift) / 2 + 1.43 * r.baud; return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000]; }
+  if (k === 'rtty' || k === 'weather') {
+    const r = RTTY[k === 'weather' ? 'weather' : 'ham'], hw = ((st.on === k && rttyShift) || r.shift) / 2 + 1.43 * r.baud;
+    return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000];
+  }
   if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
   if (k === 'services') return decFilter(svcKey());
-  if (k === 'ale') return [aleLsb ? 'lsb' : 'usb', 0.5, 2.75];       // as PhantomSDR-Plus, mirrored on LSB nets
+  if (k === 'ale' || k === 'aleu') return [aleLsb ? 'lsb' : 'usb', 0.5, 2.75];       // as PhantomSDR-Plus, mirrored on LSB nets
   if (k === 'fst4w') { const hw = (fst4w.tol + 150) / 1000; return ['usb', +(1.5 - hw).toFixed(3), +(1.5 + hw).toFixed(3)]; }
   if (k === 'msk144') { const hw = (1100 + msk.tol) / 1000; return ['usb', Math.max(0.05, +(1.5 - hw).toFixed(3)), +(1.5 + hw).toFixed(3)]; }
   if (k === 'psk31' && pskMode().browser) return ['usb', 0.3, 2.7];
@@ -1462,7 +1495,7 @@ function presetValue(k) {
   return bw >= 1000 ? (bw / 1000).toFixed(2) + ' kHz' : bw + ' Hz';
 }
 function presetTitle(k) {
-  if (k === 'rtty') return 'Filter preset (FLDIGI window): USB, around the mode\'s audio centre; the width follows the mode chosen in the FLDIGI window (RTTY 300 Hz, DWD 593 Hz, PSK31 200 Hz, Olivia and the fldigi modems their bandwidth plus a margin, Packet 800 Hz)';
+  if (k === 'rtty') return 'Filter preset (FLDIGI window): USB, around the mode\'s audio centre; the width follows the mode chosen in the FLDIGI window (RTTY 300 Hz, PSK31 200 Hz, Olivia and the fldigi modems their bandwidth plus a margin, Packet 800 Hz)';
   if (k === 'psk31') { const [, lo, hi] = decFilter('psk31'); return `Filter preset (${pskMode().label}): ${lo.toFixed(2)}–${hi.toFixed(2)} kHz, ${Math.round((hi - lo) * 1000)} Hz, USB (the signal at 1000 Hz)`; }
   if (k === 'services') {                       // the service last chosen in the SERVICES window
     const v = svcKey(), [, lo, hi] = decFilter(v), bw = Math.round((hi - lo) * 1000);
@@ -1528,7 +1561,8 @@ function start(k, opts) {
   else if (k === 'sstv') sstvWindow();
   else if (k === 'fax') faxWindow();
   else if (k === 'navtex') navtexWindow();
-  else if (k === 'rtty') rttyWindow();
+  else if (k === 'rtty' || k === 'weather') rttyWindow(k);
+  else if (k === 'maritime') maritimeWindow();
   else if (k === 'psk31') psk31Window();
   else if (k === 'olivia') oliviaWindow();
   else if (k === 'modem') modemWindow();
@@ -1536,7 +1570,7 @@ function start(k, opts) {
   else if (k === 'hfdl') hfdlWindow();
   else if (k === 'dsc' || k === 'selcall') dscWindow(k);
   else if (k === 'time') timeWindow();
-  else if (k === 'ale') aleWindow();
+  else if (k === 'ale' || k === 'aleu') aleWindow(k);
   else if (k === 'fst4w') wsjtWindow('fst4w');
   else if (k === 'msk144') wsjtWindow('msk144');
 }
@@ -1784,8 +1818,8 @@ function idUse(c) {
   }
   if (k === 'fsk') {
     const v = c.variant || 'ham';
-    if (v === 'psk31' || v === 'olivia') { start(v, { keepDial: true }); return; }
-    lsSet('ubersdr_rtty', v === 'weather' ? 'weather' : 'ham');
+    if (v === 'psk31' || v === 'olivia' || v === 'weather') { start(v, { keepDial: true }); return; }   // weather: SERVICES
+    lsSet('ubersdr_rtty', 'ham');
     start('rtty', { keepDial: true }); return;
   }
   const map = { hffax: 'fax' }, d = map[k] || k;
@@ -1808,12 +1842,14 @@ function idClick(e) {
 
 // ── SERVICES (PhantomSDR-Plus 5.5.0) ────────────────────────────────────────────────
 // The ex-HFDL button: a Service list in the window head picks HFDL (its own worker, as
-// before), DSC, Time Signals or HF Selcall. These three run in PhantomSDR-Plus's
-// services.worker.js (dsc.js, timesig.js), one at a time; this is their windows.
-const SERVICES = [['hfdl', 'HFDL'], ['dsc', 'DSC'], ['time', 'Time Signals'], ['selcall', 'HF Selcall']];
+// before), Maritime FSK / SITOR, Weather RTTY and ALE 2G (fsk.js, as FLDIGI), DSC, Time
+// Signals or HF Selcall (PhantomSDR-Plus's services.worker.js: dsc.js, timesig.js), one at
+// a time. In PhantomSDR-Plus's order.
+const SERVICES = [['hfdl', 'HFDL'], ['maritime', 'Maritime FSK / SITOR'], ['weather', 'Weather RTTY'], ['dsc', 'DSC'],
+                  ['time', 'Time Signals'], ['selcall', 'HF Selcall'], ['aleu', 'ALE 2G (MIL-STD-188-141)']];
 function svcKey() { const v = lsGet('ubersdr_service', 'hfdl'); return SERVICES.some((x) => x[0] === v) ? v : 'hfdl'; }
 function serviceSelect(cur) {
-  return `<select class="dw-svc dec-sel" title="SERVICE: HFDL (aircraft), DSC (maritime calls), Time Signals, HF Selcall">${SERVICES.map(([v, n]) =>
+  return `<select class="dw-svc dec-sel" title="SERVICE: HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G">${SERVICES.map(([v, n]) =>
     `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
 }
 function svcWire() { const e = $('.dw-svc'); if (e) e.onchange = () => { lsSet('ubersdr_service', e.value); start(e.value); }; }
@@ -1964,18 +2000,26 @@ function timeWindow() {
 }
 
 // ── ALE 2G, FST4W, MSK144 in the FLDIGI list (PhantomSDR-Plus 5.5.0, fsk.js) ────────────
-// ALE 2G (MIL-STD-188-141): the dial is the channel, a few networks work in LSB; 500–2750 Hz
+// ALE 2G (MIL-STD-188-141): the dial is the channel, a few networks work in LSB; 500–2750 Hz.
+// As PhantomSDR-Plus (AlePanel scope): FLDIGI "ALE 2G HAM" ('ale') lists the amateur (HFLINK)
+// net only, SERVICES "ALE 2G" ('aleu') every other net.
 let aleLsb = false;
-function aleWindow() {
-  const cats = [...new Set(ALE_NETS.map((n) => n.cat))], f0 = dialKHz();
-  let ni = ALE_NETS.findIndex((n) => n.khz.some((f) => Math.abs(f - f0) < 0.05));
-  if (ni < 0) ni = Math.min(ALE_NETS.length - 1, +lsGet('ubersdr_alenet', '0') || 0);
-  aleLsb = !!ALE_NETS[ni].lsb && pageMode() === 'LSB';
-  const fqOpts = (i) => { const n = ALE_NETS[i], b = [...n.khz].sort((x, y) => Math.abs(x - dialKHz()) - Math.abs(y - dialKHz()))[0];
+const aleNets = (k) => ALE_NETS.filter((n) => (n.cat === 'Amateur') === (k === 'ale'));
+// An ALE label or marker: an amateur channel opens FLDIGI's ALE 2G HAM, any other SERVICES' ALE 2G
+function aleTarget(khz) {
+  return ALE_NETS.some((n) => n.cat === 'Amateur' && n.khz.some((f) => Math.abs(f - khz) < 0.05)) ? 'ale' : 'aleu';
+}
+function aleWindow(k) {
+  const ham = k === 'ale', NETS = aleNets(k), lsKey = ham ? 'ubersdr_alenet' : 'ubersdr_alenet_u';
+  const cats = [...new Set(NETS.map((n) => n.cat))], f0 = dialKHz();
+  let ni = NETS.findIndex((n) => n.khz.some((f) => Math.abs(f - f0) < 0.05));
+  if (ni < 0) ni = Math.min(NETS.length - 1, +lsGet(lsKey, '0') || 0);
+  aleLsb = !!NETS[ni].lsb && pageMode() === 'LSB';
+  const fqOpts = (i) => { const n = NETS[i], b = [...n.khz].sort((x, y) => Math.abs(x - dialKHz()) - Math.abs(y - dialKHz()))[0];
     return n.khz.map((f) => `<option value="${f}"${f === b ? ' selected' : ''}>${f} kHz${n.lsb ? ' LSB' : ''}</option>`).join(''); };
   const rows = [];
-  openWindow(`<div class="dw-head">${familySelect('ale')}<span class="dw-title">ALE 2G</span>` +
-    `<select class="dw-net dec-sel" title="ALE network (KiwiSDR's list)">${cats.map((c) => `<optgroup label="${esc(c)}">${ALE_NETS.map((n, i) => n.cat === c ? `<option value="${i}"${i === ni ? ' selected' : ''}>${esc(n.net)}</option>` : '').join('')}</optgroup>`).join('')}</select>` +
+  openWindow(`<div class="dw-head">${ham ? familySelect('ale') : serviceSelect('aleu')}<span class="dw-title">${ham ? 'ALE 2G HAM' : 'ALE 2G'}</span>` +
+    `<select class="dw-net dec-sel" title="${ham ? 'ALE network: the amateur (HFLINK) channels; government, military and utility networks are in SERVICES → ALE 2G' : 'ALE network (KiwiSDR\'s list); the amateur (HFLINK) channels are in FLDIGI → ALE 2G HAM'}">${cats.map((c) => `<optgroup label="${esc(c)}">${NETS.map((n, i) => n.cat === c ? `<option value="${i}"${i === ni ? ' selected' : ''}>${esc(n.net)}</option>` : '').join('')}</optgroup>`).join('')}</select>` +
     `<select class="dw-fq dec-sel" title="Its channels (the dial)">${fqOpts(ni)}</select><button type="button" class="dw-go" title="Tune to this channel and set the filter">Tune</button>` +
     `<button type="button" class="dw-save" title="Save (text)">Save</button><button type="button" class="dw-clear">Clear</button></div><div class="dw-info"></div><div class="dw-list"></div>`);
   const list = $('.dw-list');
@@ -1983,7 +2027,7 @@ function aleWindow() {
   let words = 0, synced = 0, first = true;
   const info = () => { $('.dw-info').innerHTML = `<span>Words: <b>${words}</b></span><span>Synced: <b>${synced}</b></span><span>Events: <b>${rows.length}</b></span>`; };
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: 'ale', sampleRate: SR, callback: (ev) => {
-    if (!ev || st.on !== 'ale') return;
+    if (!ev || st.on !== k) return;
     if (ev.type === 'status') status(ev.text || '');
     else if (ev.type === 'alemetrics') { words = ev.words; synced = ev.synced; info(); }
     else if (ev.type === 'ale' && ev.msg) {
@@ -2005,11 +2049,11 @@ function aleWindow() {
     }
   } });
   fsk.setVariant('ale'); fsk.setConfig({ center: 1625, encoding: 'ale' }); fsk.setEnabled(true);
-  $('.dw-var').onchange = (e) => familyChange(e.target.value);
-  $('.dw-net').onchange = (e) => { lsSet('ubersdr_alenet', e.target.value); $('.dw-fq').innerHTML = fqOpts(+e.target.value); };
+  if (ham) $('.dw-var').onchange = (e) => familyChange(e.target.value); else svcWire();
+  $('.dw-net').onchange = (e) => { lsSet(lsKey, e.target.value); $('.dw-fq').innerHTML = fqOpts(+e.target.value); };
   $('.dw-go').onclick = () => {
-    const f = +$('.dw-fq').value, n = ALE_NETS[+$('.dw-net').value]; if (!f) return;
-    aleLsb = !!n.lsb; tuneKHz(f); applyFilter('ale'); picked(f);
+    const f = +$('.dw-fq').value, n = NETS[+$('.dw-net').value]; if (!f) return;
+    aleLsb = !!n.lsb; tuneKHz(f); applyFilter(k); picked(f);
   };
   $('.dw-clear').onclick = () => { rows.length = 0; list.innerHTML = ''; info(); };
   $('.dw-save').onclick = () => saveText('ale', rows.map((r) => [r.time + ' UTC', r.freq + ' kHz', r.kind + (r.count > 1 ? ` ×${r.count}` : ''),
@@ -2165,7 +2209,7 @@ function pskBrowserRows(ch) {
 // usual filter (set by setfreqm) stay.
 const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2'], [/\bJS8(?:CALL)?\b/i, 'js8'],
   [/\bWSPR\b/i, 'wspr'], [/\bSSTV\b/i, 'sstv'], [/\b(?:HF ?|WE)?FAX\b/i, 'fax'], [/\bNAVTEX\b/i, 'navtex'], [/\bRTTY\b/i, 'rtty'],
-  [/\bSITOR(?:-?B)?\b/i, 'navtex'], [/\b([BQ])?PSK-?(31|63|125)\b/i, 'psk31', null, (m) => ((m[1] || 'B').toUpperCase() === 'Q' ? 'qpsk' : 'bpsk') + m[2]],
+  [/\bSITOR(?:-?B)?\b/i, 'maritime'], [/\b([BQ])?PSK-?(31|63|125)\b/i, 'psk31', null, (m) => ((m[1] || 'B').toUpperCase() === 'Q' ? 'qpsk' : 'bpsk') + m[2]],
   [/\bOLIVIA\b/i, 'olivia', null, 'olivia'], [/\bCONTESTIA\b/i, 'olivia', null, 'contestia'], [/\bMFSK ?-?(?:16|32|64)?\b/i, 'modem', 'mfsk'],
   [/\bDOMINO ?EX\b/i, 'modem', 'dominoex'], [/\bTHOR\b/i, 'modem', 'thor'], [/\bTHROB ?X?\b/i, 'modem', 'throb'],
   [/\b(?:FELD ?)?HELL(?:SCHREIBER)?\b/i, 'modem', 'hell'], [/\bMT-?63\b/i, 'modem', 'mt63'],
@@ -2176,8 +2220,8 @@ const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2
 // MFSK sub-mode]. 'rade' = UberSDR's RADE V1 (RADEL lower, the rest upper sideband).
 // MORSE has none here: its label sets CW, which opens the CW decoder by itself.
 const MARKER_MODES = { FT8: ['ft8'], FT4: ['ft4'], FT2: ['ft2'], JS8: ['js8'], WSPR: ['wspr'], SSTV: ['sstv'],
-  FAX: ['fax'], WEFAX: ['fax'], NAVTEX: ['navtex'], SITOR: ['navtex'], RTTY: ['rtty', 'ham'],
-  'RTTY-WX': ['rtty', 'weather'], PSK31: ['psk31', null, 'bpsk31'], BPSK31: ['psk31', null, 'bpsk31'],
+  FAX: ['fax'], WEFAX: ['fax'], NAVTEX: ['navtex'], SITOR: ['maritime'], RTTY: ['rtty', 'ham'],
+  'RTTY-WX': ['weather'], PSK31: ['psk31', null, 'bpsk31'], BPSK31: ['psk31', null, 'bpsk31'],
   PSK63: ['psk31', null, 'bpsk63'], BPSK63: ['psk31', null, 'bpsk63'], PSK125: ['psk31', null, 'bpsk125'],
   BPSK125: ['psk31', null, 'bpsk125'], QPSK31: ['psk31', null, 'qpsk31'], QPSK63: ['psk31', null, 'qpsk63'],
   QPSK125: ['psk31', null, 'qpsk125'], OLIVIA: ['olivia', null, 'olivia'], CONTESTIA: ['olivia', null, 'contestia'], MFSK: ['modem', 'mfsk'],
@@ -2187,7 +2231,7 @@ const MARKER_MODES = { FT8: ['ft8'], FT4: ['ft4'], FT2: ['ft2'], JS8: ['js8'], W
   HFDL: ['hfdl'], DSC: ['dsc'], SELCALL: ['selcall'], TIME: ['time'], DCF77: ['time', null, 'dcf77'], MSF: ['time', null, 'msf'],
   RWM: ['time', null, 'rwm'], WWV: ['time', null, 'wwv'], WWVH: ['time', null, 'wwv'], FST4W: ['fst4w'], MSK144: ['msk144'], ALE: ['ale'],
   RADEL: ['rade', 'lsb'], RADEU: ['rade', 'usb'], RADE: ['rade', 'usb'], FREEDV: ['rade', 'usb'] };
-let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet, ham/weather RTTY)
+let labelVariant = null;              // the FLDIGI list entry a label names (modems, packet, Amateur RTTY)
 let labelSub = null;                  // its MFSK sub-mode, from a marker mode (MFSK32…)
 function labelMode(html) {
   labelVariant = labelSub = null;
@@ -2231,15 +2275,16 @@ function labelSignal(k) {
 // a pick from the RTTY window's list does
 function labelRttyShift(k) {
   const lf = Number(W.ubersdr_label_khz);
-  if (k !== 'rtty' || st.on !== 'rtty' || !(lf > 0)) return;
+  if ((k !== 'rtty' && k !== 'weather') || st.on !== k || !(lf > 0)) return;
   const it = RTTY_FREQS[rttyVariant()].find((x) => Math.abs(x[1] - lf) < 0.01);
-  rttyShift = (it && it[2]) || 0; rttySend(); applyFilter('rtty');
+  rttyShift = (it && it[2]) || 0; rttySend(); applyFilter(k);
 }
 document.addEventListener('click', (e) => {
   const lab = e.target.closest && e.target.closest('.statinfo0, .statinfo0l');
   if (!lab) return;
-  const k = labelMode(lab.innerHTML);
+  let k = labelMode(lab.innerHTML);
   if (!k) { if (st.on) stop(true); return; }
+  if (k === 'ale') k = aleTarget(Number(W.ubersdr_label_khz) || dialKHz());   // HAM (FLDIGI) or SERVICES
   if (k === 'rade') {                           // RADE V1: on the label's sideband (setfreqm has set it)
     if (st.on) stop(true);
     const side = labelVariant;
