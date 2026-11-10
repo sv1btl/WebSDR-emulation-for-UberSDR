@@ -92,7 +92,7 @@ if [ -d "$TARGET" ]; then
     mkdir -p "$TARGET/sv1btl"
     ( cd "$SRC/sv1btl" && find . -type d ) | while read -r d; do mkdir -p "$TARGET/sv1btl/$d"; done
     ( cd "$SRC/sv1btl" && find . -type f ) | while read -r f; do
-        case "$f" in ./station.js|./stationinfo.txt) [ -f "$TARGET/sv1btl/$f" ] && continue ;; esac
+        case "$f" in ./station.js|./stationinfo.txt|./eibi.json) [ -f "$TARGET/sv1btl/$f" ] && continue ;; esac   # eibi.json: kept current by eibi/update-eibi.sh
         cat "$SRC/sv1btl/$f" > "$TARGET/sv1btl/$f" || die "cannot write $TARGET/sv1btl/$f"
     done
     echo "   kept your sv1btl/station.js and sv1btl/stationinfo.txt"
@@ -104,11 +104,15 @@ if [ -d "$TARGET" ]; then
             cat "$f" > "$TARGET/relay/$b" || die "cannot write $TARGET/relay/$b"
         done
     fi
+    if [ -d "$SRC/eibi" ]; then                        # the EiBi schedule updater
+        mkdir -p "$TARGET/eibi"
+        for f in "$SRC/eibi"/*; do cat "$f" > "$TARGET/eibi/$(basename "$f")" || die "cannot write $TARGET/eibi/$(basename "$f")"; done
+    fi
 else
     say "Copying the layout to $TARGET"
     mkdir -p "$TARGET" && cp -a "$SRC"/. "$TARGET"/ || die "copy failed"
 fi
-chmod +x "$TARGET/check-after-update.sh" 2>/dev/null
+chmod +x "$TARGET/check-after-update.sh" "$TARGET/eibi/update-eibi.sh" 2>/dev/null
 # Run with sudo: give the files to the owner of docker-compose.yml, not to root
 if [ "$(id -u)" = 0 ]; then chown -R --reference="$COMPOSE" "$TARGET" 2>/dev/null; fi
 

@@ -1,6 +1,6 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-websdr_sv1btl version 5.5.0 (2026-11-08) · by SV1BTL · based on RW3PS's WebSDR template
+websdr_sv1btl version 5.5.0 (2026-11-10) · by SV1BTL · based on RW3PS's WebSDR template
 
 (This is the version of this layout, not of UberSDR, which has its own version numbers.)
 
@@ -257,6 +257,29 @@ it again on each band or zoom change, so after editing just reload the page.
 The labels appear only from a quarter of the way in on the zoom range (25–100 %);
 further out they would crowd the scale. To change that, edit `e.zoom * 4 < e.maxzoom`
 in `sv1btl/ubersdr-compat.js` (`* 2` = from half zoom, or delete that line to show them at every zoom).
+
+### EiBi schedule
+
+The **EiBi** button, next to **SW** under Broadcast Station Information, opens a search of
+the [EiBi](http://www.eibispace.de/dx/) broadcast and utility schedule, as in
+PhantomSDR-Plus: filter by station, language, target area, band, country, transmitter,
+frequency and UTC time (on air now in green). A click on a row tunes it in its mode (AM,
+USB, LSB), opens the CW decoder for CW rows, starts the decoder for FAX, NAVTEX, RTTY or
+HFDL rows (decoder modes in amber), switches DRM on for DRM rows, and frames the waterfall
+around it with a red label; **Show on waterfall** puts all the results on the scale as
+green labels. The list shows 400 rows at first and 400 more each time you scroll near its
+bottom. Desktop page only.
+
+The list is `sv1btl/eibi.json` (the package ships a copy), made by
+`websdr_sv1btl/eibi/update-eibi.sh`: it downloads the current season's file from
+eibispace.de only when it has changed (at most once a day) and is live at once, no
+restart. Run it daily from cron (`crontab -e`):
+
+```
+00 1 * * * $HOME/ubersdr/websdr_sv1btl/eibi/update-eibi.sh >> $HOME/ubersdr/websdr_sv1btl/eibi/update.log 2>&1
+```
+
+or by hand with `update-eibi.sh --force`.
 
 ## 5. Other things you may want to change
 

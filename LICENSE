@@ -60,6 +60,10 @@ Third-party parts keep their own terms and are NOT relicensed:
     ALE from gr-ale / KiwiSDR ALE_2G, FST4W and MSK144 from WSJT-X, all
     GPL v3); lib/tzLookup.js (tz-lookup, CC0)
   - sv1btl/fzstd.js: fzstd 0.1.1 by Arjun Barrett, MIT licence
+  - EiBi schedule: sv1btl/eibi.js (after PhantomSDR-Plus's SwSchedule.svelte) and
+    eibi/update-eibi.sh, eibi/generate-eibi.py (PhantomSDR-Plus, GNU GPL v3);
+    the schedule data sv1btl/eibi.json is from EiBi by Eike Bierwirth
+    (www.eibispace.de/dx/), free to use and pass on per its README
   - Receive Diversity: sv1btl/psdr/diversity.js, diversityList.js, uberSource.js,
     kiwiSource.js, remoteSource.js, webSdrSource.js, webSdrCodec.js, clientVersion.js,
     lib/sideService.js and modules/phantomsdrdsp_bg.*, and the WebSDR relay

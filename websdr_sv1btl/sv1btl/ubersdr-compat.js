@@ -1496,6 +1496,7 @@
     setTimeout(function () { if (!xm.kind && !rade.side) xmStatus(''); }, 10000);
   }
 
+  window.ubersdr_xmode_kind = function () { return xm.kind || null; };   // 'iq' | 'drm' | null (sv1btl/eibi.js)
   // Button: IQ / DRM. Pressing the lit one again switches it off.
   window.ubersdr_xmode = function (k) {
     if (!XM[k]) return;
@@ -2744,6 +2745,8 @@
             }
             list.push([f, mo, text]);
           }
+          // EiBi window (sv1btl/eibi.js): its results shown on the waterfall, and the station picked
+          if (window.sv1btl_eibi_dx) { try { list = list.concat(window.sv1btl_eibi_dx(min, max)); } catch (err) {} }
           list.sort(function (p, q) { return p[0] - q[0]; });   // showdx expects ascending order
           for (var j = 0; j < list.length; j++) dx(list[j][0], list[j][1], list[j][2]);
         }
