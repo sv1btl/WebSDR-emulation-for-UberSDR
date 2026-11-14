@@ -34,7 +34,7 @@
 
 // SV1BTL (websdr_sv1btl): ?v= tags on the imports below so browsers fetch the updated files
 // (UberSDR serves them without cache headers); otherwise unchanged from PhantomSDR-Plus.
-import { KiwiFSKDecoder } from './fsk.js?v=20261106c';
+import { KiwiFSKDecoder } from './fsk.js?v=20261114';
 
 let sampleRate = 12000;
 let decoder    = null;

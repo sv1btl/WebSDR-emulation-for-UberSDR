@@ -9,7 +9,7 @@
 
 // SV1BTL (websdr_sv1btl): ?v= tags on the imports below so browsers fetch the updated files
 // (UberSDR serves them without cache headers); otherwise unchanged from PhantomSDR-Plus.
-import { KiwiFSKDecoder } from './fsk.js?v=20261106c';
+import { KiwiFSKDecoder } from './fsk.js?v=20261114';
 
 export class FSKWorkerProxy {
 
@@ -37,7 +37,7 @@ export class FSKWorkerProxy {
 
     try {
       this._worker = new Worker(
-        new URL('./fsk.worker.js?v=20261106c', import.meta.url),
+        new URL('./fsk.worker.js?v=20261114', import.meta.url),
         { type: 'module' }
       );
     } catch (e) {

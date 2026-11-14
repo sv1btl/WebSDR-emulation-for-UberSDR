@@ -394,6 +394,7 @@ export class MfskDecoder {
     this._syncHistFull = false;
     this._syncHistSum = 0;
     this._currSymbol = 0;
+    this._toneRepeat = 0;
     this._prev1Symbol = 0;
     this._prev2Symbol = 0;
     this._staticBurst = false;
@@ -483,6 +484,11 @@ export class MfskDecoder {
     this._synchronize();
     this._afc(base);
     this._evalS2n(base);
+    // How often the same tone comes twice in a row (read by mfskBrowser.js;
+    // it plays no part in decoding). Real MFSK: ~1/16, the FEC data is
+    // random. FT8 next door holds each tone 160 ms = 2.5 MFSK16 symbols, and
+    // decodes as confident-looking "tnet etR" at a metric well over squelch.
+    this._toneRepeat = decayavg(this._toneRepeat, this._currSymbol === this._prev1Symbol ? 1 : 0, 64);
     this._prev2Symbol = this._prev1Symbol;
     this._prev1Symbol = this._currSymbol;
   }
@@ -729,6 +735,9 @@ export class MfskDecoder {
   }
 
   get lockQuality() { return Math.round(this._metric); }
+
+  /** Share of symbols that repeat the previous tone (0..1), averaged over ~64 symbols. */
+  get toneRepeat() { return this._toneRepeat; }
 
   _maybeEmitMetrics() {
     const now = Date.now();

@@ -21,12 +21,14 @@
 // Weather RTTY and Maritime FSK / SITOR moved from FLDIGI to SERVICES; ALE 2G is split:
 // FLDIGI "ALE 2G HAM" (the amateur HFLINK net), SERVICES "ALE 2G" (every other net).
 //
+// 2026-11-14 (PhantomSDR-Plus): RTTY Browser, MFSK Browser, Naval RTTY (PBB CARB) in SERVICES.
+//
 // Licence: GNU GPL v3, as PhantomSDR-Plus.
 
 import { SSTVWorkerProxy } from './psdr/sstvWorkerProxy.js';
 import { FAXWorkerProxy } from './psdr/faxWorkerProxy.js';
-import { FSKWorkerProxy } from './psdr/fskWorkerProxy.js?v=20261106c';
-import { FLDIGI_MODEMS } from './psdr/fsk.js?v=20261106c';
+import { FSKWorkerProxy } from './psdr/fskWorkerProxy.js?v=20261114';
+import { FLDIGI_MODEMS } from './psdr/fsk.js?v=20261114';
 import { PSK_MODES, pskModeCfg } from './psdr/psk31.js?v=20261106';
 import { mt63DefaultCenter } from './psdr/mt63.js';
 import { WSPR_TOTAL_SAMPLES, wspr2SlotPosition } from './psdr/modules/wspr.js';
@@ -45,9 +47,9 @@ import { ALE_NETS } from './psdr/lib/aleNets.js?v=20261108';
 // PhantomSDR-Plus 5.5.0 (copied unchanged): FAX / NAVTEX / DWD RTTY timetables, the
 // Decoder ID engine with its band-plan layer, and the FFT for the FT8/WSPR spectrum strip
 import { FAX_SCHEDULE, NAVTEX_DB, RTTY_SCHEDULE, RTTY_PROGRAMME_BY_KHZ, parseSlots, navtexSlots, scheduleRows } from './psdr/broadcastSchedules.js';
-import { ModeIdWorkerProxy } from './psdr/modeIdWorkerProxy.js?v=20261106';
-import { RELIABLE_LO_HZ, RELIABLE_HI_HZ, RECENTRE_TARGET_HZ } from './psdr/modeId.js?v=20261106';
-import { applyBandPriors, signalKhz } from './psdr/modePriors.js?v=20261106';
+import { ModeIdWorkerProxy } from './psdr/modeIdWorkerProxy.js?v=20261114';
+import { RELIABLE_LO_HZ, RELIABLE_HI_HZ, RECENTRE_TARGET_HZ } from './psdr/modeId.js?v=20261114';
+import { applyBandPriors, signalKhz } from './psdr/modePriors.js?v=20261114';
 import { transformFlat } from './psdr/lib/fftRadix2.js';
 
 // HF FAX stations, from PhantomSDR-Plus App.svelte (frequencies: centre of the signal, kHz)
@@ -196,7 +198,9 @@ const RTTY_FREQS = {          // signal centre, kHz (PhantomSDR-Plus FSK_KNOWN_F
         ['15m RTTY 21083', 21083], ['10m RTTY 28083', 28083]],
   weather: [['DWD DDK2 4583', 4583], ['DWD DDH7 7646', 7646], ['DWD DDK9 10100.8', 10100.8],
             ['DWD DDH9 11039', 11039], ['DWD DDH8 14467.3', 14467.3],
-            ['DWD DDH47 147.3 (LF, 85 Hz)', 147.3, 85]]   // 3rd: its own shift, Hz (DDH47 is ±42.5 Hz)
+            ['DWD DDH47 147.3 (LF, 85 Hz)', 147.3, 85]],   // 3rd: its own shift, Hz (DDH47 is ±42.5 Hz)
+  naval: [2474, 4250, 4280, 5052, 5214, 5659, 5694.5, 6356, 6358.5, 8439, 9264, 9368, 12840.5, 16318, 17116.7, 17947, 18308, 20098]
+    .map((f) => [`PBB CARB ${f}`, f])    // PhantomSDR-Plus FSK_KNOWN_FREQUENCIES.naval
 };
 // Packet: the HF APRS USB dial (tones at 1600/1800 Hz); PhantomSDR-Plus's VHF entries are
 // outside this receiver
@@ -240,6 +244,8 @@ const DEC = {
   // DWD Weather RTTY (the RTTY window, 50 Bd, 450 Hz): in FLDIGI until 2026-11-08
   maritime: { label: 'SITOR',   title: 'Maritime FSK / SITOR — SITOR-B / NBDP maritime safety broadcasts (100 Bd, 170 Hz)', kind: 'maritime', lo: 0.25, hi: 0.75, family: 'services' },
   weather:  { label: 'RTTY-WX', title: 'Weather RTTY — DWD Pinneberg and similar (50 Bd, 450 Hz)', kind: 'rtty', family: 'services' },
+  // PhantomSDR-Plus 2026-11-14: naval CARB RTTY, PBB Royal Netherlands Navy (NATO 75 Bd / 850 Hz, inverted)
+  naval:    { label: 'RTTY-NAV', title: 'Naval RTTY — PBB Royal Netherlands Navy CARB broadcast (75 Bd, 850 Hz, inverted)', kind: 'rtty', family: 'services' },
   // DSC and Selcall: FSK centre 1700 Hz above the USB dial; time signals: carrier at 1000 Hz
   dsc:     { label: 'DSC',     title: 'DSC — Digital Selective Calling: MF/HF maritime calls (GMDSS)', kind: 'svc', lo: 1.4, hi: 2.0, family: 'services' },
   time:    { label: 'TIME',    title: 'Time Signals — DCF77, MSF, RWM, WWV/WWVH: decoded date and time', kind: 'svc', lo: 0.7, hi: 1.3, family: 'services' },
@@ -285,7 +291,8 @@ W.iscw = function () { return st.on && !DEC[st.on].centred ? false : pageIscw();
 W.ubersdr_dec_offset = function () {
   if (st.on === 'fax') return 1.9;
   if (st.on === 'navtex' || st.on === 'maritime') return 0.5;
-  if (st.on === 'rtty' || st.on === 'weather') return RTTY[rttyVariant()].center / 1000;
+  if (browsing()) return 0;                                         // a Browser: the dial
+  if (st.on === 'rtty' || isSvcRtty(st.on)) return RTTY[rttyVariant()].center / 1000;
   if (pageIscw()) return 0;
   if (st.on === 'dsc' || st.on === 'selcall') return 1.7;         // the DSC / Selcall frequency
   if (st.on === 'time') return 1;                                   // the time-signal carrier
@@ -953,15 +960,17 @@ function maritimeWindow() {
   schedStart('navtex');
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
-const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 } };
+const RTTY = { ham: { center: 1000, shift: 170, baud: 45.45 }, weather: { center: 1000, shift: 450, baud: 50 },
+               naval: { center: 1000, shift: 850, baud: 75 } };
 let rttyShift = 0;            // a listed frequency's own shift, Hz (DDH47); 0 = the mode's
 // Amateur RTTY is FLDIGI's 'rtty', DWD Weather RTTY SERVICES' 'weather' (same window)
-function rttyVariant() { return st.on === 'weather' ? 'weather' : 'ham'; }
+function rttyVariant() { return st.on === 'weather' || st.on === 'naval' ? st.on : 'ham'; }
+const isSvcRtty = (k) => k === 'weather' || k === 'naval';     // the SERVICES RTTY variants
 function rttyFreqOptions(v) { return `<option value="">Frequency…</option>` + RTTY_FREQS[v].map(([n, f]) => `<option value="${f}">${n}</option>`).join(''); }
 // RTTY squelch as PhantomSDR-Plus: dB SNR (3 kHz reference), FSK_SQ_OFF and below = off;
 // ham −5 dB, DWD weather −8 dB to start. Sent with the variant's settings, the way
 // PhantomSDR-Plus's panel sends them (fsk.js gates the printing, not the demodulator).
-const FSK_SQ_OFF = -20, RTTY_SQ = { ham: -5, weather: -8 };
+const FSK_SQ_OFF = -20, RTTY_SQ = { ham: -5, weather: -8, naval: -7 };
 function rttySquelch() {
   const v = parseFloat(lsGet('ubersdr_rttysq_' + rttyVariant(), ''));
   return Number.isFinite(v) ? v : RTTY_SQ[rttyVariant()];
@@ -974,25 +983,40 @@ function rttySquelchShow() {
 function rttySend() {
   if (!fsk) return;
   const v = rttyVariant(), r = RTTY[v];
-  fsk.setConfig({ center: r.center, shift: rttyShift || r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
-                  inverted: v === 'weather', squelch: rttySquelch() });
+  // Amateur RTTY Browser (rttyBrowser.js): every signal of this shift / baud between 300 and 2700 Hz
+  fsk.setConfig({ center: v === 'ham' && rttyBrowse ? 1500 : r.center, shift: rttyShift || r.shift, baud: r.baud, framing: '5N1.5', encoding: 'ita2',
+                  inverted: isSvcRtty(v), squelch: rttySquelch(), browse: v === 'ham' && rttyBrowse });
 }
 function rttyWindow(k) {
-  const v = k === 'weather' ? 'weather' : 'ham';
-  rttyShift = 0;
-  textWindow(v === 'weather' ? 'Weather RTTY decoder' : 'RTTY decoder', `${v === 'weather' ? serviceSelect('weather') : familySelect(v)}
+  const v = isSvcRtty(k) ? k : 'ham';
+  rttyShift = 0; rttyBrowse = false;
+  textWindow(v === 'weather' ? 'Weather RTTY decoder' : v === 'naval' ? 'Naval RTTY decoder' : 'RTTY decoder', `${isSvcRtty(v) ? serviceSelect(v) : familySelect(v)}
     <select class="dw-tune dec-sel">${rttyFreqOptions(v)}</select>
     <label class="dw-sqbox" title="Squelch (SNR): print only while the signal is at least this far above the noise. Noise reads −12 to −15 dB; RTTY stays readable down to about −4 dB. Far left turns it off.">Squelch
-      <input type="range" class="dw-sq" min="${FSK_SQ_OFF}" max="10" step="1"> <b class="dw-sqv"></b></label><span class="dw-met"></span>`, SCHED_HTML);
+      <input type="range" class="dw-sq" min="${FSK_SQ_OFF}" max="10" step="1"> <b class="dw-sqv"></b></label>` +
+    (v === 'ham' ? `<label title="Decode every RTTY signal of this shift and baud between 300 and 2700 Hz at once, one line each"><input type="checkbox" class="dw-rbr"> Browser</label>` : '') +
+    `<span class="dw-met"></span>${saveBtn()}`, SCHED_HTML);
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
     if (!ev || st.on !== k) return;
     if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
     else if (ev.type === 'status') status(ev.text || '');
-    else if (ev.type === 'metrics') { const m = $('.dw-met'); if (m) m.textContent = Number.isFinite(ev.snrDb) ? `SNR ${ev.snrDb.toFixed(0)} dB` : ''; }
+    else if (ev.type === 'browser') pskBrowserRows(ev.channels || []);
+    else if (ev.type === 'metrics' && !browsing()) { const m = $('.dw-met'); if (m) m.textContent = Number.isFinite(ev.snrDb) ? `SNR ${ev.snrDb.toFixed(0)} dB` : ''; }
   } });
   fsk.setVariant(v); rttySquelchShow(); rttySend(); fsk.setEnabled(true);
-  if (v === 'weather') svcWire();
-  else { const vs = $('.dw-var'); vs.onchange = () => familyChange(vs.value); }
+  saveWire(v === 'ham' ? 'rtty' : v + '-rtty');
+  if (isSvcRtty(v)) svcWire();
+  else {
+    const vs = $('.dw-var'); vs.onchange = () => familyChange(vs.value);
+    const rb = $('.dw-rbr');
+    rb.onchange = () => {
+      if (!rb.checked) browserArchiveAll();
+      rttyBrowse = rb.checked; browserCh = []; browserRows = new Map(); const pb = $('.dw-pb'); if (pb) pb.innerHTML = '';
+      rttySend(); applyFilter('rtty'); lightPresets(); showDial(); pskBrowserShow();
+      const t = $('.dw-title'); if (t) t.textContent = rttyBrowse ? `RTTY Browser (${RTTY.ham.baud} Bd / ${RTTY.ham.shift} Hz)` : 'RTTY decoder';
+      status(rttyBrowse ? 'Looking for RTTY signals between 300 and 2700 Hz…' : `Listening (tones centred on ${RTTY.ham.center} Hz)…`);
+    };
+  }
   $('.dw-sq').oninput = () => { lsSet('ubersdr_rttysq_' + rttyVariant(), $('.dw-sq').value); rttySquelchShow(); rttySend(); };
   $('.dw-tune').onchange = (e) => {
     const f = +e.target.value; if (!f) return;
@@ -1157,8 +1181,10 @@ let hellRev = false;
 function modemSend() {
   const v = modemVariant();
   if (!fsk || st.on !== 'modem') return;
-  fsk.setConfig({ center: modemCenter(v), encoding: v, modemMode: modemKey(v), bandwidth: modemBw(v),
-                  modemSquelch: modemSquelch(v), reverse: v === 'hell' ? hellRev : false });
+  // MFSK Browser (mfskBrowser.js): the whole passband around 1500 Hz, every signal of this sub-mode
+  const br = v === 'mfsk' && mfskBrowse;
+  fsk.setConfig({ center: br ? 1500 : modemCenter(v), encoding: v, modemMode: modemKey(v), bandwidth: modemBw(v),
+                  modemSquelch: modemSquelch(v), reverse: v === 'hell' ? hellRev : false, browse: br });
 }
 // Hellschreiber: hell.js sends columns of 2 x 20 pixels (ink 0..255, pixel 0 at the bottom);
 // drawn left to right, 2 px wide, in rows that scroll up (as PhantomSDR-Plus App.svelte)
@@ -1208,7 +1234,9 @@ function modemWindow() {
       `<option value="${x.key}">${esc(x.label)}</option>`).join('')}</select></label>` +
     (ui.sq ? `<label class="dw-sqbox" title="${esc(ui.sq.note)}">Squelch <input type="range" class="dw-msq" min="${ui.sq.min}" max="${ui.sq.max}" step="${ui.sq.step}"> <b class="dw-sqv"></b></label>` : '') +
     (hell ? `<label title="FSK Hell / Hell 80: paint the other tone as ink"><input type="checkbox" class="dw-hrev"> Reverse</label><button type="button" class="dw-hsave">Save</button>` : '') +
-    `<button type="button" class="dw-auto" title="Find the strongest signal within 0.3–2.7 kHz and put it in the filter">Auto-tune</button><span class="dw-met"></span>`;
+    (v === 'mfsk' ? `<label title="Decode every signal of this Mode between 300 and 2700 Hz at once, one line each"><input type="checkbox" class="dw-mbr"> Browser</label>` : '') +
+    `<button type="button" class="dw-auto" title="Find the strongest signal within 0.3–2.7 kHz and put it in the filter">Auto-tune</button><span class="dw-met"></span>` +
+    (hell ? '' : saveBtn());
   if (hell) {
     openWindow(`<div class="dw-head"><span class="dw-title">Hellschreiber decoder</span>${head}<button type="button" class="dw-clear">Clear</button></div>` +
       `<canvas width="${HELL_W}" height="${HELL_ROW_H * HELL_ROWS}" style="width:${HELL_W}px;height:${HELL_ROW_H * HELL_ROWS}px;background:#f7f7f7"></canvas>`);
@@ -1218,20 +1246,31 @@ function modemWindow() {
     hellRev = false; $('.dw-hrev').onchange = (e) => { hellRev = e.target.checked; modemSend(); };
   } else {
     textWindow(ui.name + ' decoder', head);
+    saveWire(v);
   }
+  mfskBrowse = false;
+  const mb = $('.dw-mbr');
+  if (mb) mb.onchange = () => {
+    if (!mb.checked) browserArchiveAll();
+    mfskBrowse = mb.checked; browserCh = []; browserRows = new Map(); const pb = $('.dw-pb'); if (pb) pb.innerHTML = '';
+    modemSend(); applyFilter('modem'); lightPresets(); showDial(); pskBrowserShow();
+    const t = $('.dw-title'); if (t) t.textContent = mfskBrowse ? `MFSK Browser (${browserWhat()})` : ui.name + ' decoder';
+    if (mfskBrowse) status(`Listening for ${browserWhat()} signals between 300 and 2700 Hz…`); else modemStatus();
+  };
   $('.dw-var').onchange = (e) => familyChange(e.target.value);
   const ms = $('.dw-mmode'); ms.value = modemKey(v);
   const sqShow = () => {
     const r = $('.dw-msq'); if (!r) return;
     r.value = String(modemSquelch(v)); $('.dw-sqv').textContent = ui.sq.fmt(+r.value);
   };
-  ms.onchange = () => { lsSet('ubersdr_modem_' + v, ms.value); modemSend(); applyFilter('modem'); lightPresets(); modemStatus(); };
+  ms.onchange = () => { lsSet('ubersdr_modem_' + v, ms.value); modemSend(); applyFilter('modem'); lightPresets(); if (!mfskBrowse) modemStatus(); else { browserArchiveAll(); const pb = $('.dw-pb'); if (pb) pb.innerHTML = ''; pskBrowserShow(); const t = $('.dw-title'); if (t) t.textContent = `MFSK Browser (${browserWhat()})`; } };
   if ($('.dw-msq')) $('.dw-msq').oninput = (e) => { lsSet('ubersdr_modemsq_' + v, e.target.value); sqShow(); modemSend(); };
   $('.dw-auto').onclick = pskAutoTune;
   fsk = new FSKWorkerProxy({ role: 'fsk', variant: v, sampleRate: SR, callback: (ev) => {
     if (!ev || st.on !== 'modem') return;
     if (ev.type === 'char') { if (ev.char && ev.char !== '\r') textOut(ev.char); }
     else if (ev.type === 'hell') hellPaint(ev.column);
+    else if (ev.type === 'browser') pskBrowserRows(ev.channels || []);
     else if (ev.type === 'status') { status(ev.text || ''); pskAutoResult(ev.text || ''); }
     else if (ev.type === 'metrics') modemMetrics(ev);
   } });
@@ -1437,8 +1476,9 @@ function hfdlWindow() {
 function decFilter(k) {
   const d = DEC[k];
   if (k === 'rtty' && rttyKey() !== 'rtty') return decFilter(rttyKey());
-  if (k === 'rtty' || k === 'weather') {
-    const r = RTTY[k === 'weather' ? 'weather' : 'ham'], hw = ((st.on === k && rttyShift) || r.shift) / 2 + 1.43 * r.baud;
+  if (k === 'rtty' && rttyBrowse) return ['usb', 0.2, 2.8];             // RTTY Browser: 1500 Hz ± 1300 Hz
+  if (k === 'rtty' || isSvcRtty(k)) {
+    const r = RTTY[isSvcRtty(k) ? k : 'ham'], hw = ((st.on === k && rttyShift) || r.shift) / 2 + 1.43 * r.baud;
     return ['usb', (r.center - hw) / 1000, (r.center + hw) / 1000];
   }
   if (k === 'sstv') return [sstvSideband(dialKHz()), d.lo, d.hi];
@@ -1450,6 +1490,7 @@ function decFilter(k) {
   if (k === 'psk31') { const hw = Math.round(3.2 * pskMode().baud) / 1000; return ['usb', 1 - hw, 1 + hw]; }   // ±3.2 baud: BPSK31 ±100 Hz
   if (k === 'olivia' && oliviaBrowse) return ['usb', 0.2, 2.8];      // 1500 Hz ± 1300 Hz, as PhantomSDR-Plus
   if (k === 'olivia') { const hw = (oliviaMode().b / 2 + 150) / 1000; return ['usb', 1 - hw, 1 + hw]; }
+  if (k === 'modem' && mfskBrowse && modemVariant() === 'mfsk') return ['usb', 0.2, 2.8];   // MFSK Browser
   if (k === 'modem') {                        // PhantomSDR-Plus fskApplyBandpass: bw/2 + max(60, 15 %)
     const v = modemVariant(), bw = modemBw(v), c = modemCenter(v), hw = bw / 2 + Math.max(60, 0.15 * bw);
     return ['usb', Math.max(0.05, (c - hw) / 1000), (c + hw) / 1000];
@@ -1561,7 +1602,7 @@ function start(k, opts) {
   else if (k === 'sstv') sstvWindow();
   else if (k === 'fax') faxWindow();
   else if (k === 'navtex') navtexWindow();
-  else if (k === 'rtty' || k === 'weather') rttyWindow(k);
+  else if (k === 'rtty' || isSvcRtty(k)) rttyWindow(k);
   else if (k === 'maritime') maritimeWindow();
   else if (k === 'psk31') psk31Window();
   else if (k === 'olivia') oliviaWindow();
@@ -1809,9 +1850,10 @@ function idUse(c) {
   if (!c || !c.key) return;
   const k = c.key;
   if (k === 'cw') { idOff(); listener(); try { W.set_mode('cw'); } catch (e) {} return; }
-  if (k === 'services') {                       // DSC: SERVICES, the carrier put on its 1700 Hz
+  if (k === 'services') {                       // a SERVICE: the signal put on its decoder's audio centre
     const f = idRes && idRes.features, v = DEC[c.variant] ? c.variant : 'dsc';
-    const dial = f && f.centerHz ? dialKHz() + (pageMode() === 'LSB' ? -1 : 1) * (f.centerHz - 1700) / 1000 : 0;
+    const centre = v === 'maritime' ? 500 : isSvcRtty(v) ? 1000 : 1700;   // SITOR 500, weather RTTY 1000, DSC 1700
+    const dial = f && f.centerHz ? dialKHz() + (pageMode() === 'LSB' ? -1 : 1) * (f.centerHz - centre) / 1000 : 0;
     start(v, { keepDial: true });
     if (dial > 0) { tuneKHz(+dial.toFixed(3)); applyFilter(v); }
     return;
@@ -1845,7 +1887,7 @@ function idClick(e) {
 // before), Maritime FSK / SITOR, Weather RTTY and ALE 2G (fsk.js, as FLDIGI), DSC, Time
 // Signals or HF Selcall (PhantomSDR-Plus's services.worker.js: dsc.js, timesig.js), one at
 // a time. In PhantomSDR-Plus's order.
-const SERVICES = [['hfdl', 'HFDL'], ['maritime', 'Maritime FSK / SITOR'], ['weather', 'Weather RTTY'], ['dsc', 'DSC'],
+const SERVICES = [['hfdl', 'HFDL'], ['maritime', 'Maritime FSK / SITOR'], ['weather', 'Weather RTTY'], ['naval', 'Naval RTTY (PBB CARB)'], ['dsc', 'DSC'],
                   ['time', 'Time Signals'], ['selcall', 'HF Selcall'], ['aleu', 'ALE 2G (MIL-STD-188-141)']];
 function svcKey() { const v = lsGet('ubersdr_service', 'hfdl'); return SERVICES.some((x) => x[0] === v) ? v : 'hfdl'; }
 function serviceSelect(cur) {
@@ -2115,19 +2157,36 @@ function wsjtWindow(k) {
 }
 // PSK Browser (PhantomSDR-Plus pskBrowser.js): every BPSK31 signal in the passband, one line
 // each; a click on a line decodes that one signal as BPSK31 (at 1000 Hz)
-function browsing() { return (st.on === 'psk31' && pskMode().browser) || (st.on === 'olivia' && oliviaBrowse); }
+// The Browsers: PSK (a PSK sub-mode), Olivia / Contestia, amateur RTTY and MFSK (PhantomSDR-Plus 2026-11-14)
+let rttyBrowse = false, mfskBrowse = false;
+function browsing() {
+  return (st.on === 'psk31' && pskMode().browser) || (st.on === 'olivia' && oliviaBrowse) ||
+         (st.on === 'rtty' && rttyBrowse) || (st.on === 'modem' && mfskBrowse && modemVariant() === 'mfsk');
+}
 let browserCh = [];
-function browserWhat() { const o = oliviaMode(); return st.on === 'olivia' ? `${o.c ? 'Contestia' : 'Olivia'} ${o.label}` : 'PSK31'; }
+function browserWhat() {
+  const o = oliviaMode();
+  if (st.on === 'olivia') return `${o.c ? 'Contestia' : 'Olivia'} ${o.label}`;
+  if (st.on === 'rtty') return `RTTY ${RTTY.ham.baud} Bd / ${RTTY.ham.shift} Hz`;
+  if (st.on === 'modem') { const m = FLDIGI_MODEMS.mfsk.modes.find((x) => x.key === modemKey('mfsk')); return m ? m.label : 'MFSK'; }
+  return 'PSK31';
+}
+// Save button for the text windows (in a Browser: one line per signal, also the dropped ones)
+function saveBtn() { return `<button type="button" class="dw-save" title="Save the decoded text (in a browser: one line per signal)">Save</button>`; }
+function saveWire(name) {
+  const b = $('.dw-save'); if (!b) return;
+  b.onclick = () => browsing() || browserArchive.length ? saveText(name + '-browser', browserSaveLines()) : saveText(name, [$('.dw-text').textContent]);
+}
 function pskBrowserShow() {
   const on = browsing(), pb = $('.dw-pb'), tx = $('.dw-text'), au = $('.dw-auto');
   if (pb) {
     pb.hidden = !on;
-    if (on && !pb.childElementCount) pb.innerHTML = `<div class="sv-row"><i>${st.on === 'olivia'
-      ? `Listening for ${esc(browserWhat())} signals between 300 and 2700 Hz… A station appears once its first characters are decoded, a few seconds after it starts.`
-      : 'Looking for PSK31 signals between 300 and 2700 Hz… (a few seconds)'}</i></div>`;
+    if (on && !pb.childElementCount) pb.innerHTML = `<div class="sv-row"><i>${st.on === 'psk31'
+      ? 'Looking for PSK31 signals between 300 and 2700 Hz… (a few seconds)'
+      : `Listening for ${esc(browserWhat())} signals between 300 and 2700 Hz… A station appears once its first characters are decoded, a few seconds after it starts.`}</i></div>`;
   }
   if (tx) tx.hidden = on;
-  if (au && st.on === 'psk31') au.hidden = on;
+  if (au && (st.on === 'psk31' || st.on === 'modem')) au.hidden = on;
 }
 // One line per signal: frequency, lock and its text in a box of about 6 lines that follows new
 // text (its own scrollbar scrolls back; PhantomSDR-Plus keeps up to 4000 characters a line). The lines are
@@ -2157,7 +2216,7 @@ function pskBrowserRows(ch) {
   browserArchive = browserArchive.slice(-500);
   if (!browserCh.length && ch.length) pb.innerHTML = '';
   browserCh = ch;
-  const what = st.on === 'olivia' ? esc(oliviaMode().label) : 'BPSK31';
+  const what = st.on === 'psk31' ? 'BPSK31' : esc(browserWhat());
   for (const c of ch) {
     let r = browserRows.get(c.id);
     if (!r) {
@@ -2186,9 +2245,17 @@ function pskBrowserRows(ch) {
     const r = e.target.closest('.pb-row'); if (!r) return;
     const hz = +r.dataset.hz;
     browserArchiveAll();
-    tuneKHz(+(dialKHz() + (hz - 1000) / 1000).toFixed(3));
+    // the signal goes to the decoder's own audio centre: 1000 Hz (PSK, Olivia, RTTY), MFSK 1500 Hz
+    const centre = st.on === 'modem' ? modemCenter('mfsk') : 1000;
+    tuneKHz(+(dialKHz() + (hz - centre) / 1000).toFixed(3));
     if (st.on === 'olivia') { oliviaBrowse = false; if (oliviaSend) oliviaSend(); applyFilter('olivia'); }
-    else {
+    else if (st.on === 'rtty') {
+      rttyBrowse = false; const rb = $('.dw-rbr'); if (rb) rb.checked = false;
+      rttySend(); applyFilter('rtty'); const t = $('.dw-title'); if (t) t.textContent = 'RTTY decoder';
+    } else if (st.on === 'modem') {
+      mfskBrowse = false; const mb = $('.dw-mbr'); if (mb) mb.checked = false;
+      modemSend(); applyFilter('modem'); const t = $('.dw-title'); if (t) t.textContent = 'MFSK decoder'; modemStatus();
+    } else {
       lsSet('ubersdr_pskmode', 'bpsk31');
       const ms = $('.dw-pmode'); if (ms) ms.value = 'bpsk31';
       pskSend(); applyFilter('psk31');
@@ -2221,7 +2288,7 @@ const LABEL_MODES = [[/\bFT8\b/i, 'ft8'], [/\bFT4\b/i, 'ft4'], [/\bFT2\b/i, 'ft2
 // MORSE has none here: its label sets CW, which opens the CW decoder by itself.
 const MARKER_MODES = { FT8: ['ft8'], FT4: ['ft4'], FT2: ['ft2'], JS8: ['js8'], WSPR: ['wspr'], SSTV: ['sstv'],
   FAX: ['fax'], WEFAX: ['fax'], NAVTEX: ['navtex'], SITOR: ['maritime'], RTTY: ['rtty', 'ham'],
-  'RTTY-WX': ['weather'], PSK31: ['psk31', null, 'bpsk31'], BPSK31: ['psk31', null, 'bpsk31'],
+  'RTTY-WX': ['weather'], 'RTTY-NAV': ['naval'], PSK31: ['psk31', null, 'bpsk31'], BPSK31: ['psk31', null, 'bpsk31'],
   PSK63: ['psk31', null, 'bpsk63'], BPSK63: ['psk31', null, 'bpsk63'], PSK125: ['psk31', null, 'bpsk125'],
   BPSK125: ['psk31', null, 'bpsk125'], QPSK31: ['psk31', null, 'qpsk31'], QPSK63: ['psk31', null, 'qpsk63'],
   QPSK125: ['psk31', null, 'qpsk125'], OLIVIA: ['olivia', null, 'olivia'], CONTESTIA: ['olivia', null, 'contestia'], MFSK: ['modem', 'mfsk'],

@@ -67,7 +67,7 @@ const PLAN = {
     ranges: [[423, 425], [489, 491], [517, 519], [4208.5, 4211]],
   },
   // The ITU Appendix 15 NBDP/SITOR set, plus the MF working channel.
-  'fsk:maritime': {
+  'services:maritime': {
     strict: true,
     ranges: [
       [2173.5, 2175.5], [4209, 4211], [6313, 6315], [8415.5, 8417.5],
@@ -75,7 +75,7 @@ const PLAN = {
       [22375, 22377], [26099.5, 26101.5],
     ],
   },
-  'fsk:weather': {
+  'services:weather': {
     strict: true,
     ranges: [
       [146.3, 148.3], [4582, 4584], [7645, 7647], [10099.8, 10101.8],

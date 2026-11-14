@@ -1201,7 +1201,7 @@ const MODES = [
       0.15 * (f.continuous !== false ? 1 : 0),
   },
   {
-    key: 'fsk', variant: 'weather',
+    key: 'services', variant: 'weather',
     label: 'Weather RTTY (50 Bd, 450 Hz)',
     why: '450 Hz shift at 50 Bd — the DWD Pinneberg outlets',
     score: (f) =>

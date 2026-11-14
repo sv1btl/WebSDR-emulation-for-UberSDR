@@ -54,7 +54,7 @@ Third-party parts keep their own terms and are NOT relicensed:
   - IQ demodulators and DRM schedule: sv1btl/psdr/lib/iqDemod.js and
     drmSchedule.js (PhantomSDR-Plus, GNU GPL v3)
   - SERVICES and FLDIGI additions: sv1btl/psdr/dsc.js, timesig.js, ale.js,
-    fst4w.js, msk144.js, pskBrowser.js, oliviaBrowser.js, services.worker.js,
+    fst4w.js, msk144.js, pskBrowser.js, oliviaBrowser.js, mfskBrowser.js, rttyBrowser.js, services.worker.js,
     servicesWorkerProxy.js, lib/aleNets.js, lib/pack77.js, lib/fftMixed.js,
     lib/fst4wTables.js, lib/msk144Tables.js (PhantomSDR-Plus, GNU GPL v3;
     ALE from gr-ale / KiwiSDR ALE_2G, FST4W and MSK144 from WSJT-X, all

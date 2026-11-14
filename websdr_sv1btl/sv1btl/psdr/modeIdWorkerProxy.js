@@ -6,7 +6,7 @@
 
 // SV1BTL (websdr_sv1btl): ?v= tags on the imports below so browsers fetch the updated files
 // (UberSDR serves them without cache headers); otherwise unchanged from PhantomSDR-Plus.
-import { ModeIdentifier } from './modeId.js?v=20261106';
+import { ModeIdentifier } from './modeId.js?v=20261114';
 
 export class ModeIdWorkerProxy {
 
@@ -24,7 +24,7 @@ export class ModeIdWorkerProxy {
     if (this._worker || this._local) return;
     try {
       this._worker = new Worker(
-        new URL('./modeId.worker.js?v=20261106', import.meta.url),
+        new URL('./modeId.worker.js?v=20261114', import.meta.url),
         { type: 'module' }
       );
     } catch (e) {

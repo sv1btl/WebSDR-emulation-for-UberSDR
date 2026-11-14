@@ -2426,7 +2426,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261108a';
+    s.src = 'sv1btl/decoders.js?v=20261114br';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });
@@ -2704,7 +2704,7 @@
     // unknown one follows the band plan. Lines starting with # are comments. The file
     // is re-read on each band/zoom change, so edits show after a page reload.
     var LABEL_MODES = { ft8: 'usb', ft4: 'usb', ft2: 'usb', js8: 'usb', wspr: 'usb', fax: 'usb', wefax: 'usb',
-      navtex: 'usb', sitor: 'usb', rtty: 'usb', 'rtty-wx': 'usb', psk31: 'usb', olivia: 'usb', mfsk: 'usb',
+      navtex: 'usb', sitor: 'usb', rtty: 'usb', 'rtty-wx': 'usb', 'rtty-nav': 'usb', psk31: 'usb', olivia: 'usb', mfsk: 'usb',
       bpsk31: 'usb', psk63: 'usb', bpsk63: 'usb', psk125: 'usb', bpsk125: 'usb', qpsk31: 'usb', qpsk63: 'usb',
       qpsk125: 'usb', contestia: 'usb', dsc: 'usb', selcall: 'usb', time: 'usb', dcf77: 'usb', msf: 'usb', rwm: 'usb',
       wwv: 'usb', wwvh: 'usb', fst4w: 'usb', msk144: 'usb', ale: 'usb',
