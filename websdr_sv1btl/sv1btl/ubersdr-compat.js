@@ -2853,9 +2853,29 @@
     var wd = document.getElementById('wfdiv0');
     return !!(wd && t && t.nodeType === 1 && wd.contains(t));
   }
+  // Shift + wheel TUNES instead (2026-11-15, as PhantomSDR-Plus): 100 Hz per notch,
+  // Ctrl + Shift + wheel 10 Hz. Ctrl alone is left to the browser (page zoom) outside
+  // the waterfall; over it the default is blocked here as for every wheel turn. With
+  // Shift, Chrome/Edge on Windows and every browser on macOS report the turn as a
+  // sideways scroll (deltaX), so that is read too. Up = higher frequency.
+  var tuneAcc = 0;
+  function wheelTune(ev) {
+    var dv = ev.deltaY || ev.deltaX || 0;
+    if (ev.deltaMode === 0) {                    // pixels: add up, one step per WHEEL_STEP_PX
+      tuneAcc += dv;
+      if (Math.abs(tuneAcc) < WHEEL_STEP_PX) return;
+      dv = tuneAcc; tuneAcc = 0;
+    } else tuneAcc = 0;
+    if (!dv || typeof window.setfreq !== 'function' || typeof window.freq !== 'number') return;
+    var stepKHz = (ev.ctrlKey || ev.metaKey) ? 0.01 : 0.1;
+    var f = Math.round((window.freq + (dv < 0 ? stepKHz : -stepKHz)) * 1000) / 1000;
+    window.setfreq(Math.max(0, f));
+  }
   document.addEventListener('wheel', function (ev) {
     if (!overWaterfall(ev.target)) return;
     ev.preventDefault(); ev.stopImmediatePropagation();
+    if (ev.shiftKey) { wheelAcc = 0; wheelTune(ev); return; }
+    tuneAcc = 0;
     var wa = window.waterfallapplet && window.waterfallapplet[0];
     var cv = wfCanvases()[0];
     if (!wa || typeof wa.setzoom !== 'function' || !cv) return;

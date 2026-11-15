@@ -18,7 +18,9 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   that follows the mouse runs down through the waterfall as well, as in PhantomSDR-Plus;
 - a **3D spectrum** as in PhantomSDR-Plus, with the waterfall's own colours (the **3D**
   switch next to "Tube & Waterfall & DSP & Audio"; see "3D spectrum" below);
-- **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz;
+- **click-to-tune** on the waterfall and the spectrum, rounded to 0.5 kHz. The mouse wheel
+  there zooms; **Shift + wheel** tunes in 100 Hz steps and **Ctrl + Shift + wheel** in 10 Hz
+  steps, as in PhantomSDR-Plus (desktop page);
 - **digit tuning** on the frequency display: mouse wheel over a digit, left click up,
   right click down;
 - a **frequency keypad**: click anywhere else in the black frequency / S-meter frame (desktop

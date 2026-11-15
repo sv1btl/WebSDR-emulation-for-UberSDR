@@ -58,7 +58,7 @@ window.STATION = {
     [ 'Maasbree', 'http://sdr.websdrmaasbree.nl:8902/' ],
     [ 'Heppen',   'http://websdr.heppen.be:8901/' ],
     [ 'Utah1',    'http://websdr1.sdrutah.org:8901/' ],
-    [ 'QO100',    'http://eshail.batc.org.uk:8901/' ],
+    [ 'QO100',    'https://eshail.batc.org.uk/nb/' ],
     [ 'NA5B',     'http://na5b.com:8901/' ]
   ],
 
