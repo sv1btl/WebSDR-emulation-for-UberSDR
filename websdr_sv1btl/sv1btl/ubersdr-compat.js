@@ -2137,7 +2137,7 @@
         'font:13px/16px "Courier New",monospace;white-space:pre-wrap;word-break:break-word}' +
       '.cwdec .cw-status{padding:1px 6px 2px;color:#333;font-style:italic;border-top:1px solid #ddd}' +
       '.cwdec .cw-status.err{color:#c00;font-style:normal}' +
-      '.cwdec .cw-pb{max-height:210px;overflow-y:auto;background:#f7f7f7;font:11px/14px "Courier New",monospace}' +
+      '.cwdec .cw-pb{max-height:288px;overflow-y:auto;background:#f7f7f7;font:11px/14px "Courier New",monospace}' +
       '.cwdec .br-row{display:flex;align-items:flex-start;gap:6px;padding:1px 4px;border-bottom:1px solid #ddd;cursor:pointer}' +
       '.cwdec .br-row:hover{background:#e3f1ee}.cwdec .br-row .f{flex:none;color:#06305a;font-weight:bold}' +
       '.cwdec .br-row .w{flex:none;width:44px;text-align:right;color:#666}.cwdec .br-row .c{flex:none;width:84px;font-weight:bold;color:#8a6d00}' +
@@ -2340,14 +2340,25 @@
     cwd.archive = cwd.archive.slice(-500);
     if (!cwd.ch.length && ch.length) box.innerHTML = '';
     cwd.ch = ch;
+    // While a mouse button is held on the list (a scrollbar dragged, its arrow held) nothing is
+    // pulled to its newest text, so the scrolling is the listener's
+    if (!box._holdWired) {
+      box._holdWired = true;
+      box.addEventListener('pointerdown', function () { box._held = true; });
+      window.addEventListener('pointerup', function () { box._held = false; });
+    }
+    var prev = null;
     ch.forEach(function (c) {
       var r = cwd.rows[c.id];
       if (!r) {
         r = document.createElement('div'); r.className = 'br-row';
-        r.innerHTML = '<span class="f"></span><span class="w"></span><span class="c"></span><div class="x"></div>';
+        r.innerHTML = '<span class="f"></span><span class="w"></span><span class="c"></span><div class="x" title="Shift+wheel or its scrollbar: scroll back through this line"></div>';
         r.dataset.hz = c.hz; cwd.rows[c.id] = r;
       }
-      box.appendChild(r);                            // in the browser's order
+      // in the browser's order, moved only when that order changes (a move cuts a held scrollbar arrow)
+      var want = prev ? prev.nextSibling : box.firstChild;
+      if (r !== want) box.insertBefore(r, want);
+      prev = r;
       var khz = (Number(window.freq) || 0) + c.hz / 1000;
       r.dataset.hz = c.hz;
       r.title = 'Click: decode only this station (CW on ' + khz.toFixed(3) + ' kHz)';
@@ -2355,10 +2366,13 @@
       r.querySelector('.w').textContent = c.wpm ? c.wpm + ' wpm' : '';
       var cc = r.querySelector('.c'); cc.textContent = (c.cq && c.call ? 'CQ ' : '') + (c.call || ''); cc.className = 'c' + (c.cq ? ' cq' : '');
       var x = r.querySelector('.x'), t = String(c.text || '').replace(/^\s+/, '');
-      if (x.textContent !== t) {
+      var old = x.textContent;
+      if (old !== t) {
         var end = x.scrollTop + x.clientHeight >= x.scrollHeight - 4;
-        x.textContent = t;
-        if (end) x.scrollTop = x.scrollHeight;
+        // new text is added to the end; the whole line is written again only when its start changed
+        if (old && t.indexOf(old) === 0 && x.firstChild && x.firstChild.nodeType === 3) x.firstChild.appendData(t.slice(old.length));
+        else x.textContent = t;
+        if (end && !box._held) x.scrollTop = x.scrollHeight;
       }
     });
     if (!ch.length) cwBrowseUI();
@@ -2366,6 +2380,13 @@
     // A line's own scrollbar (over six lines of text): a click or drag on it scrolls, it does not
     // pick the station (PhantomSDR-Plus noScrollbarPick)
     box.onmousedown = function (e) { var x = e.target.closest && e.target.closest('.x'); box._onBar = !!(x && e.offsetX >= x.clientWidth); };
+    // The mouse wheel over a line moves the LIST; Shift+wheel or a line's own scrollbar
+    // scrolls back through that line's text
+    box.onwheel = function (e) {
+      if (e.shiftKey || !(e.target.closest && e.target.closest('.br-row'))) return;
+      e.preventDefault();
+      box.scrollTop += e.deltaMode === 1 ? e.deltaY * 14 : e.deltaMode === 2 ? e.deltaY * box.clientHeight : e.deltaY;
+    };
     box.onclick = function (e) {
       if (box._onBar) { box._onBar = false; return; }
       var r = e.target.closest('.br-row'); if (!r) return;
@@ -2426,7 +2447,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261114br';
+    s.src = 'sv1btl/decoders.js?v=20261114sc';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });

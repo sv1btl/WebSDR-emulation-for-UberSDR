@@ -435,6 +435,7 @@ function sstvSideband(fk) { return fk > 0 && fk < 10000 ? 'lsb' : 'usb'; }
 .decwin .ts-big .utc{font:bold 22px/26px "Courier New",monospace;color:#0a6b2a}
 .decwin .ts-bits{display:flex;gap:1px;padding:2px 6px}.decwin .ts-bits span{flex:1;height:8px;border-radius:1px;background:#ccc}
 .decwin .ts-bits .b0{background:#2f5f3a}.decwin .ts-bits .b1{background:#3fc060}.decwin .ts-bits .b2{background:#e0a020}.decwin .ts-bits .now{background:#2a8ad0}
+.decwin .dw-list.dw-pb{height:auto;min-height:60px;max-height:288px}
 .decwin .pb-row{display:flex;align-items:flex-start;gap:6px;padding:1px 4px;border-bottom:1px solid #ddd;cursor:pointer}
 .decwin .pb-row:hover{background:#e3f1ee}.decwin .pb-row .f{color:#06305a;flex:none}.decwin .pb-row .q{flex:none;width:34px;color:#888}.decwin .pb-row .q.on{color:#0a7a2a}
 .decwin .pb-row .x{flex:1 1 0;min-width:0;max-height:84px;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;color:#000}
@@ -2217,27 +2218,49 @@ function pskBrowserRows(ch) {
   if (!browserCh.length && ch.length) pb.innerHTML = '';
   browserCh = ch;
   const what = st.on === 'psk31' ? 'BPSK31' : esc(browserWhat());
+  // While a mouse button is held on the list (a scrollbar dragged, its arrow held) nothing is
+  // pulled to its newest text, so the scrolling is the listener's
+  if (!pb._holdWired) {
+    pb._holdWired = true;
+    pb.addEventListener('pointerdown', () => { pb._held = true; });
+    window.addEventListener('pointerup', () => { pb._held = false; });
+  }
+  let prev = null;
   for (const c of ch) {
     let r = browserRows.get(c.id);
     if (!r) {
       r = document.createElement('div'); r.className = 'pb-row';
-      r.innerHTML = '<span class="f"></span><span class="q" title="Lock quality"></span><div class="x"></div>';
+      r.innerHTML = '<span class="f"></span><span class="q" title="Lock quality"></span><div class="x" title="Shift+wheel or its scrollbar: scroll back through this line"></div>';
       browserRows.set(c.id, r);
     }
-    pb.appendChild(r);                               // in the browser's order
+    // in the browser's order, moved only when that order changes (a move cuts a held scrollbar arrow)
+    const want = prev ? prev.nextSibling : pb.firstChild;
+    if (r !== want) pb.insertBefore(r, want);
+    prev = r;
     r.dataset.hz = c.hz;
     r.title = `Click: decode only this signal (${what} at ${Math.round(c.hz)} Hz)`;
     r.querySelector('.f').textContent = (dialKHz() + c.hz / 1000).toFixed(3);
     const q = r.querySelector('.q'); q.textContent = c.lock + '%'; q.className = 'q' + (c.lock >= 45 ? ' on' : '');
     const x = r.querySelector('.x'), t = String(c.text || '').trimStart();
-    if (x.textContent !== t) {
+    const old = x.textContent;
+    if (old !== t) {
       const end = x.scrollTop + x.clientHeight >= x.scrollHeight - 4;
-      x.textContent = t;
-      if (end) x.scrollTop = x.scrollHeight;
+      // new text is added to the end; the whole line is written again only when its start changed
+      if (old && t.startsWith(old) && x.firstChild && x.firstChild.nodeType === 3) x.firstChild.appendData(t.slice(old.length));
+      else x.textContent = t;
+      if (end && !pb._held) x.scrollTop = x.scrollHeight;
     }
   }
   if (!ch.length) pb.innerHTML = `<div class="sv-row"><i>No ${esc(browserWhat())} signal decoded yet between 300 and 2700 Hz…</i></div>`;
   const m = $('.dw-met'); if (m) m.textContent = `Signals: ${ch.length}`;
+  // The mouse wheel over a line moves the LIST (several stations at once would otherwise leave
+  // nothing but the lines' own text boxes under the pointer); Shift+wheel, or a line's own
+  // scrollbar, scrolls back through that line's text
+  pb.onwheel = (e) => {
+    if (e.shiftKey || !e.target.closest('.pb-row')) return;
+    e.preventDefault();
+    pb.scrollTop += e.deltaMode === 1 ? e.deltaY * 14 : e.deltaMode === 2 ? e.deltaY * pb.clientHeight : e.deltaY;
+  };
   // A line's own scrollbar: a click or drag on it scrolls, it does not pick the line
   pb.onmousedown = (e) => { const x = e.target.closest && e.target.closest('.x'); pb._onBar = !!(x && e.offsetX >= x.clientWidth); };
   pb.onclick = (e) => {
