@@ -41,7 +41,7 @@ import { MfskBrowser } from './mfskBrowser.js?v=20261114';
 import { RttyBrowser } from './rttyBrowser.js?v=20261114';
 import { Fst4wDecoder } from './fst4w.js?v=20261106';
 import { Msk144Decoder } from './msk144.js?v=20261106';
-import { AleDecoder } from './ale.js?v=20261106';
+import { AleDecoder } from './ale.js?v=20261121';
 import { OliviaDecoder, OLIVIA_MODES, CONTESTIA_MODES, SYNC_THRESHOLD_DEFAULT } from './olivia.js?v=20261105';
 import { MfskDecoder, MFSK_MODES, MFSK_SQUELCH_DEFAULT, mfskBandwidth } from './mfsk.js?v=20261114';
 import { PacketDecoder } from './ax25.js';

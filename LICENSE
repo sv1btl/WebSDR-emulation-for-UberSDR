@@ -59,6 +59,10 @@ Third-party parts keep their own terms and are NOT relicensed:
     lib/fst4wTables.js, lib/msk144Tables.js (PhantomSDR-Plus, GNU GPL v3;
     ALE from gr-ale / KiwiSDR ALE_2G, FST4W and MSK144 from WSJT-X, all
     GPL v3); lib/tzLookup.js (tz-lookup, CC0)
+  - SERVICES utility modems (2026-11-21): sv1btl/psdr/krypto500/ (arqfsk.js,
+    s4285.js, m110a.js, ale3g.js, common.js, tracker.js) and AQC-ALE in
+    ale.js (PhantomSDR-Plus, GNU GPL v3; own implementations from the
+    published STANAG / MIL-STD standards)
   - sv1btl/fzstd.js: fzstd 0.1.1 by Arjun Barrett, MIT licence
   - EiBi schedule: sv1btl/eibi.js (after PhantomSDR-Plus's SwSchedule.svelte) and
     eibi/update-eibi.sh, eibi/generate-eibi.py (PhantomSDR-Plus, GNU GPL v3);

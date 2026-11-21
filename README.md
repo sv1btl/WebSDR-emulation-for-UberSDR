@@ -1,6 +1,6 @@
 # SV1BTL WebSDR layout for UberSDR — installation and user guide
 
-websdr_sv1btl version 5.5.0 (2026-11-15) · by SV1BTL · based on RW3PS's WebSDR template
+websdr_sv1btl version 6.0.0 (2026-11-21) · by SV1BTL · based on RW3PS's WebSDR template
 
 (This is the version of this layout, not of UberSDR, which has its own version numbers.)
 
@@ -50,7 +50,8 @@ restyled by RW3PS, adapted to UberSDR's Opus sound engine, with extras such as:
   PhantomSDR-Plus's CW decoder in the listener's browser, with a **CW Browser** that
   decodes every CW signal in the passband at once;
 - **digital-mode decoders** (FT8, FT4, FT2, JS8, WSPR, SSTV, HF FAX, NAVTEX, a SERVICES window with
-  HFDL, Maritime FSK / SITOR, Weather RTTY, Naval RTTY, DSC, time signals, HF Selcall and ALE 2G, and an
+  HFDL, Maritime FSK / SITOR, Weather RTTY, Naval RTTY, DSC, time signals, HF Selcall, ALE 2G, AQC-ALE, the FSK modes SITOR-A, ARQ-E
+  and ARQ-E3, STANAG 4285, MIL-STD-188-110A and 3G ALE, and an
   FLDIGI window with Amateur RTTY, PSK31·63·125 (BPSK/QPSK), Olivia and Contestia (Amateur
   RTTY, PSK, Olivia / Contestia and MFSK each with a browser for all their signals at once), FST4W, MFSK, MSK144, DominoEX, THOR, THROB,
   Hellschreiber, MT63, ALE 2G HAM, Packet and APRS) from
@@ -437,8 +438,10 @@ no extra session, no `mainServer`, no `enable_cors`. Things to know:
 A **Decoder** row under the Mode buttons starts one of PhantomSDR-Plus's decoders, in
 the listener's browser: **FT8, FT4, FT2, JS8, WSPR, SSTV, FAX, NAVTEX, FLDIGI, SERVICES**.
 **SERVICES** (the HFDL button before) has a Service list at the start of its window, in
-PhantomSDR-Plus's order: HFDL, Maritime FSK / SITOR, Weather RTTY, Naval RTTY (PBB CARB), DSC, Time Signals, HF Selcall
-and ALE 2G; the button reopens the last one. The FLDIGI window's list, also in PhantomSDR-Plus's
+PhantomSDR-Plus's order: HFDL, Maritime FSK / SITOR, Weather RTTY, Naval RTTY (PBB CARB), DSC, Time Signals, HF Selcall,
+ALE 2G, AQC-ALE, FSK modes (SITOR-A, ARQ-E, ARQ-E3), STANAG 4285, MIL-STD-188-110A serial and 3G ALE;
+the button reopens the last one. Picking a frequency in a SERVICES, FAX or NAVTEX list also centres the
+waterfall on the signal at a medium zoom (about 59 kHz across), as in PhantomSDR-Plus. The FLDIGI window's list, also in PhantomSDR-Plus's
 order, picks Amateur RTTY (or its Browser), PSK31·63·125 (BPSK/QPSK, or the PSK Browser), Olivia / Contestia (or
 their Browser), FST4W, MFSK16·32·64 (or its Browser), MSK144, DominoEX, THOR, THROB, Hellschreiber, MT63,
 ALE 2G HAM, Packet or APRS. Its window
@@ -451,7 +454,7 @@ audio before squelch, NR and the notch filters, and nothing extra is asked of Ub
 
 While a decoder runs, the **Mode Filters' presets** on the left are replaced by
 **Decoder Filters' presets**: one button per decoder with its filter width (FT8, FT4,
-FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz; SERVICES by service: HFDL 2.60 kHz, Maritime FSK / SITOR 500 Hz, Weather RTTY 593 Hz, Naval RTTY 1.06 kHz, DSC, Selcall and time signals 600 Hz, ALE 2G 2.25 kHz; FLDIGI
+FT2 and JS8 2.90 kHz, WSPR 400 Hz, SSTV 1.50 kHz, FAX 1.60 kHz, NAVTEX 500 Hz; SERVICES by service: HFDL 2.60 kHz, Maritime FSK / SITOR 500 Hz, Weather RTTY 593 Hz, Naval RTTY 1.06 kHz, DSC, Selcall and time signals 600 Hz, ALE 2G and AQC-ALE 2.25 kHz, FSK modes 2.80 kHz, STANAG 4285, MIL-STD-188-110A and 3G ALE 3.30 kHz; FLDIGI
 follows its list: RTTY 300 Hz, PSK 200, 400 or 800 Hz by speed, the other modes their
 bandwidth plus a margin). A button sets that decoder's sideband and filter;
 the one in use is lit. The Mode presets come back when the decoder stops.
@@ -478,6 +481,10 @@ the one in use is lit. The Mode presets come back when the decoder stops.
 | Hellschreiber (FLDIGI list) | USB around 1500 Hz | a picture of the received text, as on paper (no squelch, as fldigi); Feld Hell, Slow Hell, Hell X5/X9, FSK Hell 245/105, Hell 80; **Reverse** for FSK Hell sent the other way round; **Save** as PNG; Auto-tune |
 | Packet (AX.25), APRS (FLDIGI list) | USB 1.3–2.1 kHz, tones 1600/1800 Hz | 300 Bd HF packet: every frame like a TNC monitor, or APRS decoded into plain text (positions, weather, messages…). Only frames with a correct checksum are printed. List: the 30 m HF APRS dial, 10147.6 kHz. 1200 Bd VHF packet needs FM above 30 MHz, which this receiver does not cover; there is no APRS map |
 | ALE 2G HAM (FLDIGI list), ALE 2G (SERVICES) | USB 0.5–2.75 kHz (LSB for the few LSB networks); the dial on the channel | MIL-STD-188-141 link set-up: soundings, calls and links with who calls whom, commands and bit errors (repeats counted, not listed again); networks from KiwiSDR's list and their channels with Tune: ALE 2G HAM has the amateur (HFLINK) channels, SERVICES' ALE 2G the government, military, MARS and utility networks; Save |
+| AQC-ALE (SERVICES) | USB 0.5–2.75 kHz; the dial on the listed frequency | the quick-call form of ALE 2G (MIL-STD-188-141B): calls, responses, links, soundings and inlink transactions with traffic type, noise report and link quality; plain ALE 2G calls too. Tune exactly: about 60 Hz off is not read |
+| FSK modes (SERVICES) | USB 0.3–3.1 kHz; the dial on the listed frequency | SITOR-A, ARQ-E and ARQ-E3 teleprinter text; **System**, **Baud**, **Shift** and **Centre** in the window (remembered), polarity and character timing found automatically |
+| STANAG 4285, MIL-STD-188-110A (SERVICES) | USB 0.15–3.45 kHz; the dial on the listed frequency | NATO / military 8-PSK data modems (2400 symbols/s on 1800 Hz): the rate and interleaver (4285 tries them all, 110A reads them from its preamble), text or hex, S/N, offset; most traffic is encrypted |
+| 3G ALE (SERVICES) | USB 0.15–3.45 kHz; the dial on the listed frequency | MIL-STD-188-141B link set-up PDUs (BW0 bursts) with their fields, CRC-checked; addresses as numbers (group.member) |
 | FST4W (FLDIGI list) | USB around 1500 Hz, ± the search width + 150 Hz | WSJT-X's LF/MF beacon mode: one decode per T/R period (120, 300, 900 or 1800 s, on the UTC clock) with a recording bar; UTC, dB, DT, MHz, message; F Tol ±50/100/150 Hz; the 136, 474.2 and 1836.6 kHz dials; Save as WSJT-X lists them |
 | MSK144 (FLDIGI list) | USB around 1500 Hz, tones 1000/2000 Hz | WSJT-X's meteor-scatter mode: UTC, dB, T, MHz, message; F Tol, T/R period 15/30 s, Decode Fast/Normal/Deep. It lives on 6 m and 2 m, above this receiver; only 10 m (28.145 MHz) is listed |
 
@@ -521,7 +528,8 @@ the one in use is lit. The Mode presets come back when the decoder stops.
   HF Selcall, and the Olivia / Contestia Browser; 2026-11-08: the FLDIGI and SERVICES lists
   in PhantomSDR-Plus's order, Weather RTTY and Maritime FSK / SITOR in SERVICES, ALE 2G split
   into ALE 2G HAM and the other networks; 2026-11-14: the RTTY and MFSK Browsers, Naval RTTY
-  (PBB CARB) in SERVICES) and `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
+  (PBB CARB) in SERVICES; 2026-11-21: AQC-ALE, the FSK modes SITOR-A / ARQ-E / ARQ-E3, STANAG 4285,
+  MIL-STD-188-110A and 3G ALE in SERVICES, in `psdr/krypto500/`) and `sv1btl/decoders.js` (the buttons and windows). The JS8 dictionary (1.9 MB) is only
   downloaded when JS8 is used.
 - Desktop page only.
 
@@ -858,7 +866,9 @@ editing, raise the `?v=` number (see section 6).
 - **SERVICES** and the newer FLDIGI modes are PhantomSDR-Plus's too (GPL v3): DSC and HF
   Selcall, time signals, ALE 2G (a port of gr-ale as carried in KiwiSDR's ALE_2G
   extension, GPL v3, with its network list), FST4W and MSK144 (ports of the WSJT-X
-  decoders, GPL v3); the time-zone table `tzLookup.js` (tz-lookup, CC0).
+  decoders, GPL v3), and AQC-ALE, SITOR-A / ARQ-E / ARQ-E3, STANAG 4285, MIL-STD-188-110A and 3G ALE
+  (PhantomSDR-Plus's own implementations from the published standards, `psdr/krypto500/` and
+  `psdr/ale.js`); the time-zone table `tzLookup.js` (tz-lookup, CC0).
 - The **HFDL map**: PhantomSDR-Plus's `aprsMap.js` (GPL v3) with **Leaflet 1.9.4**
   (BSD-2-Clause, the copy UberSDR ships) in `sv1btl/psdr/lib/`; map tiles © OpenStreetMap
   contributors. The **IQ demodulators** (`iqDemod.js`) and the **DRM schedule**

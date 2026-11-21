@@ -41,6 +41,27 @@ const PREAMBLE = ['DATA', 'THRU', 'TO', 'TWAS', 'FROM', 'TIS', 'CMD', 'REP'];
 const P = { DATA: 0, THRU: 1, TO: 2, TWAS: 3, FROM: 4, TIS: 5, CMD: 6, REP: 7 };
 const S = { START: 0, TO: 1, TWAS: 2, TIS: 3, FROM: 4, CALL_EST: 5, CMD: 6, END: 7 };
 
+
+// ── AQC-ALE tables (MIL-STD-188-141B A.5.8.1) ─────────────────────────────
+const AQC_CHARS = '*0123456789?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_';   // ordinal 0..39
+const AQC_PRE = { 1: 'INLINK', 2: 'TO', 3: 'TWAS', 5: 'TIS' };
+const AQC_MAX_BAD = 12;      // of 48 voted bits
+const AQC_RESOURCE = ['clear voice', 'digital voice', 'HFD voice', 'reserved', 'secure digital voice', 'secure HFD voice', 'reserved', 'reserved',
+  'ALE messaging', 'PSK messaging', '39-tone messaging', 'HF e-mail', 'KY-100 data security', 'reserved', 'reserved', 'undeclared / mixed'];
+const AQC_TRANSACTION = ['reserved', 'MS-141A message sections', 'ACK of last transaction', 'NAK of last transaction', 'directed link terminate', 'operator ACK/NAK', 'AQC control message', 'reserved'];
+function aqcNoise(v) {
+  if (v === 15) return 'no data';
+  const mean = ['≤ 6', '≤ 6', '≤ 6', '6-15', '6-15', '6-15', '15-40', '15-40', '15-40', '40-60', '40-60', '40-60', '60-80', '80-100', '> 100'][v];
+  const max = v < 12 ? [' (max < +6)', ' (max +6…12)', ' (max ≥ +12)'][v % 3] : '';
+  return `mean ${mean} dB${max}`;
+}
+function aqcLqa(de5, de6) {
+  if (de6 === 15) return 'LQA: no measurement';
+  const snr = ['≤ −6', '−6…−3', '−3…0', '0…3', '3…6', '6…9', '9…12', '12…15', '15…18', '18…21', '21…24', '24…27', '27…30', '30…33', '> 33'][de6];
+  const drop = ['≤ 6', '6-12', '12-18', '> 18'][de5 & 3];
+  return `LQA: SNR ${snr} dB, min ${drop} dB below mean${(de5 >> 3) & 1 ? ', fading' : ''}`;
+}
+
 // Gray code of the eight tones 750 … 2500 Hz (A.5.1.2 of the ALE spec).
 const GRAY = [0, 1, 3, 2, 6, 7, 5, 4];
 
@@ -91,6 +112,8 @@ export class AleDecoder {
     this.onMessage = typeof options.onMessage === 'function' ? options.onMessage : null;
     this.onStatus = typeof options.onStatus === 'function' ? options.onStatus : null;
     this.onMetrics = typeof options.onMetrics === 'function' ? options.onMetrics : null;
+    // AQC-ALE (MIL-STD-188-141B A.5.8): also read the packed AQC words
+    this._aqcOn = !!options.aqc;
     this._cos = new Float64Array(HALF); this._sin = new Float64Array(HALF);
     for (let i = 0; i < HALF; i++) { this._cos[i] = Math.cos(-2 * Math.PI * i / N); this._sin[i] = Math.sin(-2 * Math.PI * i / N); }
     this.reset();
@@ -121,6 +144,7 @@ export class AleDecoder {
     this._words = 0; this._active = false;
     this._lastMetricsAt = 0; this._statusText = '';
     this._level = 0;
+    this._aqcWords = []; this._aqcHalf = null; this._aqcIdle = 0; this._aqcLastResp = null;
   }
 
   feed(pcm) {
@@ -194,6 +218,10 @@ export class AleDecoder {
     const w = goodCnt >= 2 ? this._words1 : null;
     if (temppos !== 0) this._bestPos = temppos;
     if (w) this._callLogic(w);
+    if (this._aqcOn && (this._aqcWords.length || this._aqcHalf)) {
+      this._aqcIdle += N;
+      if (this._aqcIdle >= 0.9 * FS) this._aqcFrame();   // > 2 word periods quiet
+    }
     this._stateCount += N;
     if (this._stateCount >= 2 * FS && this._state !== S.START) {
       this._log('QUIET');
@@ -264,12 +292,27 @@ export class AleDecoder {
       else if (pre === P.FROM) w1.from = s3;
       else if (pre === P.TIS) w1.tis = s3;
     }
-    // (AQC-ALE packed words are recognised by the original but not shown.)
+    else if (this._aqcOn && !a38 && pre >= 1 && pre <= 5) {
+      // AQC-ALE word: preamble, address differentiation flag (= MSB of the
+      // packed address), 16-bit base-40 packed address, 4-bit data exchange
+      const adf = bf(w, 20, 20), pk = bf(w, 19, 4), de = bf(w, 3, 0);
+      if (adf === (pk >> 15) && pk >= 1641 && pk <= 63999) {
+        const c1 = Math.floor(pk / 1600), c2 = Math.floor(pk / 40) % 40, c3 = pk % 40;
+        // the AQC word has no character-set check to reject a misaligned
+        // decode, so it must come from a clean vote; of several decoders the
+        // cleanest wins
+        if (c1 < 40 && berw <= AQC_MAX_BAD && (!w1.aqc || berw < w1.aqc.ber)) {
+          this._ber[nt] = berw;
+          w1.aqc = { pre, addr: AQC_CHARS[c1] + AQC_CHARS[c2] + AQC_CHARS[c3], de, ber: berw };
+        }
+      }
+    }
     this._words++;
   }
 
   /** do_modem2(): advance the call state on the words of this symbol. */
   _callLogic(w) {
+    if (w.aqc) this._aqcWord(w.aqc);
     const closeCmd = () => { this._inCmd = false; this._binary = false; };
     if (w.to) {
       if (this._state !== S.START && this._state !== S.TO) this._log('TO');
@@ -332,6 +375,65 @@ export class AleDecoder {
       this._cmds.push(cp);
       this._stateCount = 0; this._lastBer = this._bestBer;
     }
+  }
+
+
+  // ── AQC-ALE frames (A.5.8.2) ─────────────────────────────────────────────
+  _aqcWord(a) {
+    this._aqcIdle = 0;
+    if (a.pre === 4) {                       // PART2: second half of an address
+      const h = this._aqcHalf;
+      if (h) {
+        this._aqcWords.push({ role: AQC_PRE[h.pre], addr: (h.addr + a.addr).replace(/@/g, ''), de1: h.de, de2: a.de, raw: h.addr + a.addr });
+        this._aqcHalf = null;
+      }
+      return;
+    }
+    this._aqcHalf = a;
+  }
+
+  _aqcFrame() {
+    const ws = this._aqcWords;
+    this._aqcWords = []; this._aqcHalf = null; this._aqcIdle = 0;
+    if (!ws.length) return;
+    const time = new Date().toISOString().slice(11, 19);
+    const tos = ws.filter((x) => x.role === 'TO'), tis = ws.filter((x) => x.role === 'TIS' || x.role === 'TWAS');
+    const inl = ws.filter((x) => x.role === 'INLINK');
+    const last = (arr) => arr[arr.length - 1];
+    const allCall = (x) => x && x.raw === '@?@@?@', anyCall = (x) => x && x.raw === '@@?@@?';
+    const toName = (x) => allCall(x) ? 'AllCall' : anyCall(x) ? 'AnyCall' : x.addr;
+    let msg;
+    if (inl.length) {
+      const x = inl[0], ackThis = (x.de1 >> 3) & 1, nCmd = x.de1 & 7, imIn = (x.de2 >> 3) & 1;
+      const code = ((x.de1 & 7) << 4 | (x.de2 & 7)), tcode = x.de2 & 7;
+      msg = { kind: 'AQC inlink', from: x.addr, details: [AQC_TRANSACTION[tcode] || `transaction ${tcode}`, ackThis ? 'acknowledge requested' : 'broadcast', imIn ? 'remaining in link' : 'leaving the link', nCmd ? `${nCmd} command section(s)` : ''] };
+      void code;
+    } else if (tos.length && tis.length) {
+      const to = last(tos), from = last(tis);
+      if (tos.some((x) => x.de1 > 0)) {
+        msg = { kind: 'AQC call', from: from.addr, to: toName(to), details: [`traffic: ${AQC_RESOURCE[to.de2] || 'reserved'}`, `caller noise: ${aqcNoise(from.de2)}`] };
+      } else {
+        msg = { kind: 'AQC response', from: from.addr, to: toName(to), details: [`traffic: ${AQC_RESOURCE[to.de2] || 'reserved'}`, aqcLqa(from.de1, from.de2)] };
+        this._aqcLastResp = { from: from.addr, to: to.addr, at: Date.now() };
+      }
+    } else if (tos.length) {
+      msg = { kind: 'AQC call', to: toName(last(tos)), details: [`traffic: ${AQC_RESOURCE[last(tos).de2] || 'reserved'}`, 'caller not heard'] };
+    } else if (tis.length) {
+      const x = last(tis), r = this._aqcLastResp;
+      if (tis.length === 1 && r && r.to === x.addr && Date.now() - r.at < 15000) {
+        msg = { kind: 'AQC link established', from: x.addr, to: r.from, details: [aqcLqa(x.de1, x.de2)] };
+        this._aqcLastResp = null;
+      } else {
+        msg = { kind: x.role === 'TWAS' ? 'AQC sounding (this was)' : 'AQC sounding (this is)', from: x.addr, details: [`noise: ${aqcNoise(x.de2)}`] };
+      }
+    }
+    if (!msg) return;
+    msg.details = msg.details.filter(Boolean);
+    msg.protocol = 'AQC';
+    msg.cmds = [];
+    msg.ber = this._lastBer;
+    msg.time = time;
+    if (this.onMessage) this.onMessage(msg);
   }
 
   /** log(): one finished call or sounding becomes a message. */

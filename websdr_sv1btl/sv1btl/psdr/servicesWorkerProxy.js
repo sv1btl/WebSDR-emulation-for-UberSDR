@@ -20,7 +20,7 @@ export class ServicesWorkerProxy {
   _ensureWorker() {
     if (this._worker) return;
     try {
-      this._worker = new Worker(new URL('./services.worker.js', import.meta.url), { type: 'module' });
+      this._worker = new Worker(new URL('./services.worker.js?v=20261121', import.meta.url), { type: 'module' });   // SV1BTL: ?v= tag (no cache headers)
     } catch (e) {
       console.error('[SERVICES] Worker unavailable:', e);
       if (this._callback) this._callback({ type: 'error', message: String(e && e.message || e) });

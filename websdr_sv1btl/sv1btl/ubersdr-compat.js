@@ -1,5 +1,5 @@
 // ubersdr-compat.js — lets the RW3PS WebSDR layout run on UberSDR.
-// SV1BTL WebSDR layout for UberSDR (websdr_sv1btl), version 5.5.0 (2026-11-04) — the version of
+// SV1BTL WebSDR layout for UberSDR (websdr_sv1btl), version 6.0.0 (2026-11-21) — the version of
 // this layout, not of UberSDR.
 //
 // The RW3PS websdr-base.js was written for PA3FWM's original sound client (with
@@ -2447,7 +2447,7 @@
     if (!document.getElementById('wfmode')) return;   // desktop page only
     var s = document.createElement('script');
     s.type = 'module';
-    s.src = 'sv1btl/decoders.js?v=20261114sc';
+    s.src = 'sv1btl/decoders.js?v=20261121fr2';
     s.onerror = function () { console.error('ubersdr-compat: could not load sv1btl/decoders.js'); };
     document.head.appendChild(s);
   });

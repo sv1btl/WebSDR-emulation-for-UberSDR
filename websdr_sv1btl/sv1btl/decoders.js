@@ -23,12 +23,16 @@
 //
 // 2026-11-14 (PhantomSDR-Plus): RTTY Browser, MFSK Browser, Naval RTTY (PBB CARB) in SERVICES.
 //
+// 2026-11-21 (websdr_sv1btl 6.0.0, PhantomSDR-Plus copy of that day): SERVICES AQC-ALE, FSK modes
+// (SITOR-A, ARQ-E, ARQ-E3), STANAG 4285, MIL-STD-188-110A serial and 3G ALE (k5Window;
+// psdr/krypto500/*.js, AQC in psdr/ale.js, run in psdr/services.worker.js).
+//
 // Licence: GNU GPL v3, as PhantomSDR-Plus.
 
 import { SSTVWorkerProxy } from './psdr/sstvWorkerProxy.js';
 import { FAXWorkerProxy } from './psdr/faxWorkerProxy.js';
-import { FSKWorkerProxy } from './psdr/fskWorkerProxy.js?v=20261114';
-import { FLDIGI_MODEMS } from './psdr/fsk.js?v=20261114';
+import { FSKWorkerProxy } from './psdr/fskWorkerProxy.js?v=20261121';
+import { FLDIGI_MODEMS } from './psdr/fsk.js?v=20261121';
 import { PSK_MODES, pskModeCfg } from './psdr/psk31.js?v=20261106';
 import { mt63DefaultCenter } from './psdr/mt63.js';
 import { WSPR_TOTAL_SAMPLES, wspr2SlotPosition } from './psdr/modules/wspr.js';
@@ -41,7 +45,7 @@ import { HFDL_STATIONS } from './psdr/lib/hfdlStations.js';
 import { AprsMap, locatorToLatLon } from './psdr/lib/aprsMap.js';
 // PhantomSDR-Plus 5.5.0 (2026-11-06, copied unchanged): SERVICES (DSC, time signals, HF Selcall
 // in services.worker.js), and ALE 2G's list of networks
-import { ServicesWorkerProxy } from './psdr/servicesWorkerProxy.js?v=20261106';
+import { ServicesWorkerProxy } from './psdr/servicesWorkerProxy.js?v=20261121';
 import { TIME_STATIONS } from './psdr/timesig.js?v=20261106';
 import { ALE_NETS } from './psdr/lib/aleNets.js?v=20261108';
 // PhantomSDR-Plus 5.5.0 (copied unchanged): FAX / NAVTEX / DWD RTTY timetables, the
@@ -237,7 +241,7 @@ const DEC = {
   rtty:   { label: 'FLDIGI', title: 'FLDIGI modes: Amateur RTTY, PSK31·63·125 (BPSK/QPSK), Olivia / Contestia, FST4W, MFSK, MSK144, DominoEX, THOR, THROB, Hellschreiber, MT63, ALE 2G HAM, Packet, APRS (chosen in the window)', kind: 'rtty' },
   // SERVICES (PhantomSDR-Plus 5.5.0, ex-HFDL button): HFDL, Maritime FSK / SITOR, Weather
   // RTTY, DSC, Time Signals, HF Selcall, ALE 2G, chosen in the window's Service list
-  services: { label: 'SERVICES', title: 'SERVICES — HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G (chosen in the window)', kind: 'services' },
+  services: { label: 'SERVICES', title: 'SERVICES — HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, Naval RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G, AQC-ALE, FSK modes (SITOR-A, ARQ-E, ARQ-E3), STANAG 4285, MIL-STD-188-110A, 3G ALE (chosen in the window)', kind: 'services' },
   // PhantomSDR-Plus's HFDL: USB, the dial on the listed frequency, subcarrier at 1440 Hz
   hfdl:   { label: 'HFDL',   title: 'HFDL — HF Data Link: aircraft ACARS messages on shortwave', kind: 'hfdl', lo: 0.15, hi: 2.75, family: 'services' },
   // Maritime FSK / SITOR (fsk.js 'maritime': 100 Bd, 170 Hz, centre 500 Hz above the dial) and
@@ -252,6 +256,13 @@ const DEC = {
   selcall: { label: 'SELCALL', title: 'HF Selcall — CCIR 493-4 (Codan, Barrett …): who calls whom', kind: 'svc', lo: 1.4, hi: 2.0, family: 'services' },
   // ALE 2G of every net but the amateur one (that is FLDIGI's ALE 2G HAM)
   aleu:    { label: 'ALE',     title: 'ALE 2G (MIL-STD-188-141): government, military, MARS and utility networks', kind: 'ale', family: 'services' },
+  // PhantomSDR-Plus 6.0 (2026-11-21): utility modems in services.worker.js, the dial on the
+  // listed frequency, USB; 2400-Bd PSK needs the whole 3 kHz, FSK a little less. Labels = its /users report.
+  k5aqc:   { label: 'AQC-ALE',    title: 'AQC-ALE (MIL-STD-188-141B Appendix A.5.8): quick-call ALE with packed addresses', kind: 'k5', lo: 0.5, hi: 2.75, family: 'services' },
+  k5fsk:   { label: 'ARQ-FSK',    title: 'FSK modes: SITOR-A, ARQ-E, ARQ-E3 (synchronous ARQ teleprinter systems)', kind: 'k5', lo: 0.3, hi: 3.1, family: 'services' },
+  k5s4285: { label: 'STANAG4285', title: 'STANAG 4285: NATO 2400 Bd PSK modem, 75-3600 bps', kind: 'k5', lo: 0.15, hi: 3.45, family: 'services' },
+  k5m110a: { label: 'MS110A',     title: 'MIL-STD-188-110A serial-tone PSK modem, 75-4800 bps', kind: 'k5', lo: 0.15, hi: 3.45, family: 'services' },
+  k5ale3g: { label: '3G-ALE',     title: '3G ALE (MIL-STD-188-141B Appendix C): BW0 link-setup PDUs', kind: 'k5', lo: 0.15, hi: 3.45, family: 'services' },
   // No buttons of their own: chosen in the RTTY window's list (family 'rtty')
   psk31:  { label: 'PSK',    title: 'PSK31·63·125 (BPSK / QPSK)', kind: 'psk31', centred: true, family: 'rtty' },
   olivia: { label: 'OLIVIA', title: 'Olivia / Contestia (MFSK)', kind: 'olivia', centred: true, family: 'rtty' },
@@ -318,6 +329,21 @@ function tuneKHz(f) {
 // picked again). The list goes with the window when the decoder is switched off.
 let pickedDial = 0;
 function picked(dial) { pickedDial = dial || 0; }
+// A frequency picked in a SERVICES, FAX or NAVTEX list: the waterfall centred on the signal
+// (sig, kHz) at a medium zoom, about 50 kHz across (PhantomSDR-Plus _servicesFrame,
+// ±25 kHz). The zoom steps halve the view, so it is the narrowest step still >= 50 kHz.
+const FRAME_KHZ = 50;
+function frameAt(sig) {
+  try {
+    const b = W.band, e = W.bi && W.bi[b];
+    if (!e || typeof W.wfset_freq !== 'function' || !(sig > 0)) return;
+    let z = 0, width = e.samplerate;
+    while (width / 2 >= FRAME_KHZ && z < e.maxzoom) { z++; width /= 2; }
+    const lo = e.centerfreq - e.samplerate / 2, hi = e.centerfreq + e.samplerate / 2;
+    const c = Math.min(hi - width / 2, Math.max(lo + width / 2, sig));   // at the receiver's edges, shifted inwards
+    W.wfset_freq(b, z, c);
+  } catch (x) { console.error('decoders: frame', x); }
+}
 function pickedFollow() {
   const sel = $('.dw-tune');
   if (!sel || !sel.value || !pickedDial) return;
@@ -878,7 +904,7 @@ function faxWindow() {
     const [i, j] = e.target.value.split(':').map(Number), s = FAX_STATIONS[i];
     ls.value = String(s.lpm); is.value = String(s.ioc); params();
     tuneKHz(s.freqs[j] - 1.9);                      // centre 1900 Hz above the USB dial
-    applyFilter('fax'); picked(s.freqs[j] - 1.9);
+    applyFilter('fax'); picked(s.freqs[j] - 1.9); frameAt(s.freqs[j]);
     schedName = s.name; schedTick();
   };
   schedStart('fax');
@@ -940,7 +966,7 @@ function navtexWindow() {
     else if (ev.type === 'status') status(ev.text);
   } });
   fsk.setEnabled(true);
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('navtex'); picked(f - 0.5); schedTick(); } };
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('navtex'); picked(f - 0.5); frameAt(f); schedTick(); } };
   schedStart('navtex');
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
@@ -957,7 +983,7 @@ function maritimeWindow() {
   fsk.setConfig({ center: 500, shift: 170, baud: 100, framing: '7N1', encoding: 'ccir476', inverted: false });
   fsk.setEnabled(true);
   svcWire();
-  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('maritime'); picked(f - 0.5); schedTick(); } };
+  $('.dw-tune').onchange = (e) => { const f = +e.target.value; if (f) { tuneKHz(f - 0.5); applyFilter('maritime'); picked(f - 0.5); frameAt(f); schedTick(); } };
   schedStart('navtex');
   status('Listening (100 Bd, 170 Hz shift, centre 500 Hz)…');
 }
@@ -1024,6 +1050,7 @@ function rttyWindow(k) {
     const it = RTTY_FREQS[rttyVariant()].find((x) => x[1] === f);
     rttyShift = (it && it[2]) || 0; rttySend();
     const d = f - RTTY[rttyVariant()].center / 1000; tuneKHz(d); applyFilter(k); picked(d);
+    if (isSvcRtty(k)) frameAt(f);                    // SERVICES (Weather / Naval RTTY)
     schedTick();
   };
   schedStart('rtty');
@@ -1431,7 +1458,7 @@ function hfdlWindow() {
   const texts = [];
   svcWire();
   $('.dw-gs').onchange = (e) => { lsSet('ubersdr_hfdl_gs', e.target.value); $('.dw-fq').innerHTML = hfdlFreqOptions(e.target.value); };
-  $('.dw-go').onclick = () => { const k = +$('.dw-fq').value; if (k) { tuneKHz(k); applyFilter('hfdl'); if (hfdl) { hfdl.setDial(k * 1000); hfdl.reset(); } } };
+  $('.dw-go').onclick = () => { const k = +$('.dw-fq').value; if (k) { tuneKHz(k); applyFilter('hfdl'); frameAt(k + 1.44); if (hfdl) { hfdl.setDial(k * 1000); hfdl.reset(); } } };
   $('.dw-sq').onchange = (e) => {
     hfdlSq = e.target.checked ? 1 : 0; lsSet('ubersdr_hfdl_sq', String(hfdlSq));
     st.win.querySelectorAll('tr.hf-sq').forEach((r) => { r.style.display = hfdlSq ? '' : 'none'; });
@@ -1613,6 +1640,7 @@ function start(k, opts) {
   else if (k === 'dsc' || k === 'selcall') dscWindow(k);
   else if (k === 'time') timeWindow();
   else if (k === 'ale' || k === 'aleu') aleWindow(k);
+  else if (d.kind === 'k5') k5Window(k);
   else if (k === 'fst4w') wsjtWindow('fst4w');
   else if (k === 'msk144') wsjtWindow('msk144');
 }
@@ -1889,10 +1917,13 @@ function idClick(e) {
 // Signals or HF Selcall (PhantomSDR-Plus's services.worker.js: dsc.js, timesig.js), one at
 // a time. In PhantomSDR-Plus's order.
 const SERVICES = [['hfdl', 'HFDL'], ['maritime', 'Maritime FSK / SITOR'], ['weather', 'Weather RTTY'], ['naval', 'Naval RTTY (PBB CARB)'], ['dsc', 'DSC'],
-                  ['time', 'Time Signals'], ['selcall', 'HF Selcall'], ['aleu', 'ALE 2G (MIL-STD-188-141)']];
+                  ['time', 'Time Signals'], ['selcall', 'HF Selcall'], ['aleu', 'ALE 2G (MIL-STD-188-141)'],
+                  // PhantomSDR-Plus 6.0 (2026-11-21): utility modems and ALE variants (k5Window)
+                  ['k5aqc', 'AQC-ALE'], ['k5fsk', 'FSK modes (SITOR-A, ARQ-E, ARQ-E3)'], ['k5s4285', 'STANAG 4285'],
+                  ['k5m110a', 'MIL-STD-188-110A serial'], ['k5ale3g', '3G ALE (MIL-STD-188-141B)']];
 function svcKey() { const v = lsGet('ubersdr_service', 'hfdl'); return SERVICES.some((x) => x[0] === v) ? v : 'hfdl'; }
 function serviceSelect(cur) {
-  return `<select class="dw-svc dec-sel" title="SERVICE: HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G">${SERVICES.map(([v, n]) =>
+  return `<select class="dw-svc dec-sel" title="SERVICE: HFDL (aircraft), Maritime FSK / SITOR, Weather RTTY, Naval RTTY, DSC (maritime calls), Time Signals, HF Selcall, ALE 2G, AQC-ALE, FSK modes (SITOR-A, ARQ-E, ARQ-E3), STANAG 4285, MIL-STD-188-110A, 3G ALE">${SERVICES.map(([v, n]) =>
     `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
 }
 function svcWire() { const e = $('.dw-svc'); if (e) e.onchange = () => { lsSet('ubersdr_service', e.value); start(e.value); }; }
@@ -1964,7 +1995,7 @@ function dscWindow(k) {
       info();
     }
   });
-  $('.dw-go').onclick = () => { const f = +$('.dw-fq').value; if (f) { tuneKHz(+(f - 1.7).toFixed(3)); applyFilter(k); picked(f - 1.7); if (svc) svc.reset(); setTimeout(info, 400); } };
+  $('.dw-go').onclick = () => { const f = +$('.dw-fq').value; if (f) { tuneKHz(+(f - 1.7).toFixed(3)); applyFilter(k); picked(f - 1.7); frameAt(f); if (svc) svc.reset(); setTimeout(info, 400); } };
   $('.dw-clear').onclick = () => { calls.length = 0; list.innerHTML = ''; info(); };
   $('.dw-save').onclick = () => saveText(k, calls.map((m) => [m.time + ' UTC', m.fq + ' kHz', m.formatText, cat(m)[1],
     ...(m.fields || []).map((f) => f.join(': ')), m.eccOk === true ? 'ECC ok' : m.recovered ? '1 character rebuilt from ECC' : m.eccOk === false ? 'ECC error' : ''].filter(Boolean).join(' | ')));
@@ -2032,7 +2063,7 @@ function timeWindow() {
     }
   });
   $('.dw-st').onchange = (e) => { stn = e.target.value; lsSet('ubersdr_timestation', stn); last = met = null; if (svc) svc.setOptions({ station: stn }); $('.dw-fq').innerHTML = fqOpts(); draw(); };
-  $('.dw-go').onclick = () => { const f = +$('.dw-fq').value; if (f) { tuneKHz(+(f - 1).toFixed(3)); applyFilter('time'); picked(f - 1); if (svc) svc.reset(); last = met = null; setTimeout(draw, 400); } };
+  $('.dw-go').onclick = () => { const f = +$('.dw-fq').value; if (f) { tuneKHz(+(f - 1).toFixed(3)); applyFilter('time'); picked(f - 1); frameAt(f); if (svc) svc.reset(); last = met = null; setTimeout(draw, 400); } };
   $('.dw-clear').onclick = () => { rows.length = 0; list.innerHTML = ''; last = null; draw(); };
   $('.dw-save').onclick = () => saveText('timesignals', rows.map((r) => [r.received + ' (page clock)', String(r.station).toUpperCase(), r.fq + ' kHz',
     r.timingOnly ? r.text : `${r.utc} UTC${r.date ? ' ' + r.date : ''}${r.local ? ' (' + r.local + ')' : ''}`, r.dut1 != null ? `DUT1 ${r.dut1 >= 0 ? '+' : ''}${r.dut1} s` : '',
@@ -2040,6 +2071,136 @@ function timeWindow() {
   draw(); status('Waiting for the signal…');
   svcInfo = draw;
   tsZoneLoad().then(draw);
+}
+
+// ── SERVICES: AQC-ALE, FSK modes, STANAG 4285, MIL-STD-188-110A, 3G ALE ───────────────
+// PhantomSDR-Plus 6.0 (2026-11-21, its "Krypto500" group; Krypto500Panel.svelte): five
+// utility modems in services.worker.js (ale.js with aqc, krypto500/*.js), one window. The
+// listed frequencies are USB dial frequencies; the filters as App.svelte's presets.
+const K5_FREQS = {
+  k5aqc: [['USAF Special Ops net (Hurlburt sounds in AQC-ALE, 2018 — ominous-valve ALE list)', [4625.0, 5100.0, 7500.0, 8425.0, 8501.4, 10476.4, 12100.0, 12501.4, 13465.0, 14774.4, 14980.0]]],
+  k5fsk: [['SITOR-A — MFA Cairo and others (i56578-swl logs)', [[17415.0, 'MFA Cairo, 2016'], [18046.8, 'MFA Cairo, 2015'], [16766.5, 'unidentified, 2016']]]],
+  k5s4285: [['French Navy OMAR net (4285 / 188-110A variants)', [5884.0, 6828.0, 7582.0, 7720.0, 8276.0, 9073.0, 9190.0, 14716.6, 14800.0, 19215.0]],
+    ['Logged STANAG 4285', [[5155.0, 'Turkish, idle, 2016'], [5838.0, 'STANAG 5066 e-mail net, 2016'], [8013.2, 'UK DHFCS?, 1200L, 2025'], [10008.2, 'UK DHFCS?, 1200L, 2025'], [10568.2, 'NCSA Naples, 600L, 2014'], [12857.0, 'French Navy Dakar 6WW, 600L, 2015']]]],
+  k5m110a: [['Logged MIL-STD-188-110A serial', [[5094.0, 'Polish CD/TDF net, STANAG 5066, 2022'], [8968.0, 'USAF HFGCS, 1200S, 2015'], [9073.0, 'French Navy 5CI, 2015'], [10315.0, 'Romanian MFA / NATO, 2016'], [11480.0, 'Algerian AF air defence, 2024'], [15091.0, 'STANAG 4415 (75 bps), 2025']]]],
+  k5ale3g: [['Logged 3G ALE (BW0 / FLSU bursts)', [[5365.0, '3G-HF FLSU + wideband, 2018'], [6910.0, 'US Army MARS, 2020'], [6953.0, 'listed 3G ALE'], [6968.0, 'listed 3G ALE']]]] };
+const K5_TITLES = { k5aqc: 'AQC-ALE (MIL-STD-188-141B)', k5fsk: 'FSK modes: SITOR-A · ARQ-E · ARQ-E3', k5s4285: 'STANAG 4285',
+  k5m110a: 'MIL-STD-188-110A serial tone', k5ale3g: '3G ALE (MIL-STD-188-141B App. C)' };
+const K5_NOTES = {
+  k5aqc: 'AQC-ALE uses the 8-FSK 2G ALE modem (125 Bd) with packed 6-character addresses and data-exchange fields: calls, responses, acknowledgements, soundings and inlink transactions are shown with their traffic type, noise reports and LQA. Plain 2G ALE calls on the same channel are shown too. Tune exactly: about ±60 Hz off is the blind spot of the shared 2G ALE front end.',
+  k5fsk: 'Synchronous ARQ teleprinter systems. SITOR-A: 100 Bd blocks of three CCIR 476 characters, repeats dropped. ARQ-E: ITA2-P, every 4th or 8th character inverted. ARQ-E3: ITA3 constant-ratio code. Polarity and character phase are found automatically; baud and shift must match. Most ARQ-E/E3 networks of the past have gone quiet: no current public log was found, tune by ear.',
+  k5s4285: '2400 symbols/s 8-PSK frames on 1800 Hz. STANAG 4285 does not announce its rate: after locking to the frames the decoder reads the constellation and tries every rate and interleaver it allows, the best Viterbi fit wins (a long interleaver needs 10 s). Most traffic is encrypted or STANAG 5066: then you see hex. Checked on the air: 12857 kHz (French Navy) read as 600 bps long interleave.',
+  k5m110a: 'The 188-110A preamble names the rate (75–4800 bps) and interleaver, so the decoder knows the mode at once. Text sent as async 8N1 characters is shown as text, anything else as hex; the end-of-message pattern closes it. Entry needs the preamble: a transmission already running when you tune in is caught at its next preamble.',
+  k5ale3g: '3G ALE link-setup PDUs travel in BW0 bursts (613 ms, PSK, Walsh-coded): LE_Call, LE_Handshake, LE_Notification, LE_Broadcast, scanning calls and time PDUs are decoded and CRC-checked. 3G addresses are numbers (group.member); BW1–BW4 traffic bursts are not decoded.' };
+const K5_FSK_MODES = [
+  { key: 'sitora', label: 'SITOR-A', bauds: [100], shifts: [170, 400, 850] },
+  { key: 'arqe', label: 'ARQ-E', bauds: [46.2, 48, 50, 64, 72, 85.7, 96, 144, 192, 288], shifts: [170, 400, 850] },
+  { key: 'arqe3', label: 'ARQ-E3', bauds: [48, 50, 64, 72, 96, 100, 192, 200], shifts: [170, 270, 300, 400, 850] }];
+// The FSK-mode settings, remembered per browser (the same key as PhantomSDR-Plus)
+function k5FskOpts() {
+  let o = { mode: 'sitora', baud: 100, shift: 170, centerHz: 1700 };
+  try { o = { ...o, ...JSON.parse(lsGet('k5fskOpts', '{}')) }; } catch (e) {}
+  const m = K5_FSK_MODES.find((x) => x.key === o.mode) || K5_FSK_MODES[0];
+  o.mode = m.key;
+  if (!m.bauds.includes(o.baud)) o.baud = m.bauds[m.bauds.length > 5 ? 6 : 0];
+  if (!m.shifts.includes(o.shift)) o.shift = m.shifts.includes(400) ? 400 : m.shifts[0];
+  return o;
+}
+function k5Window(k) {
+  const groups = K5_FREQS[k] || [], fv = (f) => Array.isArray(f) ? f[0] : f, ft = (f) => Array.isArray(f) ? f[1] : '';
+  const all = groups.flatMap((g) => g[1].map(fv));
+  const cur = all.find((f) => Math.abs(f - dialKHz()) < 0.05) ?? all[0];
+  let fo = k5FskOpts();
+  const fskCtl = () => {
+    const m = K5_FSK_MODES.find((x) => x.key === fo.mode);
+    const sel = (cls, tip, label, opts) => `<label title="${tip}">${label} <select class="${cls} dec-sel">${opts}</select></label>`;
+    return sel('k5-sys', 'The ARQ system to read', 'System', K5_FSK_MODES.map((x) => `<option value="${x.key}"${x.key === fo.mode ? ' selected' : ''}>${x.label}</option>`).join('')) +
+      sel('k5-baud', 'Baud rate (must match the signal)', 'Baud', m.bauds.map((b) => `<option value="${b}"${b === fo.baud ? ' selected' : ''}>${b}</option>`).join('')) +
+      sel('k5-shift', 'Frequency shift between the two tones', 'Shift', m.shifts.map((s) => `<option value="${s}"${s === fo.shift ? ' selected' : ''}>${s} Hz</option>`).join('')) +
+      sel('k5-ctr', 'Audio centre of the two tones (USB)', 'Centre', [1000, 1500, 1700, 2000].map((c) => `<option value="${c}"${c === fo.centerHz ? ' selected' : ''}>${c} Hz</option>`).join(''));
+  };
+  openWindow(`<div class="dw-head">${serviceSelect(k)}<span class="dw-title">${esc(K5_TITLES[k])}</span>` +
+    `<select class="dw-fq dec-sel" title="Frequencies where this mode has been reported (USB dial). Activity comes and goes.">${groups.map(([g, l]) =>
+      `<optgroup label="${esc(g)}">${l.map((f) => `<option value="${fv(f)}"${fv(f) === cur ? ' selected' : ''} title="${esc(ft(f))}">${fv(f).toFixed(1)} kHz${ft(f) ? ' — ' + esc(ft(f)) : ''}</option>`).join('')}</optgroup>`).join('')}</select>` +
+    `<button type="button" class="dw-go" title="Tune the receiver to this frequency (USB) and set the IF filter">Tune</button>` +
+    `<button type="button" class="dw-save" title="Save the decoded output (text)">Save</button><button type="button" class="dw-clear">Clear</button></div>` +
+    (k === 'k5fsk' ? `<div class="dw-info k5-fsk">${fskCtl()}</div>` : '') +
+    `<div class="dw-info k5-met"></div><div class="dw-list" style="height:160px"></div><div class="dw-info k5-note" style="font-size:10px">${esc(K5_NOTES[k])}</div>`);
+  svcWire();
+  let met = {}, open = null;
+  const rows = [];
+  const list = $('.dw-list');
+  const empty = () => { list.innerHTML = '<div class="sv-row"><i>Pick a frequency, click Tune and wait: these networks are on the air only now and then.</i></div>'; };
+  empty();
+  const info = () => {
+    const on = all.some((f) => Math.abs(f - dialKHz()) < 0.05), n = (v) => v !== null && v !== undefined;
+    $('.k5-met').innerHTML = `<span>Dial: <b>${dialKHz().toFixed(1)} kHz USB</b>${all.length && !on ? ' <span class="warn" title="Not one of the listed frequencies">⚠ not listed</span>' : ''}</span>` +
+      (met.mode ? `<span>Mode: <b>${esc(met.mode)}</b></span>` : '') +
+      (n(met.snrDb) ? `<span title="Signal-to-noise on the known symbols">S/N: <b>${(+met.snrDb).toFixed(1)} dB</b></span>` : '') +
+      (n(met.offsetHz) ? `<span title="Carrier offset from 1800 Hz">Offset: <b>${met.offsetHz > 0 ? '+' : ''}${(+met.offsetHz).toFixed(1)} Hz</b></span>` : '') +
+      (n(met.bursts) ? `<span>Bursts: <b>${met.good}/${met.bursts}</b></span>` : '') +
+      (n(met.words) ? `<span>ALE words: <b>${met.words}</b></span>` : '') +
+      (n(met.chars) ? `<span>Characters: <b>${met.chars}</b>${met.errors ? ` <span class="warn">(${met.errors} bad)</span>` : ''}</span>` : '') +
+      (met.cands ? `<span title="Viterbi fit of each rate/interleaver being tried">Trying: <b>${esc(met.cands.map((c) => `${String(c[0]).replace(' interleave', '')} ${c[1]}%`).join(', '))}</b></span>` : '') +
+      (met.receiving ? '<span class="ok"><b>[receiving]</b></span>' : '');
+  };
+  const rowHtml = (r) => `<span class="t">${esc(r.time || '')}</span> ${r.fq} <span class="k ${r.cls}">${esc(r.head)}</span>${r.extra ? ` <i>${esc(r.extra)}</i>` : ''}` +
+    (r.body ? `<div class="fl"${r.text ? ' style="white-space:pre-wrap;word-break:break-all;font-family:\'Courier New\',monospace"' : ''}>${esc(r.body)}</div>` : '');
+  const push = (r) => {
+    if (!rows.length) list.innerHTML = '';
+    r.fq = dialKHz().toFixed(1); rows.push(r);
+    r.el = document.createElement('div'); r.el.className = 'sv-row'; r.el.innerHTML = rowHtml(r);
+    list.appendChild(r.el);
+    while (rows.length > 400) { const x = rows.shift(); if (x.el) x.el.remove(); }
+    return r;
+  };
+  const redraw = (r) => { if (r && r.el) r.el.innerHTML = rowHtml(r); };
+  const fskSet = () => {
+    lsSet('k5fskOpts', JSON.stringify(fo));
+    if (svc) svc.setOptions({ ...fo });
+  };
+  svcStart(k, k === 'k5fsk' ? { ...fo } : { centerHz: 1700 }, (e) => {
+    if (e.type === 'status') { status(e.text); return; }
+    if (e.type === 'metrics') { met = e; info(); return; }
+    if (e.type === 'error') { status('Decoder error: ' + e.message); return; }
+    if (e.type !== 'message' || !e.msg) return;
+    const m = e.msg, end = atEnd(list);
+    if (m.kind === 'text') {
+      if (!open) open = push({ time: m.time, cls: 'fmt', head: 'Text', body: '', text: true });
+      open.body += m.text; redraw(open);
+    } else if (m.kind === 'start') open = push({ time: m.time, cls: 'fmt', head: '▶ ' + m.mode, body: '', text: true });
+    else if (m.kind === 'mode') { if (open) { open.head = '▶ ' + m.mode; redraw(open); } }
+    else if (m.kind === 'end') { push({ time: m.time, cls: '', head: '■ ' + (m.reason || 'end'), body: m.mode || '' }); open = null; }
+    else if (m.kind === 'info') {
+      push({ time: m.time, cls: '', head: m.text, body: '' });
+      if (open) { const o = open; open = null; open = push({ time: m.time, cls: o.cls, head: '…', body: '', text: true }); }
+    } else if (m.kind === 'pdu') {
+      const f = Object.entries(m).filter(([x]) => !['kind', 'type', 'time', 'snrDb', 'quality', 'calledMember'].includes(x))
+        .map(([x, v]) => `${x}: ${v && typeof v === 'object' ? v.text : v}`);
+      push({ time: m.time, cls: m.type === 'LE_Call' ? 'saf' : 'rou', head: m.type, body: f.join(' · '), extra: `q ${m.quality} %` });
+    } else if (m.kind === 'burst') push({ time: m.time, cls: '', head: m.text, body: '' });
+    else {                                       // an ALE (2G or AQC) call / sounding
+      const who = `${m.from ? m.from : ''}${m.to ? ' → ' + m.to : ''}`;
+      const det = [...(m.details || []), ...(m.cmds || []).map((c) => `[${c.type}${c.text ? ': ' + c.text : ''}]`)].join(' · ');
+      push({ time: m.time, cls: m.protocol === 'AQC' ? 'saf' : 'rou', head: `${m.protocol === 'AQC' ? '' : '2G '}${m.kind}`, body: who + (det ? '  ' + det : ''), extra: m.ber !== undefined ? `BER ${m.ber}` : '' });
+    }
+    if (end) scrollEnd(list);
+  });
+  if (k === 'k5fsk') {
+    const wire = () => {
+      const box = $('.k5-fsk');
+      box.querySelector('.k5-sys').onchange = (e) => { fo.mode = e.target.value; lsSet('k5fskOpts', JSON.stringify(fo)); fo = k5FskOpts(); box.innerHTML = fskCtl(); wire(); fskSet(); };
+      box.querySelector('.k5-baud').onchange = (e) => { fo.baud = +e.target.value; fskSet(); };
+      box.querySelector('.k5-shift').onchange = (e) => { fo.shift = +e.target.value; fskSet(); };
+      box.querySelector('.k5-ctr').onchange = (e) => { fo.centerHz = +e.target.value; fskSet(); };
+    };
+    wire(); fskSet();
+  }
+  $('.dw-go').onclick = () => { const f = +$('.dw-fq').value; if (f) { tuneKHz(f); applyFilter(k); picked(f); frameAt(f); if (svc) svc.reset(); setTimeout(info, 400); } };
+  $('.dw-clear').onclick = () => { rows.length = 0; open = null; empty(); info(); };
+  $('.dw-save').onclick = () => saveText(k, rows.map((r) => [r.time + ' UTC', r.fq + ' kHz', r.head, r.body, r.extra || ''].filter(Boolean).join(' | ')));
+  info(); status('Starting…');
+  svcInfo = info;
 }
 
 // ── ALE 2G, FST4W, MSK144 in the FLDIGI list (PhantomSDR-Plus 5.5.0, fsk.js) ────────────
@@ -2096,7 +2257,7 @@ function aleWindow(k) {
   $('.dw-net').onchange = (e) => { lsSet(lsKey, e.target.value); $('.dw-fq').innerHTML = fqOpts(+e.target.value); };
   $('.dw-go').onclick = () => {
     const f = +$('.dw-fq').value, n = NETS[+$('.dw-net').value]; if (!f) return;
-    aleLsb = !!n.lsb; tuneKHz(f); applyFilter(k); picked(f);
+    aleLsb = !!n.lsb; tuneKHz(f); applyFilter(k); picked(f); if (k === 'aleu') frameAt(f);
   };
   $('.dw-clear').onclick = () => { rows.length = 0; list.innerHTML = ''; info(); };
   $('.dw-save').onclick = () => saveText('ale', rows.map((r) => [r.time + ' UTC', r.freq + ' kHz', r.kind + (r.count > 1 ? ` ×${r.count}` : ''),
@@ -2422,7 +2583,7 @@ W.ubersdr_dec_tap = function (pcm, sr) {
     else if (kind === 'sstv' && sstv) sstv.feedPCM(pcm);
     else if (kind === 'fax' && fax) fax.feedPCM(pcm, st.sr);
     else if (kind === 'hfdl' && hfdl) hfdl.feedPCM(pcm);
-    else if (kind === 'svc') { if (svc) svc.feedPCM(pcm); }
+    else if (kind === 'svc' || kind === 'k5') { if (svc) svc.feedPCM(pcm); }   // k5: services.worker.js too
     else if (fsk) fsk.feedPCM(pcm);
   } catch (e) { console.error('decoders: feed', e); }
 };
@@ -2444,7 +2605,7 @@ setInterval(() => {
   if (lastBand && bk !== lastBand) applyFilter(st.on);
   lastF = f; lastBand = bk;
   pickedFollow();
-  if (svcInfo && DEC[st.on] && DEC[st.on].kind === 'svc' && Math.abs(f - lastInfoF) > 0.0005) { lastInfoF = f; svcInfo(); }
+  if (svcInfo && DEC[st.on] && (DEC[st.on].kind === 'svc' || DEC[st.on].kind === 'k5') && Math.abs(f - lastInfoF) > 0.0005) { lastInfoF = f; svcInfo(); }
   if (st.on === 'hfdl' && hfdl && Math.round(f * 1000) !== hfdlDial) { hfdlDial = Math.round(f * 1000); hfdl.setDial(hfdlDial); }
 }, 500);
 buildRow();
