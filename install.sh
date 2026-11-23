@@ -36,6 +36,23 @@ die()  { echo "ERROR: $*"; exit 1; }
 
 [ -f "$COMPOSE" ] || die "no docker-compose.yml (or compose.yml) in $UBERSDR_DIR (give the UberSDR folder as the first argument)"
 [ -d "$SRC" ]     || die "run this from the unpacked package (websdr_sv1btl/ not found next to install.sh)"
+# Every package file must be there BEFORE anything is written: the files are written in
+# place, so a missing source file would leave an empty file on the live page
+MISSING=""
+for f in $ROOT_FILES check-after-update.sh sv1btl/station.js sv1btl/stationinfo.txt sv1btl/ubersdr-compat.js; do
+    [ -s "$SRC/$f" ] || MISSING="$MISSING websdr_sv1btl/$f"
+done
+if command -v git >/dev/null && git -C "$PKG_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    MISSING="$MISSING $(git -C "$PKG_DIR" ls-files --deleted -- websdr_sv1btl | tr '\n' ' ')"   # files deleted from a git clone
+fi
+MISSING="$(echo $MISSING | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+if [ -n "${MISSING// /}" ]; then
+    die "the package is incomplete, so nothing was changed. Missing or empty:
+         $MISSING
+       If you got the package with git, restore it and run this again:
+         cd $PKG_DIR && git checkout -- websdr_sv1btl && bash install.sh $UBERSDR_DIR
+       Otherwise download and unpack the package again."
+fi
 command -v python3 >/dev/null || die "python3 is needed (sudo apt install python3)"
 command -v docker  >/dev/null || die "docker is needed"
 docker info >/dev/null 2>&1 || die "cannot use Docker as $(id -un): add yourself to the docker group (sudo usermod -aG docker $(id -un), then log in again) or run: sudo bash $0 $UBERSDR_DIR"
