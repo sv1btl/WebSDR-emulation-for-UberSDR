@@ -449,6 +449,7 @@ docker run -d --name websdr_relay --restart unless-stopped -p 8902:8902 \
 git pull
 bash install.sh</code></pre></div>
         <p>Without git, download and unpack the new ZIP or release archive and run its <code>install.sh</code>. The installer saves the current folder as <code>websdr_sv1btl.bak.&lt;date&gt;</code>, writes the new files in place (live at once, no restart), and <strong>keeps your <code>station.js</code> and <code>stationinfo.txt</code></strong>. Settings that are new in the version are added to your <code>station.js</code> with their default value; your own values are not changed, and the installer lists what it added.</p>
+        <p>If <code>git pull</code> stops with <em>"Your local changes to the following files would be overwritten by merge"</em> (for example <code>websdr_sv1btl/websdr-controls.html</code>), you have edited files in the cloned folder. Run <code>git stash &amp;&amp; git pull &amp;&amp; git stash pop</code> to set your edits aside, update, and put them back. If <code>stash pop</code> reports a conflict, open the file, keep the lines you need, and delete the <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> / <code>=======</code> / <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> markers. To discard your edits instead, run <code>git checkout -- &lt;file&gt;</code> before <code>git pull</code>.</p>
       </section>
 
       <section id="uninstall">

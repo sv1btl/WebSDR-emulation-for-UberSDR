@@ -773,6 +773,18 @@ bash install.sh
   settings that are new in this version (with their explanation and default value; your
   own values are not changed). It lists the settings it added.
 
+If `git pull` stops with *"Your local changes to the following files would be
+overwritten by merge"* (for example `websdr_sv1btl/websdr-controls.html`), you have
+edited files in the cloned folder. Set your edits aside, update, and put them back:
+
+```bash
+git stash && git pull && git stash pop
+```
+
+If `stash pop` reports a conflict, open the file, keep the lines you need, and delete
+the `<<<<<<<` / `=======` / `>>>>>>>` markers. To discard your edits instead, run
+`git checkout -- <file>` before `git pull`.
+
 ## 9. Uninstalling
 
 ```bash
