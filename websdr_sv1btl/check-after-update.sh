@@ -92,16 +92,30 @@ echo "5. Waterfall and page script"
 curl -s "$URL/websdr-waterfall.js" | grep -q "putImageData" && ok "websdr-waterfall.js served" || warn "websdr-waterfall.js changed shape"
 curl -s "$URL/websdr-base.js" | grep -q "var waterslowness=1;" && ok "UberSDR still patches websdr-base.js (fast waterfall)" || warn "websdr-base.js not patched by UberSDR (waterfall may default to slow)"
 
-# 2026-11-21: one listener ran 5 sessions through Opera VPN (HERN Labs AB, AS205016) and came
-# back on a new IP after each ban → max 2 sessions per IP and that ASN banned. Both live in
-# the ubersdr-config volume (an update keeps them); this only checks a new version still has them.
-echo "6. Listener limits (per-IP sessions, ASN ban)"
-v=$(docker exec "$CONTAINER" sh -c "grep -E '^ +max_sessions_ip:' /app/config/config.yaml" 2>/dev/null | awk '{print $2}')
-[ "$v" = 2 ] && ok "max_sessions_ip: 2" || warn "max_sessions_ip is '${v:-missing}', not 2 — set it in the admin UI (Server) or /app/config/config.yaml, then restart"
-docker exec "$CONTAINER" grep -q "asn: 205016" /app/config/banned_asns.yaml 2>/dev/null && ok "ASN 205016 (HERN Labs AB / Opera VPN) banned" \
-    || warn "ASN 205016 ban missing from /app/config/banned_asns.yaml — ban it again in the admin UI"
-docker logs --since 24h "$CONTAINER" 2>&1 | grep -q "Loaded [0-9]* banned ASN" && ok "UberSDR loads banned_asns.yaml" \
-    || warn "no 'Loaded … banned ASN' line in the last 24 h of the log — the ASN ban may not be read by this version"
+# Optional, per station: listener limits the sysop set in UberSDR (they live in the
+# ubersdr-config volume, an update keeps them) and wants re-checked after each update.
+# Only if $UBERSDR_DIR/websdr-listener-limits.conf exists (it is not part of the package):
+#   max_sessions_ip=2        # sessions allowed per IP address
+#   banned_asn=205016        # an ASN that must stay banned (one line each)
+LIMITS="$UBERSDR_DIR/websdr-listener-limits.conf"
+if [ -f "$LIMITS" ]; then
+    echo "6. Listener limits ($LIMITS)"
+    want=$(sed -n 's/^[[:space:]]*max_sessions_ip[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$LIMITS" | tail -1)
+    if [ -n "$want" ]; then
+        v=$(docker exec "$CONTAINER" sh -c "grep -E '^ +max_sessions_ip:' /app/config/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d "\"'")
+        [ "$v" = "$want" ] && ok "max_sessions_ip: $v" || warn "max_sessions_ip is '${v:-missing}', not $want — set it in the admin UI (Server) or /app/config/config.yaml, then restart"
+    fi
+    asns=$(sed -n 's/^[[:space:]]*banned_asn[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$LIMITS")
+    for a in $asns; do
+        docker exec "$CONTAINER" grep -qE "asn: *$a\b" /app/config/banned_asns.yaml 2>/dev/null && ok "ASN $a banned" \
+            || warn "ASN $a ban missing from /app/config/banned_asns.yaml — ban it again in the admin UI"
+    done
+    if [ -n "$asns" ]; then
+        # "Loaded N banned ASN(s)" is logged once at start-up, "Blocked request from banned ASN" on each block
+        docker logs "$CONTAINER" 2>&1 | grep -qE "Loaded [0-9]+ banned ASN|from banned ASN" && ok "UberSDR reads banned_asns.yaml" \
+            || warn "no 'Loaded … banned ASN' line in the log since UberSDR started — the ASN ban may not be read by this version"
+    fi
+fi
 
 echo
 if [ "$problems" -eq 0 ]; then
